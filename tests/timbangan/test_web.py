@@ -2277,3 +2277,63 @@ async def test_admin_diantar_ke_pengaturan_setelah_mengangkat_super_pertama(
     assert r.status_code == 200
     assert "tertutup bagi Anda" in r.text
     assert (await akun_oleh(app_uji, "budi")).role == ROLE_SUPERADMIN
+
+
+# ─────────────── Menu navigasi ───────────────
+
+def _menu_aktif(teks: str) -> list[str]:
+    """Nama menu yang menyala pada satu halaman."""
+    blok = teks[teks.index('class="bawah__isi"'):teks.index("</nav>")]
+    return [
+        # Buang ikon SVG-nya; yang dibandingkan namanya, bukan gambarnya.
+        re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", potongan)).strip()
+        for potongan in re.findall(
+            r'class="aktif"[^>]*>(.*?)</a>', blok, re.S
+        )
+    ]
+
+
+@pytest.mark.parametrize("jalur,menu", [
+    ("/", "Beranda"),
+    ("/tiket", "Tiket"),
+    ("/transaksi", "Catatan"),
+    ("/laporan", "Ringkasan"),
+    ("/monitoring", "Ringkasan"),
+    ("/pengaturan", "Pengaturan"),
+    ("/aturan", "Pengaturan"),
+    ("/tara", "Pengaturan"),
+    ("/pengguna", "Pengaturan"),
+    ("/akun", "Pengaturan"),
+    ("/audit", "Pengaturan"),
+])
+async def test_menu_menyala_di_halaman_yang_sedang_dibuka(
+    klien, app_uji, jalur, menu
+):
+    """Dulu menu Catatan tidak pernah menyala: rutenya mengirim nomor halaman
+    paginasi dengan nama variabel yang sama seperti nama layar, dan nomor itu
+    menimpanya tanpa suara. Diuji untuk SEMUA menu, bukan yang itu saja —
+    tabrakan nama seperti ini tidak mengumumkan dirinya."""
+    await _jadi_super(app_uji)
+    await login(klien, "wahid")
+    r = await klien.get(PREFIX + jalur)
+    assert r.status_code == 200, jalur
+    assert _menu_aktif(r.text) == [menu], jalur
+
+
+async def test_menu_catatan_tetap_menyala_di_halaman_kedua(klien, app_uji):
+    """Justru di sinilah dulu bug-nya paling terlihat."""
+    await _jadi_super(app_uji)
+    await login(klien, "wahid")
+    r = await klien.get(f"{PREFIX}/transaksi?hal=2")
+    assert _menu_aktif(r.text) == ["Catatan"]
+
+
+async def test_menu_catatan_menyala_di_rincian_dan_koreksi(klien, app_uji):
+    await login(klien, "budi")
+    trx_id = await _selesaikan(klien, "GABAH_BASAH")
+    await klien.post(f"{PREFIX}/keluar")
+
+    await _jadi_super(app_uji)
+    await login(klien, "wahid")
+    for jalur in (f"/transaksi/{trx_id}", f"/transaksi/{trx_id}/koreksi"):
+        assert _menu_aktif((await klien.get(PREFIX + jalur)).text) == ["Catatan"], jalur

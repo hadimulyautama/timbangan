@@ -120,7 +120,11 @@ def render(request: Request, nama: str, **konteks) -> HTMLResponse:
         "akun": getattr(request.state, "akun", None),
         "pesan_ok": request.query_params.get("ok"),
         "pesan_err": request.query_params.get("err"),
-        "halaman": nama.replace(".html", ""),
+        # Namanya "layar", bukan "halaman". Dulu "halaman", dan rute yang
+        # memakai paginasi mengirim `halaman=<nomor>` — nomor itu menimpa
+        # nama layarnya tanpa suara, sehingga menu Catatan tidak pernah
+        # menyala. Dua arti untuk satu kata, dan yang belakangan menang.
+        "layar": nama.replace(".html", ""),
         "kembali": None,
         "KAPASITAS_KG": aktif.get(
             "kapasitas_jembatan_kg", tsettings.kapasitas_jembatan_kg

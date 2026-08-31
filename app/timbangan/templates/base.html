@@ -83,7 +83,7 @@
     {# Hanya tampak saat bilah ini berubah jadi sidebar di layar lebar. #}
     <div class="bawah__kepala">Pos Timbang</div>
     <div class="bawah__isi">
-      <a href="{{ PREFIX }}/" class="{{ 'aktif' if halaman == 'beranda' }}">
+      <a href="{{ PREFIX }}/" class="{{ 'aktif' if layar == 'beranda' }}">
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"
              stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 10l9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
@@ -91,7 +91,7 @@
         Beranda
       </a>
 
-      <a href="{{ PREFIX }}/tiket" class="{{ 'aktif' if halaman == 'tiket' }}">
+      <a href="{{ PREFIX }}/tiket" class="{{ 'aktif' if layar == 'tiket' }}">
         <span style="position:relative;display:flex">
           <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"
                stroke-linecap="round" stroke-linejoin="round">
@@ -106,7 +106,7 @@
 
       {% if akun.is_admin %}
       <a href="{{ PREFIX }}/transaksi"
-         class="{{ 'aktif' if halaman in ('daftar', 'rincian', 'koreksi') }}">
+         class="{{ 'aktif' if layar in ('daftar', 'rincian', 'koreksi', 'cetak_pilih') }}">
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"
              stroke-linecap="round" stroke-linejoin="round">
           <path d="M4 4h16v16H4z"/><path d="M8 9h8"/><path d="M8 13h8"/>
@@ -117,7 +117,7 @@
 
       {% if akun.is_admin %}
         <a href="{{ PREFIX }}/laporan"
-           class="{{ 'aktif' if halaman in ('laporan', 'monitoring') }}">
+           class="{{ 'aktif' if layar in ('laporan', 'monitoring') }}">
           <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"
                stroke-linecap="round" stroke-linejoin="round">
             <path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/>
@@ -127,7 +127,8 @@
       {% endif %}
 
       <a href="{{ PREFIX }}/pengaturan"
-         class="{{ 'aktif' if halaman in ('pengaturan', 'aturan', 'tara', 'pengguna') }}">
+         class="{{ 'aktif' if layar in ('pengaturan', 'aturan', 'tara', 'pengguna',
+                              'pengguna_ubah', 'akun_saya', 'audit') }}">
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"
              stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="3"/>
