@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros.html" import baris_transaksi, lencana %}
+{% from "macros.html" import baris_transaksi, judul_truk, lencana %}
 
 {% block judul %}Pos Timbang{% endblock %}
 {% block bar_judul %}Pos Timbang{% endblock %}
@@ -18,9 +18,8 @@
         <a href="{{ PREFIX }}/tiket/{{ b.trx.id }}" class="pilihan"
            style="margin-bottom:8px">
           <div class="pilihan__isi">
-            <div class="pilihan__nama">{{ b.trx.nomor_polisi or b.trx.kode }}</div>
+            {{ judul_truk(b) }}
             <div class="pilihan__ket">
-              {{ b.supplier_nama or b.trx.pihak_nama or '—' }} ·
               {{ NAMA_JENIS.get(b.trx.jenis_kode, b.trx.jenis_kode) }} ·
               masuk {{ b.trx.timbang1_waktu|jam }}
             </div>

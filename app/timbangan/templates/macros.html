@@ -80,14 +80,24 @@
 {% endmacro %}
 
 
+{% macro judul_truk(b) %}
+  {# Nomor polisi DAN pihaknya sama-sama besar.
+     Petugas mencocokkan dua hal saat truk berhenti di jembatan: platnya, dan
+     siapa yang mengirim. Menyembunyikan yang kedua di baris keterangan
+     membuatnya harus dibaca dua kali. Plat tetap di depan — itu yang paling
+     cepat dicocokkan dengan benda di depan mata. #}
+  <div class="pilihan__nama">
+    {{ b.trx.nomor_polisi or b.trx.kode }}
+    <span class="pilihan__pihak">
+      {{ b.supplier_nama or b.trx.pihak_nama or 'tanpa nama pihak' }}</span>
+  </div>
+{% endmacro %}
+
 {% macro baris_transaksi(b) %}
   <a href="{{ PREFIX }}/transaksi/{{ b.trx.id }}" class="pilihan">
     <div class="pilihan__isi">
-      <div class="pilihan__nama">
-        {{ b.trx.nomor_polisi or b.trx.kode }}
-      </div>
+      {{ judul_truk(b) }}
       <div class="pilihan__ket">
-        {{ b.supplier_nama or b.trx.pihak_nama or '—' }} ·
         {{ NAMA_JENIS.get(b.trx.jenis_kode, b.trx.jenis_kode) }} ·
         {{ b.trx.tanggal|tgl(true) }}
       </div>

@@ -2385,3 +2385,40 @@ async def test_jam_yang_diketik_petugas_tampil_sama_persis(klien):
     tiket = await klien.get(f"{PREFIX}/tiket")
     assert "09:15" in tiket.text
     assert "16:15" not in tiket.text
+
+
+# ─────────────── Nama pihak ikut tercetak besar ───────────────
+
+@pytest.mark.parametrize("jalur", ["/", "/tiket"])
+async def test_pihak_tercetak_sebesar_nomor_polisi(klien, jalur):
+    """Petugas mencocokkan dua hal saat truk berhenti: platnya, dan siapa
+    yang mengirim. Keduanya harus terbaca sekali lihat."""
+    await login(klien)
+    form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
+    await klien.post(f"{PREFIX}/timbang/GABAH_BASAH", data={
+        "kode": kode_dari(form), "berat_kg": "13600",
+        "cara_timbang": "DUA_KALI", "supplier_id": "1",
+        "nomor_polisi": "AD 5 BB", "jumlah_karung": "120",
+        "tara_per_karung_kg": "0,25", "berat_acuan_kg": "10000",
+        "tara_lain_kg": "0", "waktu": "", "catatan": "",
+        "nomor_acuan": "N-1", "nama_sopir": "", "pihak_nama": "",
+    })
+    teks = (await klien.get(PREFIX + jalur)).text
+    baris = teks[teks.index('class="pilihan__nama"'):]
+    baris = baris[:baris.index("</div>", baris.index("pilihan__pihak"))]
+    assert "AD 5 BB" in baris
+    assert "H. Anton" in baris          # di baris besar yang sama
+
+
+async def test_pihak_tanpa_nama_tidak_menyisakan_baris_kosong(klien):
+    """Jasa timbang boleh tanpa supplier terdaftar."""
+    await login(klien)
+    form = (await klien.get(f"{PREFIX}/timbang/TRANSFER")).text
+    await klien.post(f"{PREFIX}/timbang/TRANSFER", data={
+        "kode": kode_dari(form), "berat_kg": "13600",
+        "cara_timbang": "DUA_KALI", "supplier_id": "", "pihak_nama": "",
+        "nomor_polisi": "", "nama_sopir": "", "jumlah_karung": "",
+        "tara_per_karung_kg": "", "berat_acuan_kg": "", "nomor_acuan": "",
+        "tara_lain_kg": "0", "waktu": "", "catatan": "",
+    })
+    assert "tanpa nama pihak" in (await klien.get(f"{PREFIX}/tiket")).text

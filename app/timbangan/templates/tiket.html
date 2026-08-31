@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros.html" import judul_truk %}
 {% block judul %}Tiket terbuka{% endblock %}
 {% block bar_judul %}Tiket terbuka{% endblock %}
 {% block bar_sub %}{{ terbuka|length }} truk menunggu timbang kedua{% endblock %}
@@ -7,9 +8,8 @@
   {% for b in terbuka %}
     <a href="{{ PREFIX }}/tiket/{{ b.trx.id }}" class="pilihan">
       <div class="pilihan__isi">
-        <div class="pilihan__nama">{{ b.trx.nomor_polisi or b.trx.kode }}</div>
+        {{ judul_truk(b) }}
         <div class="pilihan__ket">
-          {{ b.supplier_nama or b.trx.pihak_nama or '—' }} ·
           {{ NAMA_JENIS.get(b.trx.jenis_kode, b.trx.jenis_kode) }} ·
           masuk {{ b.trx.timbang1_waktu|tgl_jam }}
         </div>
