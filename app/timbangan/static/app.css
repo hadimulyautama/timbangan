@@ -351,6 +351,10 @@ select.fld { appearance: none; font-family: var(--teks); font-size: 16px;
 /* Pihak sebesar nomor polisi, sedikit lebih ringan supaya keduanya terbaca
    tanpa saling berebut. Boleh turun baris: nama pihak bisa panjang, dan
    memotongnya dengan elipsis justru menghapus yang perlu dibaca. */
+/* Plat sedikit lebih kecil dari nama pihak. Ia tetap di depan karena paling
+   cepat dicocokkan dengan truk di depan mata, tetapi yang lebih sering perlu
+   dibaca dari jauh adalah nama pihaknya. */
+.pilihan__nopol { font-size: 14.5px; }
 .pilihan__pihak { color: var(--tinta-2); font-weight: 600; }
 .pilihan__pihak::before { content: "·"; color: var(--tinta-4); margin: 0 5px;
   font-weight: 400; }

@@ -87,7 +87,7 @@
      membuatnya harus dibaca dua kali. Plat tetap di depan — itu yang paling
      cepat dicocokkan dengan benda di depan mata. #}
   <div class="pilihan__nama">
-    {{ b.trx.nomor_polisi or b.trx.kode }}
+    <span class="pilihan__nopol">{{ b.trx.nomor_polisi or b.trx.kode }}</span>
     <span class="pilihan__pihak">
       {{ b.supplier_nama or b.trx.pihak_nama or 'tanpa nama pihak' }}</span>
   </div>
