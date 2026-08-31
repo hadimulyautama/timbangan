@@ -71,7 +71,11 @@
                 <td style="white-space:nowrap">{{ j.waktu|tgl_jam }}</td>
                 <td style="font-family:var(--teks);white-space:nowrap">
                   {{ j.akun_nama or '—' }}
-                  {% if j.akun_nama and not j.akun_id %}
+                  {% if j.akun_nama == 'perbaikan sistem' %}
+                    {# Bukan orang. Perbaikan data yang dijalankan sekali,
+                       dicatat justru supaya tidak terjadi diam-diam. #}
+                    <span class="lencana lencana--hati">sistem</span>
+                  {% elif j.akun_nama and not j.akun_id %}
                     {# Akunnya sudah dihapus; salinan namanya yang tersisa. #}
                     <span class="lencana lencana--netral">akun dihapus</span>
                   {% endif %}
