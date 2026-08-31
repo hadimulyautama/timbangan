@@ -1,0 +1,18 @@
+# ── Backend & API ──
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+jinja2==3.1.4
+python-multipart==0.0.20
+aiofiles==24.1.0
+
+# ── Database ──
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+alembic==1.14.0
+greenlet==3.1.1
+
+# ── PDF bukti timbang ──
+# Digambar di server supaya ukurannya pasti dan tidak ada kop-kaki peramban
+# (tanggal, jam, nomor halaman, URL) yang ikut tercetak di kertas nota.
+# Murni Python, tanpa pustaka sistem — aman untuk image slim.
+reportlab==5.0.1

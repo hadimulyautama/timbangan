@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+*.sqlite3
+.DS_Store
+.pytest_cache/
+# PDF pedoman dibuat ulang dari HTML-nya
+docs/*.pdf
