@@ -47,7 +47,7 @@ Uji memakai SQLite sementara dan tidak pernah menyentuh database produksi.
 Untuk menjalankan servernya, isi `DATABASE_URL` lalu:
 
 ```bash
-.venv/bin/uvicorn app.main:app --reload
+.venv/bin/uvicorn app.timbangan.main:app --reload
 ```
 
 ## Variabel lingkungan

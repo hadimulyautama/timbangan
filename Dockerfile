@@ -23,4 +23,4 @@ RUN chmod +x /entrypoint.sh
 # ${PORT} benar-benar ter-ekspansi; Railway menjalankan perintah start
 # sebagai argv, bukan lewat shell.
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "uvicorn app.timbangan.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

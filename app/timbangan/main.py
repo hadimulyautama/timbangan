@@ -1,15 +1,18 @@
-"""Titik masuk service Timbangan.
+"""Titik masuk aplikasi Pos Timbang.
 
-Service kedua di Railway, database yang sama. Sengaja TIDAK memuat bot
-Telegram, poller, maupun modul produksi — deploy pos timbang tidak boleh
-sanggup menjatuhkan bot yang sedang melayani manajemen, dan sebaliknya.
+Sengaja TIDAK memuat bot Telegram, poller, maupun modul produksi — deploy pos
+timbang tidak boleh sanggup menjatuhkan bot yang sedang melayani manajemen,
+dan sebaliknya. Sejak 31 Agustus 2026 pemisahan itu bukan lagi soal service
+saja melainkan repo: keduanya tidak lagi saling memicu rilis.
 
-Dua hal yang khas di sini:
+Migrasi TIDAK dijalankan dari sini melainkan oleh entrypoint image
+(`docker/entrypoint.sh` → `scripts/siapkan_skema.py`), sebelum server menyala.
+Dulu migrasi memang dilewati sama sekali karena riwayatnya milik service lain;
+sekarang repo ini memiliki rangkaiannya sendiri dengan tabel versi terpisah.
 
-  · **Tidak menjalankan migrasi Alembic.** Riwayat migrasi hanya milik service
-    `app`. Dua service yang bermigrasi bersamaan akan berebut skema.
-  · **Menyemai master komoditas.** Aman dijalankan berulang: hanya menambah
-    baris yang belum ada, tidak pernah menimpa aturan yang sudah disetel.
+Yang tetap dikerjakan di sini adalah menyemai master komoditas dan akun Admin
+pertama — aman dijalankan berulang: hanya menambah yang belum ada, tidak
+pernah menimpa aturan yang sudah disetel dari layar.
 
 Jalankan:  uvicorn app.timbangan.main:app --host 0.0.0.0 --port $PORT
 """
