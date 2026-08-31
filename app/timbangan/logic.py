@@ -346,12 +346,21 @@ def hitung(
         raise ValidasiError("Tara lebih besar daripada netto timbangan.")
 
     acuan = sum(b.berat_acuan_kg for b in baris)
-    selisih = barang - acuan if aturan.acuan != ACUAN_TIDAK_ADA else 0.0
-    persen = (selisih / acuan * 100.0) if acuan else 0.0
+    # **Acuan nol berarti TIDAK ADA dokumen, bukan dokumen yang menyebut nol
+    # kilo.** Nota sering baru datang setelah bongkar, dan aplikasi memang
+    # mengizinkannya dikosongkan dulu. Tanpa pembedaan ini, seluruh muatan
+    # terhitung sebagai selisih: truk 10 ton tanpa nota keluar berstatus
+    # INVESTIGASI dengan selisih 10.000 kg — tuduhan yang lahir dari kolom
+    # kosong, dan tersimpan permanen di catatan.
+    ada_acuan = aturan.acuan != ACUAN_TIDAK_ADA and acuan > 0
+    selisih = barang - acuan if ada_acuan else 0.0
+    persen = (selisih / acuan * 100.0) if ada_acuan else 0.0
 
     batas = _batas(aturan, acuan_kg=acuan, jumlah_karung=karung)
     batas_inv = _batas_investigasi(aturan, acuan_kg=acuan, jumlah_karung=karung)
-    bawah, atas, status, keterangan = _status(aturan, selisih, batas, batas_inv)
+    bawah, atas, status, keterangan = _status(
+        aturan, selisih, batas, batas_inv, ada_acuan=ada_acuan
+    )
 
     return Hasil(
         berat_bermuatan_kg=_r(bermuatan),
@@ -393,12 +402,25 @@ def _batas_investigasi(aturan: AturanJenis, *, acuan_kg: float,
 
 
 def _status(aturan: AturanJenis, selisih: float, batas: float,
-            batas_investigasi: float | None
+            batas_investigasi: float | None, *, ada_acuan: bool = True
             ) -> tuple[float | None, float | None, str, str]:
-    """(batas bawah, batas atas, status, keterangan)."""
+    """(batas bawah, batas atas, status, keterangan).
+
+    `ada_acuan=False` berarti tidak ada angka pembanding sama sekali — entah
+    karena komoditasnya memang tanpa dokumen (jasa timbang, transfer
+    internal), atau karena notanya belum diisi. Keduanya menghasilkan status
+    yang sama, TANPA KONTROL, karena memang tidak ada yang bisa dibandingkan.
+    Keterangannya dibedakan supaya Admin tahu mana yang masih menunggu nota.
+    """
     if aturan.ambang_jenis == AMBANG_TIDAK_ADA or aturan.acuan == ACUAN_TIDAK_ADA:
         return None, None, TANPA_KONTROL, (
             "Tidak ada dokumen pembanding — yang dicatat beratnya saja."
+        )
+    if not ada_acuan:
+        dokumen = "Nota" if aturan.acuan == ACUAN_NOTA else "Surat jalan"
+        return None, None, TANPA_KONTROL, (
+            f"{dokumen} belum diisi, jadi tidak ada pembanding. Selisih baru "
+            "dihitung setelah beratnya dilengkapi lewat Koreksi."
         )
 
     kurang = max(0.0, -selisih)

@@ -336,3 +336,67 @@ def test_tara_beras_masuk_meniru_beras_pk():
         assert getattr(beras, kolom) == getattr(pk, kolom), kolom
     assert beras.sumber_tara == L.TARA_SAMPLING
     assert beras.tara_bawaan_kg == 0.1
+
+
+# ─────────────── Nota kosong bukan nota nol ───────────────
+
+def test_tanpa_berat_nota_selisihnya_nol_bukan_seluruh_muatan():
+    """Kolom nota yang dibiarkan kosong berarti dokumennya belum ada.
+
+    Sebelumnya nol diperlakukan sebagai "dokumen menyebut nol kilo", sehingga
+    truk 10 ton tanpa nota keluar berstatus INVESTIGASI dengan selisih 10.000
+    kg — tuduhan yang lahir dari kolom kosong, dan tersimpan permanen.
+    """
+    h = L.hitung(
+        aturan=L.JENIS_PETA["GABAH_BASAH"],
+        berat_bermuatan_kg=13_600, berat_kosong_kg=3_570,
+        muatan=[L.BarisMuatan(
+            jenis_kode="GABAH_BASAH", jumlah_karung=120,
+            tara_per_karung_kg=0.25, berat_acuan_kg=0,
+        )],
+    )
+    assert h.selisih_kg == 0
+    assert h.selisih_persen == 0
+    assert h.status == L.TANPA_KONTROL
+    assert "Nota belum diisi" in h.keterangan
+    # Beratnya sendiri tetap dihitung penuh — yang ditunda hanya kontrolnya.
+    assert h.berat_barang_kg == 13_600 - 3_570 - 30
+
+
+def test_surat_jalan_kosong_juga_tidak_menuduh():
+    h = L.hitung(
+        aturan=L.JENIS_PETA["BERAS"],
+        berat_bermuatan_kg=12_000, berat_kosong_kg=4_000,
+        muatan=[L.BarisMuatan(
+            jenis_kode="BERAS", jumlah_karung=160,
+            tara_per_karung_kg=0.05, berat_acuan_kg=0,
+        )],
+    )
+    assert h.selisih_kg == 0
+    assert h.status == L.TANPA_KONTROL
+    assert "Surat jalan belum diisi" in h.keterangan
+
+
+def test_nota_terisi_tetap_dikontrol_seperti_biasa():
+    """Pagar di atas tidak boleh membuat kontrolnya ikut mati."""
+    h = L.hitung(
+        aturan=L.JENIS_PETA["GABAH_BASAH"],
+        berat_bermuatan_kg=13_600, berat_kosong_kg=3_570,
+        muatan=[L.BarisMuatan(
+            jenis_kode="GABAH_BASAH", jumlah_karung=120,
+            tara_per_karung_kg=0.25, berat_acuan_kg=10_000,
+        )],
+    )
+    assert h.selisih_kg == 0
+    assert h.status == L.NORMAL
+
+    jauh = L.hitung(
+        aturan=L.JENIS_PETA["GABAH_BASAH"],
+        berat_bermuatan_kg=13_600, berat_kosong_kg=3_570,
+        muatan=[L.BarisMuatan(
+            jenis_kode="GABAH_BASAH", jumlah_karung=120,
+            tara_per_karung_kg=0.25, berat_acuan_kg=9_000,
+        )],
+    )
+    assert jauh.selisih_kg == 1_000
+    assert jauh.status != L.TANPA_KONTROL
