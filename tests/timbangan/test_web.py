@@ -2422,3 +2422,58 @@ async def test_pihak_tanpa_nama_tidak_menyisakan_baris_kosong(klien):
         "tara_lain_kg": "0", "waktu": "", "catatan": "",
     })
     assert "tanpa nama pihak" in (await klien.get(f"{PREFIX}/tiket")).text
+
+
+# ─────────────── Lembar pemeriksaan yang alasannya hilang ───────────────
+
+async def test_lembar_terbuka_menyebut_bahwa_pemicunya_sudah_hilang(
+    klien, app_uji
+):
+    """Lembar dibuka otomatis oleh status yang menuntut pemeriksaan. Bila
+    angkanya lalu dikoreksi dan statusnya turun, lembarnya tetap terbuka —
+    menutupnya keputusan manusia. Tetapi Admin yang membukanya kemudian tidak
+    punya petunjuk apa pun tentang apa yang dulu dipersoalkan.
+    """
+    await login(klien, "budi")
+    form = (await klien.get(f"{PREFIX}/timbang/BERAS")).text
+    await klien.post(f"{PREFIX}/timbang/BERAS", data={
+        "kode": kode_dari(form), "berat_kg": "3680",
+        "cara_timbang": "DUA_KALI", "supplier_id": "1",
+        "nomor_polisi": "K 8382 CC", "jumlah_karung": "0",
+        "tara_per_karung_kg": "0", "berat_acuan_kg": "9000",
+        "tara_lain_kg": "0", "waktu": "", "catatan": "",
+        "nomor_acuan": "SJ-1", "nama_sopir": "", "pihak_nama": "",
+    })
+    tiket = await klien.get(f"{PREFIX}/tiket")
+    trx_id = int(re.search(r"/tiket/(\d+)", tiket.text).group(1))
+    await klien.post(f"{PREFIX}/tiket/{trx_id}", data={
+        "berat_kg": "15680", "jumlah_karung": "", "tara_per_karung_kg": "",
+        "berat_acuan_kg": "", "nomor_acuan": "", "waktu": "", "catatan": "",
+        "aksi": "selesai",
+    })
+    trx = await trx_oleh_id(trx_id)
+    assert trx.status_kontrol in ("KELEBIHAN", "PERLU_PEMERIKSAAN",
+                                  "INVESTIGASI")
+
+    await klien.post(f"{PREFIX}/keluar")
+    await _jadi_super(app_uji)
+    await login(klien, "wahid")
+    rincian = (await klien.get(f"{PREFIX}/transaksi/{trx_id}")).text
+    assert "sudah berubah sejak lembar ini dibuka" not in rincian
+
+    # Angkanya dibetulkan; statusnya turun, lembarnya tetap terbuka.
+    await klien.post(f"{PREFIX}/transaksi/{trx_id}/koreksi", data={
+        "alasan": "Berat menurut dokumen tidak diinput",
+        "timbang1_kg": "", "timbang2_kg": "", "nomor_polisi": "",
+        "nama_sopir": "", "supplier_id": "", "jumlah_karung": "",
+        "tara_per_karung_kg": "", "berat_acuan_kg": "12000",
+        "nomor_acuan": "", "catatan": "",
+    })
+    trx = await trx_oleh_id(trx_id)
+    assert trx.status_kontrol not in ("KELEBIHAN", "PERLU_PEMERIKSAAN",
+                                      "INVESTIGASI")
+
+    rincian = (await klien.get(f"{PREFIX}/transaksi/{trx_id}")).text
+    assert "sudah berubah sejak lembar ini dibuka" in rincian
+    assert "Terbuka" in rincian          # tetap terbuka, tidak ditutup mesin
+    assert "Tutup pemeriksaan" in rincian

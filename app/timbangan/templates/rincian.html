@@ -152,6 +152,23 @@
         {% endif %}
       </div>
 
+      {# Lembar yang alasannya sudah hilang.
+         Lembar dibuka otomatis saat statusnya menuntut pemeriksaan. Bila
+         angkanya kemudian dikoreksi dan statusnya turun, lembarnya TETAP
+         terbuka — menutupnya keputusan manusia, bukan mesin. Tetapi Admin
+         yang membukanya berbulan-bulan kemudian tidak punya petunjuk apa pun
+         tentang apa yang dulu dipersoalkan, jadi keadaannya disebutkan di
+         sini. Riwayat lengkapnya ada di Jejak audit. #}
+      {% if pemeriksaan.status != 'SELESAI'
+            and trx.status_kontrol not in STATUS_WAJIB_PERIKSA %}
+        <div class="pesan pesan--ok" style="margin:10px 0 2px">
+          Angkanya sudah berubah sejak lembar ini dibuka — statusnya kini
+          <b>{{ STATUS_LABEL.get(trx.status_kontrol, trx.status_kontrol) }}</b>,
+          yang tidak menuntut pemeriksaan. Lembarnya tetap terbuka sampai
+          Anda menutupnya, supaya tercatat apa yang ditemukan.
+        </div>
+      {% endif %}
+
       {% if pemeriksaan.status == 'SELESAI' %}
         <div class="baris">
           <span>Hasil</span>

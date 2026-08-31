@@ -34,7 +34,7 @@ BASE_DIR = Path(__file__).parent
 PREFIX = "/timbangan"
 
 # Dinaikkan bila CSS/JS berubah, supaya perangkat tidak memakai berkas lama.
-VERSI = "12"
+VERSI = "13"
 
 #: Warna tiap status. Dipisahkan dari `logic` karena ini urusan tampilan.
 NADA_STATUS = {
@@ -91,6 +91,7 @@ templates.env.globals.update({
     "ALAMAT": tsettings.perusahaan_alamat,
     "TELEPON": tsettings.perusahaan_telepon,
     "STATUS_LABEL": logic.STATUS_LABEL,
+    "STATUS_WAJIB_PERIKSA": logic.STATUS_WAJIB_PERIKSA,
     "NADA_STATUS": NADA_STATUS,
     "NAMA_JENIS": NAMA_JENIS,
     "ringkas_aturan": ringkas_aturan,
