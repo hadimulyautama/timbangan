@@ -2337,3 +2337,51 @@ async def test_menu_catatan_menyala_di_rincian_dan_koreksi(klien, app_uji):
     await login(klien, "wahid")
     for jalur in (f"/transaksi/{trx_id}", f"/transaksi/{trx_id}/koreksi"):
         assert _menu_aktif((await klien.get(PREFIX + jalur)).text) == ["Catatan"], jalur
+
+
+# ─────────────── Waktu yang diketik operator ───────────────
+
+def test_waktu_operator_selalu_berzona():
+    """Isian datetime-local mengirim angka polos tanpa zona, dan angka itu
+    adalah WIB. Diserahkan apa adanya ke kolom timestamptz, Postgres
+    menafsirkannya sebagai UTC — tepat tujuh jam meleset.
+
+    Diuji di tingkat fungsi, bukan lewat HTTP, justru karena SQLite
+    menyembunyikan kesalahannya: ia menyimpan tanpa zona sehingga angkanya
+    kembali apa adanya. Hanya Postgres yang memperlihatkannya, yaitu hanya
+    di produksi.
+    """
+    from zoneinfo import ZoneInfo
+
+    from app.timbangan.routes.pos import _waktu_operator
+
+    hasil = _waktu_operator("2026-08-31T09:15")
+    assert hasil is not None
+    assert hasil.tzinfo is not None, "waktu tanpa zona akan dibaca sebagai UTC"
+    assert hasil.utcoffset().total_seconds() == 7 * 3600
+    assert hasil.astimezone(ZoneInfo("UTC")).hour == 2   # 09:15 WIB = 02:15 UTC
+
+
+def test_waktu_operator_kosong_atau_ngawur_jatuh_ke_jam_sistem():
+    from app.timbangan.routes.pos import _waktu_operator
+
+    assert _waktu_operator("") is None
+    assert _waktu_operator(None) is None
+    assert _waktu_operator("bukan waktu") is None
+
+
+async def test_jam_yang_diketik_petugas_tampil_sama_persis(klien):
+    """Yang diketik 09:15 harus terbaca 09:15 — bukan 16:15."""
+    await login(klien)
+    form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
+    await klien.post(f"{PREFIX}/timbang/GABAH_BASAH", data={
+        "kode": kode_dari(form), "berat_kg": "13600",
+        "cara_timbang": "DUA_KALI", "supplier_id": "1",
+        "nomor_polisi": "AD 5 BB", "jumlah_karung": "120",
+        "tara_per_karung_kg": "0,25", "berat_acuan_kg": "10000",
+        "tara_lain_kg": "0", "waktu": "2026-08-31T09:15",
+        "catatan": "", "nomor_acuan": "N-1", "nama_sopir": "", "pihak_nama": "",
+    })
+    tiket = await klien.get(f"{PREFIX}/tiket")
+    assert "09:15" in tiket.text
+    assert "16:15" not in tiket.text

@@ -7,10 +7,12 @@ dan tidak ada layar tambahan yang tidak dipakai setiap hari.
 from __future__ import annotations
 
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Form, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.timbangan import logic, service
 from app.timbangan.db import get_db, hari_ini, sekarang
 from app.timbangan.models import CARA_DUA_KALI, CARA_SEKALI, TimbanganAkun
@@ -55,12 +57,27 @@ def _angka(teks: str | None, bawaan: float = 0.0) -> float:
 
 
 def _waktu_operator(teks: str | None) -> datetime | None:
-    """Jam yang boleh dikoreksi petugas bila ia mencatat terlambat."""
+    """Jam yang boleh dikoreksi petugas bila ia mencatat terlambat.
+
+    **Hasilnya WAJIB berzona.** Isian `datetime-local` di peramban mengirim
+    angka polos tanpa zona — "2026-08-31T09:15" — dan angka itu adalah waktu
+    setempat, WIB. Bila diserahkan apa adanya ke kolom `timestamptz`,
+    Postgres menafsirkannya memakai zona sesinya (UTC di Railway), sehingga
+    ketikan 09:15 pagi tersimpan sebagai 09:15 UTC lalu tampil kembali
+    sebagai 16:15 sore. Tepat tujuh jam meleset, dan meyakinkan.
+
+    Kesalahan itu tidak terlihat di pengujian maupun di SQLite: uji mengirim
+    kolom ini kosong sehingga jatuh ke `sekarang()` yang memang berzona, dan
+    SQLite menyimpan tanpa zona sehingga angkanya kembali apa adanya. Ia
+    hanya muncul di Postgres, yaitu di produksi.
+    """
     if not teks:
         return None
     for pola in ("%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M"):
         try:
-            return datetime.strptime(teks, pola)
+            return datetime.strptime(teks, pola).replace(
+                tzinfo=ZoneInfo(settings.app_timezone)
+            )
         except ValueError:
             continue
     return None
