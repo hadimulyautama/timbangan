@@ -85,8 +85,7 @@
   <div class="kartu">
     <div class="kartu__judul">Keterangan</div>
     <div class="baris">
-      <span>{% if trx.arah == MASUK %}Supplier{% elif trx.arah == TRANSFER
-             %}Asal → tujuan{% else %}Pihak{% endif %}</span>
+      <span>{{ PIHAK_LABEL.get(trx.arah, 'Pihak') }}</span>
       <b style="font-family:var(--teks);font-size:14px">
         {{ b.supplier_nama or trx.pihak_nama or '—' }}</b>
     </div>

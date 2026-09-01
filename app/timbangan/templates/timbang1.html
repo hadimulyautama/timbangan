@@ -45,18 +45,18 @@
 
   {# ── Pihak ── #}
   {% if bebas %}
-    {{ isian('pihak_nama', 'Nama pemilik barang', '', '', 'text',
+    {{ isian('pihak_nama', PIHAK_LABEL[BEBAS], '', '', 'text',
              'Boleh perorangan maupun perusahaan', true, true) }}
   {% elif transfer %}
     {# Tidak ada pihak lawan — yang perlu diketahui barangnya berpindah dari
        mana ke mana. Ditulis bebas, tanpa master lokasi tersendiri. #}
-    {{ isian('pihak_nama', 'Asal → tujuan', '', '', 'text',
+    {{ isian('pihak_nama', PIHAK_LABEL[TRANSFER], '', '', 'text',
              'Contoh: Gudang 1 → Gudang 2', true, true) }}
   {% else %}
     <div class="grup">
-      <div class="lbl">{{ 'Supplier' if masuk else 'Tujuan / pembeli' }}</div>
+      <div class="lbl">{{ PIHAK_LABEL.get(aturan.arah, 'Pihak') }}</div>
       <select class="fld" name="supplier_id"
-              data-cari="Ketik nama supplier…">
+              data-cari="Ketik nama {{ PIHAK_LABEL.get(aturan.arah, 'pihak')|lower }}…">
         <option value="">— pilih —</option>
         {# Yang sering datang ditaruh di atas: petugas memilih sambil truk
            menunggu, bukan sambil duduk santai. #}
@@ -77,8 +77,10 @@
         Belum terdaftar? Isi nama pada kolom di bawah.
       </div>
     </div>
-    {{ isian('pihak_nama', 'Nama pihak (bila belum terdaftar)', '', '',
-             'text', '', false, true) }}
+    {{ isian('pihak_nama',
+             'Nama ' ~ PIHAK_LABEL.get(aturan.arah, 'pihak')|lower
+                     ~ ' (bila belum terdaftar)',
+             '', '', 'text', '', false, true) }}
   {% endif %}
 
   {# Wajib untuk barang masuk dan barang keluar: keduanya melibatkan pihak

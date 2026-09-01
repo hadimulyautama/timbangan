@@ -2751,3 +2751,35 @@ async def test_catatan_menyebut_arah_pada_kolom_komoditas(klien, app_uji):
     tabel = teks[teks.index("<tbody>"):teks.index("</tbody>")]
     blok = tabel[tabel.index("Gabah Basah"):]
     assert "barang masuk" in blok[:220]
+
+
+# ─────────────── Sebutan lawan transaksi ───────────────
+
+@pytest.mark.parametrize("jenis,sebutan,bukan", [
+    ("GABAH_BASAH", "Supplier", "Pelanggan"),
+    ("BERAS", "Pelanggan", "Supplier"),
+    ("BEBAS", "Pemilik barang", "Supplier"),
+    ("TRANSFER", "Asal → tujuan", "Supplier"),
+])
+async def test_lawan_transaksi_dinamai_menurut_arah(klien, jenis, sebutan, bukan):
+    """Satu kolom data, empat nama. Memakai "Supplier" untuk semuanya membuat
+    layar berbohong: pada pengiriman yang menerima barang adalah pelanggan."""
+    await login(klien)
+    form = (await klien.get(f"{PREFIX}/timbang/{jenis}")).text
+    assert sebutan in form
+    assert bukan not in form
+
+
+async def test_sebutan_ikut_berubah_saat_arahnya_dibetulkan(klien, app_uji):
+    await login(klien, "budi")
+    trx_id = await _mulai_masuk(klien)
+    await klien.post(f"{PREFIX}/keluar")
+    await login(klien, "wahid")
+
+    assert "Supplier" in (await klien.get(f"{PREFIX}/transaksi/{trx_id}")).text
+    await klien.post(f"{PREFIX}/transaksi/{trx_id}/jenis", data={
+        "jenis_kode": "BERAS", "alasan": "Salah pilih"})
+
+    rincian = (await klien.get(f"{PREFIX}/transaksi/{trx_id}")).text
+    assert "Pelanggan" in rincian
+    assert "Supplier" not in rincian
