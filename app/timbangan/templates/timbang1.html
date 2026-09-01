@@ -74,13 +74,26 @@
         </optgroup>
       </select>
       <div class="bantu">
-        Belum terdaftar? Isi nama pada kolom di bawah.
+        Wajib diisi — pilih dari daftar, atau ketik namanya pada kolom di
+        bawah bila belum terdaftar.
       </div>
     </div>
-    {{ isian('pihak_nama',
-             'Nama ' ~ PIHAK_LABEL.get(aturan.arah, 'pihak')|lower
-                     ~ ' (bila belum terdaftar)',
-             '', '', 'text', '', false, true) }}
+    {# Ditulis langsung, tidak lewat macro `isian`: macro menandai isian tak
+       wajib dengan "(boleh kosong)", dan di sini itu menyesatkan. Kolom ini
+       boleh kosong HANYA bila daftar di atas sudah dipilih — salah satu dari
+       keduanya wajib, dan HTML tidak bisa menyatakan itu. Pagarnya di
+       layanan (`_wajib_pihak`). #}
+    <div class="grup">
+      <div class="lbl">
+        Nama {{ PIHAK_LABEL.get(aturan.arah, 'pihak')|lower }}
+        <span style="text-transform:none;letter-spacing:0;font-weight:500">
+          (bila belum terdaftar)</span>
+      </div>
+      <input class="fld teks" name="pihak_nama" id="f-pihak_nama" type="text">
+      <div class="bantu">
+        Isi ini bila tidak memilih dari daftar di atas.
+      </div>
+    </div>
   {% endif %}
 
   {# Wajib untuk barang masuk dan barang keluar: keduanya melibatkan pihak
@@ -89,7 +102,9 @@
   {{ isian('nomor_polisi', 'Nomor polisi', '', '', 'text',
            'Contoh: AD 1234 XY', masuk or (not bebas and not transfer), true,
            'autocapitalize="characters" autocomplete="off"') }}
-  {{ isian('nama_sopir', 'Nama sopir', '', '', 'text', '', false, true) }}
+  {# Wajib: sopir satu-satunya orang yang hadir di jembatan saat angkanya
+     dibaca. Tanpa namanya, sengketa muatan tidak punya saksi. #}
+  {{ isian('nama_sopir', 'Nama sopir', '', '', 'text', '', true, true) }}
 
   {# ── Dokumen & muatan ── #}
   {% if transfer %}

@@ -34,7 +34,7 @@ BASE_DIR = Path(__file__).parent
 PREFIX = "/timbangan"
 
 # Dinaikkan bila CSS/JS berubah, supaya perangkat tidak memakai berkas lama.
-VERSI = "18"
+VERSI = "19"
 
 #: Warna tiap status. Dipisahkan dari `logic` karena ini urusan tampilan.
 NADA_STATUS = {
@@ -55,18 +55,8 @@ NAMA_JENIS = {a.kode: a.nama for a in logic.JENIS_AWAL}
 #: daftar keduanya tampak identik. Dan kata "masuk" tidak boleh dipakai untuk
 #: hal lain di layar yang sama — dulu baris tiket berbunyi "Beras · masuk
 #: 09:43" yang bermaksud JAM KEDATANGAN, dan terbaca sebagai arah barang.
-#: Sebutan lawan transaksi menurut arah barang.
-#:
-#: Satu kolom data, empat nama — dan memakai satu nama untuk semuanya membuat
-#: layar berbohong: pada pengiriman, yang menerima barang adalah PELANGGAN,
-#: bukan supplier. Nama yang salah di layar operasional bukan soal rasa
-#: bahasa; ia membuat orang ragu apakah datanya benar.
-PIHAK_LABEL = {
-    logic.MASUK: "Supplier",
-    logic.KELUAR: "Pelanggan",
-    logic.BEBAS: "Pemilik barang",
-    logic.TRANSFER: "Asal → tujuan",
-}
+#: Sebutan lawan transaksi menurut arah barang — satu sumber di `logic`.
+PIHAK_LABEL = logic.PIHAK_LABEL
 
 ARAH_LABEL = {
     logic.MASUK: "barang masuk",

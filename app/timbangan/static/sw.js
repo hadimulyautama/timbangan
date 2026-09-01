@@ -5,7 +5,7 @@
  * timbangan basi di pos timbang lebih berbahaya daripada menampilkan
  * pesan "tidak ada jaringan".
  */
-var VERSI = 'timbangan-v18';
+var VERSI = 'timbangan-v19';
 var PREFIX = '/timbangan';
 
 var RANGKA = [

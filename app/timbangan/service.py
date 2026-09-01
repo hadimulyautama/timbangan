@@ -708,6 +708,38 @@ async def daftar_aksi_audit(db: AsyncSession) -> list[str]:
 ARAH_WAJIB_NOPOL = (logic.MASUK, logic.KELUAR)
 
 
+def _wajib_pihak(arah: str, *, punya_id: bool, pihak_nama: str | None) -> None:
+    """Setiap transaksi harus menyebut lawannya.
+
+    Boleh dari daftar (supplier atau pelanggan, menurut arah) ATAU diketik
+    bebas untuk pihak yang belum terdaftar — tetapi tidak boleh kosong.
+    Catatan timbang tanpa nama pihak tidak bisa dicocokkan dengan nota,
+    tidak bisa direkap, dan tidak bisa dipertanggungjawabkan kepada siapa
+    pun; ia hanya menyisakan angka yang tidak menjelaskan apa-apa.
+
+    "Salah satu dari dua" tidak bisa dinyatakan HTML, jadi pagarnya memang
+    harus di sini — bukan sekadar `required` di isian.
+    """
+    if punya_id or (pihak_nama or "").strip():
+        return
+    sebutan = logic.PIHAK_LABEL.get(arah, "Nama pihak")
+    raise LayananError(
+        f"{sebutan} wajib diisi — pilih dari daftar, atau ketik namanya "
+        "bila belum terdaftar."
+    )
+
+
+def _wajib_sopir(nama_sopir: str | None) -> None:
+    """Nama sopir wajib, apa pun arah barangnya.
+
+    Sopir adalah satu-satunya orang yang benar-benar hadir di jembatan saat
+    angka itu dibaca. Tanpa namanya, sengketa tentang muatan tidak punya
+    saksi.
+    """
+    if not (nama_sopir or "").strip():
+        raise LayananError("Nama sopir wajib diisi.")
+
+
 def _wajib_nopol(arah: str, nomor_polisi: str | None) -> None:
     if arah in ARAH_WAJIB_NOPOL and not (nomor_polisi or "").strip():
         raise LayananError(
@@ -755,6 +787,12 @@ async def simpan_timbang_pertama(
 
     aturan = await aturan_untuk(db, data.jenis_kode)
     _wajib_nopol(aturan.arah, data.nomor_polisi)
+    _wajib_pihak(
+        aturan.arah,
+        punya_id=bool(data.supplier_id),
+        pihak_nama=data.pihak_nama,
+    )
+    _wajib_sopir(data.nama_sopir)
     kapasitas = (await setelan.semua(db))["kapasitas_jembatan_kg"]
     # Diperiksa SEKARANG, bukan nanti di timbang kedua. Salah ketik yang baru
     # ketahuan setelah truk selesai bongkar sudah terlambat untuk diperbaiki.
@@ -1140,9 +1178,21 @@ async def koreksi_transaksi(
         "tara_lain_kg", "catatan",
     }
     # Diperiksa sebelum apa pun disentuh — koreksi tidak boleh menjadi jalan
-    # memutar untuk mengosongkan nomor polisi.
+    # memutar untuk mengosongkan hal yang wajib saat menimbang. Rute koreksi
+    # memang memperlakukan kolom kosong sebagai "tidak diubah", jadi pagar ini
+    # menjaga pintu lain: antrean luring dan pemakaian layanan langsung.
     if "nomor_polisi" in perubahan:
         _wajib_nopol(trx.arah, perubahan["nomor_polisi"])
+    if "nama_sopir" in perubahan:
+        _wajib_sopir(perubahan["nama_sopir"])
+    if "pihak_nama" in perubahan or "supplier_id" in perubahan:
+        _wajib_pihak(
+            trx.arah,
+            punya_id=bool(
+                perubahan.get("supplier_id", trx.supplier_id or trx.pelanggan_id)
+            ),
+            pihak_nama=perubahan.get("pihak_nama", trx.pihak_nama),
+        )
 
     sebelum, sesudah = {}, {}
     for kolom, nilai in perubahan.items():

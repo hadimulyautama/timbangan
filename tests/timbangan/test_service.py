@@ -50,6 +50,7 @@ def masuk_gabah(kode: str, supplier_id: int | None, berat: float) -> InputTimban
             nomor_acuan="NOTA-01",
         )],
         perangkat_kode="P1",
+            nama_sopir="Slamet",
     )
 
 
@@ -126,6 +127,7 @@ async def test_arah_keluar_membalik_urutan_angka(db, petugas, supplier):
             tara_per_karung_kg=0.05, berat_acuan_kg=12_000,
             nomor_acuan="SJ-77",
         )],
+            nama_sopir="Slamet",
     )
     await service.simpan_timbang_pertama(db, akun=petugas, data=data)
     trx = await service.simpan_timbang_kedua(
@@ -148,6 +150,7 @@ async def test_pengiriman_kurang_dari_surat_jalan_ditandai(db, petugas, supplier
             jenis_kode="BEKATUL", jumlah_karung=240,
             tara_per_karung_kg=0.05, berat_acuan_kg=12_000,
         )],
+            nama_sopir="Slamet",
     )
     await service.simpan_timbang_pertama(db, akun=petugas, data=data)
     trx = await service.simpan_timbang_kedua(
@@ -174,6 +177,7 @@ async def test_jasa_timbang_sekali_langsung_selesai(db, petugas):
         kode="TRX-20260830-P1-006", arah=logic.BEBAS, jenis_kode="BEBAS",
         berat_kg=12_850, cara_timbang=CARA_SEKALI,
         pihak_nama="CV Sumber Rejeki",
+            nama_sopir="Slamet",
     ))
     assert trx.status_tiket == TIKET_SELESAI
     assert trx.netto_timbangan_kg == 12_850
@@ -475,6 +479,7 @@ async def test_koreksi_menolak_mengosongkan_nomor_polisi(
         berat_kg=13_600, supplier_id=supplier.id, nomor_polisi="AD 5 BB",
         muatan=[InputMuatan(jenis_kode="GABAH_BASAH", jumlah_karung=120,
                             tara_per_karung_kg=0.25, berat_acuan_kg=10_000)],
+            nama_sopir="Slamet",
     ))
     with pytest.raises(service.LayananError, match="Nomor polisi wajib"):
         await service.koreksi_transaksi(
@@ -490,5 +495,39 @@ async def test_transfer_internal_boleh_tanpa_nomor_polisi(
     trx = await service.simpan_timbang_pertama(db, akun=petugas, data=InputTimbang(
         kode="TRX-20260831-P1-002", arah=logic.TRANSFER, jenis_kode="TRANSFER",
         berat_kg=13_600, pihak_nama="Gudang 1 → Gudang 2",
+            nama_sopir="Slamet",
     ))
     assert trx.nomor_polisi is None
+
+
+async def test_koreksi_menolak_mengosongkan_nama_sopir(
+    db, petugas, supplier, jenis_tersemai
+):
+    trx = await service.simpan_timbang_pertama(db, akun=petugas, data=InputTimbang(
+        kode="TRX-20260901-P1-001", arah=logic.MASUK, jenis_kode="GABAH_BASAH",
+        berat_kg=13_600, supplier_id=supplier.id, nomor_polisi="AD 5 BB",
+        nama_sopir="Slamet",
+        muatan=[InputMuatan(jenis_kode="GABAH_BASAH", jumlah_karung=120,
+                            tara_per_karung_kg=0.25, berat_acuan_kg=10_000)],
+    ))
+    with pytest.raises(service.LayananError, match="Nama sopir wajib"):
+        await service.koreksi_transaksi(
+            db, akun=petugas, trx=trx, alasan="coba",
+            perubahan={"nama_sopir": "   "},
+        )
+    assert trx.nama_sopir == "Slamet"
+
+
+async def test_koreksi_menolak_mengosongkan_nama_pihak(
+    db, petugas, jenis_tersemai
+):
+    trx = await service.simpan_timbang_pertama(db, akun=petugas, data=InputTimbang(
+        kode="TRX-20260901-P1-002", arah=logic.TRANSFER, jenis_kode="TRANSFER",
+        berat_kg=13_600, pihak_nama="Gudang 1 → Gudang 2", nama_sopir="Slamet",
+    ))
+    with pytest.raises(service.LayananError, match="wajib diisi"):
+        await service.koreksi_transaksi(
+            db, akun=petugas, trx=trx, alasan="coba",
+            perubahan={"pihak_nama": "  "},
+        )
+    assert trx.pihak_nama == "Gudang 1 → Gudang 2"

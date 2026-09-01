@@ -211,7 +211,7 @@ async def test_angka_dengan_koma_maupun_titik_diterima(klien):
             "nomor_polisi": "AD 1 A", "jumlah_karung": "10",
             "tara_per_karung_kg": "0,25", "berat_acuan_kg": "1000",
             "tara_lain_kg": "0", "waktu": "", "catatan": "",
-            "nomor_acuan": "", "nama_sopir": "", "pihak_nama": "",
+            "nomor_acuan": "", "nama_sopir": "Slamet", "pihak_nama": "",
         })
         assert harapan in r.text, f"{berat} → tidak muncul {harapan}"
 
@@ -224,7 +224,7 @@ async def test_jasa_timbang_sekali_langsung_ada_hasil(klien):
         "cara_timbang": "SEKALI", "pihak_nama": "CV Sumber Rejeki",
         "nomor_polisi": "AD 9 ZZ", "tara_lain_kg": "0", "supplier_id": "",
         "jumlah_karung": "0", "tara_per_karung_kg": "0", "berat_acuan_kg": "0",
-        "waktu": "", "catatan": "", "nomor_acuan": "", "nama_sopir": "",
+        "waktu": "", "catatan": "", "nomor_acuan": "", "nama_sopir": "Slamet",
     })
     assert r.status_code == 200
     # Statusnya dipakai jasa timbang maupun transfer internal, jadi labelnya
@@ -241,7 +241,7 @@ async def test_tutup_paksa_tiket_lewat_halaman(klien):
         "supplier_id": "1", "nomor_polisi": "AD 7 QQ", "jumlah_karung": "10",
         "tara_per_karung_kg": "0,25", "berat_acuan_kg": "1000",
         "tara_lain_kg": "0", "waktu": "", "catatan": "", "nomor_acuan": "",
-        "nama_sopir": "", "pihak_nama": "",
+        "nama_sopir": "Slamet", "pihak_nama": "",
     })
     tiket = await klien.get(f"{PREFIX}/tiket")
     trx_id = int(re.search(r"/tiket/(\d+)", tiket.text).group(1))
@@ -352,7 +352,7 @@ async def test_koreksi_lewat_halaman_menghitung_ulang(klien):
 
     r = await klien.post(f"{PREFIX}/transaksi/{trx_id}/koreksi", data={
         "alasan": "Salah ketik berat nota", "timbang1_kg": "", "timbang2_kg": "",
-        "nomor_polisi": "", "nama_sopir": "", "supplier_id": "",
+        "nomor_polisi": "", "nama_sopir": "Slamet", "supplier_id": "",
         "jumlah_karung": "120", "tara_per_karung_kg": "0,25",
         "berat_acuan_kg": "10010", "nomor_acuan": "N-1", "catatan": "",
     })
@@ -547,7 +547,7 @@ async def test_admin_menyetel_kapasitas_dan_langsung_berlaku(klien, app_uji):
         "supplier_id": "1", "nomor_polisi": "AD 1 A", "jumlah_karung": "10",
         "tara_per_karung_kg": "0.250", "berat_acuan_kg": "1000",
         "tara_lain_kg": "0", "waktu": "", "catatan": "", "nomor_acuan": "",
-        "nama_sopir": "", "pihak_nama": "",
+        "nama_sopir": "Slamet", "pihak_nama": "",
     })
     assert "Melebihi kapasitas" not in r.text
 
@@ -563,7 +563,7 @@ async def test_admin_menyetel_kapasitas_dan_langsung_berlaku(klien, app_uji):
         "supplier_id": "1", "nomor_polisi": "AD 2 B", "jumlah_karung": "10",
         "tara_per_karung_kg": "0.250", "berat_acuan_kg": "1000",
         "tara_lain_kg": "0", "waktu": "", "catatan": "", "nomor_acuan": "",
-        "nama_sopir": "", "pihak_nama": "",
+        "nama_sopir": "Slamet", "pihak_nama": "",
     })
     assert "Melebihi kapasitas jembatan timbang (12000 kg)" in r.text
 
@@ -801,7 +801,7 @@ async def test_tanda_tiket_terbuka_terlihat_dari_halaman_lain(klien):
         "supplier_id": "1", "nomor_polisi": "AD 3 CC", "jumlah_karung": "10",
         "tara_per_karung_kg": "0.250", "berat_acuan_kg": "1000",
         "tara_lain_kg": "0", "waktu": "", "catatan": "", "nomor_acuan": "",
-        "nama_sopir": "", "pihak_nama": "",
+        "nama_sopir": "Slamet", "pihak_nama": "",
     })
     teks = (await klien.get(f"{PREFIX}/pengaturan")).text
     assert 'class="bawah__tanda"' in teks
@@ -1958,7 +1958,7 @@ async def test_transfer_internal_timbang_bermuatan_lalu_kosong(klien):
         "kode": kode_dari(form), "berat_kg": "13600",
         "cara_timbang": "DUA_KALI", "supplier_id": "",
         "pihak_nama": "Gudang 1 → Gudang 2", "nomor_polisi": "AD 7 CC",
-        "nama_sopir": "", "jumlah_karung": "", "tara_per_karung_kg": "",
+        "nama_sopir": "Slamet", "jumlah_karung": "", "tara_per_karung_kg": "",
         "berat_acuan_kg": "", "nomor_acuan": "", "tara_lain_kg": "0",
         "waktu": "", "catatan": "",
     })
@@ -1999,7 +1999,7 @@ async def test_transfer_internal_tanpa_dokumen_pembanding(klien):
         "kode": kode_dari(form), "berat_kg": "13600",
         "cara_timbang": "DUA_KALI", "supplier_id": "",
         "pihak_nama": "Gudang 1 → Gudang 2", "nomor_polisi": "AD 7 CC",
-        "nama_sopir": "", "jumlah_karung": "", "tara_per_karung_kg": "",
+        "nama_sopir": "Slamet", "jumlah_karung": "", "tara_per_karung_kg": "",
         "berat_acuan_kg": "", "nomor_acuan": "", "tara_lain_kg": "0",
         "waktu": "", "catatan": "",
     })
@@ -2017,7 +2017,7 @@ async def test_transfer_internal_tidak_terkena_pagar_jumlah_karung(klien):
         "kode": kode_dari(form), "berat_kg": "13600",
         "cara_timbang": "DUA_KALI", "supplier_id": "",
         "pihak_nama": "Gudang 1 → Gudang 2", "nomor_polisi": "AD 7 CC",
-        "nama_sopir": "", "jumlah_karung": "", "tara_per_karung_kg": "",
+        "nama_sopir": "Slamet", "jumlah_karung": "", "tara_per_karung_kg": "",
         "berat_acuan_kg": "", "nomor_acuan": "", "tara_lain_kg": "0",
         "waktu": "", "catatan": "",
     })
@@ -2075,7 +2075,7 @@ async def test_masuk_dan_keluar_menolak_tanpa_nomor_polisi(klien, jenis):
     r = await klien.post(f"{PREFIX}/timbang/{jenis}", data={
         "kode": kode_dari(form), "berat_kg": "13600",
         "cara_timbang": "DUA_KALI", "supplier_id": "1", "nomor_polisi": "  ",
-        "nama_sopir": "", "jumlah_karung": "120", "tara_per_karung_kg": "0,25",
+        "nama_sopir": "Slamet", "jumlah_karung": "120", "tara_per_karung_kg": "0,25",
         "berat_acuan_kg": "10000", "nomor_acuan": "N-1", "tara_lain_kg": "0",
         "waktu": "", "catatan": "", "pihak_nama": "",
     })
@@ -2106,7 +2106,7 @@ async def test_jasa_timbang_dan_transfer_tetap_boleh_tanpa_nomor_polisi(
         "kode": kode_dari(form), "berat_kg": "12850",
         "cara_timbang": "SEKALI" if jenis == "BEBAS" else "DUA_KALI",
         "supplier_id": "", "pihak_nama": "CV Sumber Rejeki",
-        "nomor_polisi": "", "nama_sopir": "", "jumlah_karung": "",
+        "nomor_polisi": "", "nama_sopir": "Slamet", "jumlah_karung": "",
         "tara_per_karung_kg": "", "berat_acuan_kg": "", "nomor_acuan": "",
         "tara_lain_kg": "0", "waktu": "", "catatan": "",
     })
@@ -2121,7 +2121,7 @@ async def test_koreksi_tidak_bisa_mengosongkan_nomor_polisi(klien):
 
     r = await klien.post(f"{PREFIX}/transaksi/{trx_id}/koreksi", data={
         "alasan": "Salah ketik", "timbang1_kg": "", "timbang2_kg": "",
-        "nomor_polisi": "", "nama_sopir": "", "supplier_id": "",
+        "nomor_polisi": "", "nama_sopir": "Slamet", "supplier_id": "",
         "jumlah_karung": "", "tara_per_karung_kg": "", "berat_acuan_kg": "",
         "nomor_acuan": "", "catatan": "",
     })
@@ -2207,7 +2207,7 @@ async def test_jejak_audit_menampilkan_angka_sebelum_diubah(klien, app_uji):
     trx_id = await _selesaikan(klien, "GABAH_BASAH")
     await klien.post(f"{PREFIX}/transaksi/{trx_id}/koreksi", data={
         "alasan": "Salah baca timbangan", "timbang1_kg": "13500",
-        "timbang2_kg": "", "nomor_polisi": "", "nama_sopir": "",
+        "timbang2_kg": "", "nomor_polisi": "", "nama_sopir": "Slamet",
         "supplier_id": "", "jumlah_karung": "", "tara_per_karung_kg": "",
         "berat_acuan_kg": "", "nomor_acuan": "", "catatan": "",
     })
@@ -2380,7 +2380,7 @@ async def test_jam_yang_diketik_petugas_tampil_sama_persis(klien):
         "nomor_polisi": "AD 5 BB", "jumlah_karung": "120",
         "tara_per_karung_kg": "0,25", "berat_acuan_kg": "10000",
         "tara_lain_kg": "0", "waktu": "2026-08-31T09:15",
-        "catatan": "", "nomor_acuan": "N-1", "nama_sopir": "", "pihak_nama": "",
+        "catatan": "", "nomor_acuan": "N-1", "nama_sopir": "Slamet", "pihak_nama": "",
     })
     tiket = await klien.get(f"{PREFIX}/tiket")
     assert "09:15" in tiket.text
@@ -2401,7 +2401,7 @@ async def test_pihak_tercetak_sebesar_nomor_polisi(klien, jalur):
         "nomor_polisi": "AD 5 BB", "jumlah_karung": "120",
         "tara_per_karung_kg": "0,25", "berat_acuan_kg": "10000",
         "tara_lain_kg": "0", "waktu": "", "catatan": "",
-        "nomor_acuan": "N-1", "nama_sopir": "", "pihak_nama": "",
+        "nomor_acuan": "N-1", "nama_sopir": "Slamet", "pihak_nama": "",
     })
     teks = (await klien.get(PREFIX + jalur)).text
     baris = teks[teks.index('class="pilihan__nama"'):]
@@ -2410,18 +2410,22 @@ async def test_pihak_tercetak_sebesar_nomor_polisi(klien, jalur):
     assert "H. Anton" in baris          # di baris besar yang sama
 
 
-async def test_pihak_tanpa_nama_tidak_menyisakan_baris_kosong(klien):
-    """Jasa timbang boleh tanpa supplier terdaftar."""
+async def test_nama_pihak_wajib_di_semua_arah(klien):
+    """Catatan timbang tanpa nama pihak tidak bisa dicocokkan dengan nota,
+    tidak bisa direkap, dan tidak bisa dipertanggungjawabkan kepada siapa pun.
+    """
     await login(klien)
     form = (await klien.get(f"{PREFIX}/timbang/TRANSFER")).text
-    await klien.post(f"{PREFIX}/timbang/TRANSFER", data={
+    r = await klien.post(f"{PREFIX}/timbang/TRANSFER", data={
         "kode": kode_dari(form), "berat_kg": "13600",
         "cara_timbang": "DUA_KALI", "supplier_id": "", "pihak_nama": "",
-        "nomor_polisi": "", "nama_sopir": "", "jumlah_karung": "",
+        "nomor_polisi": "", "nama_sopir": "Slamet", "jumlah_karung": "",
         "tara_per_karung_kg": "", "berat_acuan_kg": "", "nomor_acuan": "",
         "tara_lain_kg": "0", "waktu": "", "catatan": "",
     })
-    assert "tanpa nama pihak" in (await klien.get(f"{PREFIX}/tiket")).text
+    assert "wajib diisi" in r.text
+    assert "Tidak ada truk" in (await klien.get(f"{PREFIX}/tiket")).text \
+        or "0" in (await klien.get(f"{PREFIX}/tiket")).text
 
 
 # ─────────────── Lembar pemeriksaan yang alasannya hilang ───────────────
@@ -2442,7 +2446,7 @@ async def test_lembar_terbuka_menyebut_bahwa_pemicunya_sudah_hilang(
         "nomor_polisi": "K 8382 CC", "jumlah_karung": "0",
         "tara_per_karung_kg": "0", "berat_acuan_kg": "9000",
         "tara_lain_kg": "0", "waktu": "", "catatan": "",
-        "nomor_acuan": "SJ-1", "nama_sopir": "", "pihak_nama": "",
+        "nomor_acuan": "SJ-1", "nama_sopir": "Slamet", "pihak_nama": "",
     })
     tiket = await klien.get(f"{PREFIX}/tiket")
     trx_id = int(re.search(r"/tiket/(\d+)", tiket.text).group(1))
@@ -2465,7 +2469,7 @@ async def test_lembar_terbuka_menyebut_bahwa_pemicunya_sudah_hilang(
     await klien.post(f"{PREFIX}/transaksi/{trx_id}/koreksi", data={
         "alasan": "Berat menurut dokumen tidak diinput",
         "timbang1_kg": "", "timbang2_kg": "", "nomor_polisi": "",
-        "nama_sopir": "", "supplier_id": "", "jumlah_karung": "",
+        "nama_sopir": "Slamet", "supplier_id": "", "jumlah_karung": "",
         "tara_per_karung_kg": "", "berat_acuan_kg": "12000",
         "nomor_acuan": "", "catatan": "",
     })
@@ -2488,7 +2492,7 @@ async def _mulai_masuk(klien, jenis="GABAH_BASAH", nopol="AD 5 BB") -> int:
         "cara_timbang": "DUA_KALI", "supplier_id": "1", "nomor_polisi": nopol,
         "jumlah_karung": "120", "tara_per_karung_kg": "0,25",
         "berat_acuan_kg": "10000", "tara_lain_kg": "0", "waktu": "",
-        "catatan": "", "nomor_acuan": "N-1", "nama_sopir": "", "pihak_nama": "",
+        "catatan": "", "nomor_acuan": "N-1", "nama_sopir": "Slamet", "pihak_nama": "",
     })
     tiket = await klien.get(f"{PREFIX}/tiket")
     return int(re.search(r"/tiket/(\d+)", tiket.text).group(1))
@@ -2589,7 +2593,7 @@ async def test_tara_bawaan_ikut_berganti_tapi_yang_diketik_dihormati(
         "cara_timbang": "DUA_KALI", "supplier_id": "1", "nomor_polisi": "B 1 CD",
         "jumlah_karung": "120", "tara_per_karung_kg": "0,4",
         "berat_acuan_kg": "10000", "tara_lain_kg": "0", "waktu": "",
-        "catatan": "", "nomor_acuan": "N-2", "nama_sopir": "", "pihak_nama": "",
+        "catatan": "", "nomor_acuan": "N-2", "nama_sopir": "Slamet", "pihak_nama": "",
     })
     diketik = (await trx_oleh_kode(klien, "B 1 CD"))
     await klien.post(f"{PREFIX}/keluar")
@@ -2705,7 +2709,7 @@ async def test_tiket_menyebut_arah_dan_tidak_memakai_kata_masuk_untuk_jam(
         "supplier_id": "1", "nomor_polisi": "K 8482 CC", "jumlah_karung": "0",
         "tara_per_karung_kg": "0", "berat_acuan_kg": "10000",
         "tara_lain_kg": "0", "waktu": "", "catatan": "", "nomor_acuan": "SJ-1",
-        "nama_sopir": "", "pihak_nama": "",
+        "nama_sopir": "Slamet", "pihak_nama": "",
     })
     for jalur in (f"{PREFIX}/tiket", f"{PREFIX}/"):
         teks = (await klien.get(jalur)).text
@@ -2731,7 +2735,7 @@ async def test_beras_masuk_dan_beras_keluar_bisa_dibedakan_di_daftar(
             "nomor_polisi": nopol, "jumlah_karung": "100",
             "tara_per_karung_kg": "0,1", "berat_acuan_kg": "9000",
             "tara_lain_kg": "0", "waktu": "", "catatan": "",
-            "nomor_acuan": "N", "nama_sopir": "", "pihak_nama": "",
+            "nomor_acuan": "N", "nama_sopir": "Slamet", "pihak_nama": "",
         })
     teks = (await klien.get(f"{PREFIX}/tiket")).text
     for nopol, arah in (("AD 1 AA", "barang masuk"), ("AD 2 BB", "pengiriman")):
@@ -2826,7 +2830,7 @@ async def test_pengiriman_menyimpan_ke_kolom_pelanggan(klien):
         "supplier_id": str(pid), "nomor_polisi": "K 8482 CC",
         "jumlah_karung": "100", "tara_per_karung_kg": "0,05",
         "berat_acuan_kg": "9000", "tara_lain_kg": "0", "waktu": "",
-        "catatan": "", "nomor_acuan": "SJ-1", "nama_sopir": "", "pihak_nama": "",
+        "catatan": "", "nomor_acuan": "SJ-1", "nama_sopir": "Slamet", "pihak_nama": "",
     })
     tiket = await klien.get(f"{PREFIX}/tiket")
     trx_id = int(re.search(r"/tiket/(\d+)", tiket.text).group(1))
@@ -2878,7 +2882,7 @@ async def test_ringkasan_menautkan_lembar_pemeriksaan_yang_terbuka(
         "supplier_id": "", "pihak_nama": "CV Uji", "nomor_polisi": "K 8382 CC",
         "jumlah_karung": "0", "tara_per_karung_kg": "0",
         "berat_acuan_kg": "9000", "tara_lain_kg": "0", "waktu": "",
-        "catatan": "", "nomor_acuan": "SJ-1", "nama_sopir": "",
+        "catatan": "", "nomor_acuan": "SJ-1", "nama_sopir": "Slamet",
     })
     tiket = await klien.get(f"{PREFIX}/tiket")
     trx_id = int(re.search(r"/tiket/(\d+)", tiket.text).group(1))
@@ -2895,7 +2899,7 @@ async def test_ringkasan_menautkan_lembar_pemeriksaan_yang_terbuka(
     # keadaan yang dulu membuat lembarnya menghilang dari layar.
     await klien.post(f"{PREFIX}/transaksi/{trx_id}/koreksi", data={
         "alasan": "harusnya tidak ada dokumen", "timbang1_kg": "",
-        "timbang2_kg": "", "nomor_polisi": "", "nama_sopir": "",
+        "timbang2_kg": "", "nomor_polisi": "", "nama_sopir": "Slamet",
         "supplier_id": "", "jumlah_karung": "", "tara_per_karung_kg": "",
         "berat_acuan_kg": "0", "nomor_acuan": "", "catatan": "",
     })
@@ -2917,7 +2921,7 @@ async def test_ringkasan_bersih_setelah_lembarnya_ditutup(klien, app_uji):
         "supplier_id": "", "pihak_nama": "CV Uji", "nomor_polisi": "K 1 AA",
         "jumlah_karung": "0", "tara_per_karung_kg": "0",
         "berat_acuan_kg": "9000", "tara_lain_kg": "0", "waktu": "",
-        "catatan": "", "nomor_acuan": "SJ-2", "nama_sopir": "",
+        "catatan": "", "nomor_acuan": "SJ-2", "nama_sopir": "Slamet",
     })
     tiket = await klien.get(f"{PREFIX}/tiket")
     trx_id = int(re.search(r"/tiket/(\d+)", tiket.text).group(1))
@@ -2944,3 +2948,66 @@ async def test_ringkasan_bersih_setelah_lembarnya_ditutup(klien, app_uji):
     assert "Pemeriksaan ditutup" in r.text
     assert "lembar pemeriksaan masih terbuka" not in (
         await klien.get(f"{PREFIX}/laporan")).text
+
+
+# ─────────────── Pihak & sopir wajib ───────────────
+
+@pytest.mark.parametrize("jenis,sebutan", [
+    ("GABAH_BASAH", "Supplier"),
+    ("BERAS", "Pelanggan"),
+    ("BEBAS", "Pemilik barang"),
+    ("TRANSFER", "Asal → tujuan"),
+])
+async def test_pihak_kosong_ditolak_dengan_sebutan_arahnya(klien, jenis, sebutan):
+    await login(klien)
+    form = (await klien.get(f"{PREFIX}/timbang/{jenis}")).text
+    r = await klien.post(f"{PREFIX}/timbang/{jenis}", data={
+        "kode": kode_dari(form), "berat_kg": "13600",
+        "cara_timbang": "DUA_KALI", "supplier_id": "", "pihak_nama": "",
+        "nomor_polisi": "AD 5 BB", "nama_sopir": "Slamet",
+        "jumlah_karung": "100", "tara_per_karung_kg": "0,1",
+        "berat_acuan_kg": "9000", "nomor_acuan": "N", "tara_lain_kg": "0",
+        "waktu": "", "catatan": "",
+    })
+    assert f"{sebutan} wajib diisi" in r.text
+
+
+async def test_pihak_boleh_dari_daftar_atau_diketik(klien):
+    """Dua jalan yang sah — yang dilarang hanya kosong."""
+    await login(klien)
+    for pilih, tulis in ((("supplier_id", "1"), ("pihak_nama", "")),
+                         (("supplier_id", ""), ("pihak_nama", "H. Baru"))):
+        form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
+        r = await klien.post(f"{PREFIX}/timbang/GABAH_BASAH", data={
+            "kode": kode_dari(form), "berat_kg": "13600",
+            "cara_timbang": "DUA_KALI", pilih[0]: pilih[1], tulis[0]: tulis[1],
+            "nomor_polisi": "AD 5 BB", "nama_sopir": "Slamet",
+            "jumlah_karung": "120", "tara_per_karung_kg": "0,25",
+            "berat_acuan_kg": "10000", "nomor_acuan": "N-1",
+            "tara_lain_kg": "0", "waktu": "", "catatan": "",
+        })
+        assert "wajib diisi" not in r.text
+
+
+async def test_nama_sopir_wajib(klien):
+    """Sopir satu-satunya orang yang hadir di jembatan saat angkanya dibaca."""
+    await login(klien)
+    form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
+    r = await klien.post(f"{PREFIX}/timbang/GABAH_BASAH", data={
+        "kode": kode_dari(form), "berat_kg": "13600",
+        "cara_timbang": "DUA_KALI", "supplier_id": "1", "pihak_nama": "",
+        "nomor_polisi": "AD 5 BB", "nama_sopir": "   ",
+        "jumlah_karung": "120", "tara_per_karung_kg": "0,25",
+        "berat_acuan_kg": "10000", "nomor_acuan": "N-1", "tara_lain_kg": "0",
+        "waktu": "", "catatan": "",
+    })
+    assert "Nama sopir wajib diisi" in r.text
+
+
+async def test_isian_sopir_ditandai_wajib_di_layar(klien):
+    await login(klien)
+    form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
+    potongan = form[form.index('name="nama_sopir"') - 300:
+                    form.index('name="nama_sopir"') + 200]
+    assert "required" in potongan
+    assert "Nama sopir (boleh kosong)" not in form

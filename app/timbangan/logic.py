@@ -87,6 +87,18 @@ STATUS_LABEL = {
     TANPA_KONTROL: "TANPA KONTROL",
 }
 
+#: Sebutan lawan transaksi menurut arah barang.
+#:
+#: Tinggal di sini, bukan di `web.py`, karena dipakai dua tempat: label di
+#: layar dan kalimat galat dari layanan. Dua salinan kata yang sama akan
+#: berbeda suatu hari, dan yang membacanya tidak akan tahu mana yang benar.
+PIHAK_LABEL = {
+    MASUK: "Supplier",
+    KELUAR: "Pelanggan",
+    BEBAS: "Pemilik barang",
+    TRANSFER: "Asal → tujuan",
+}
+
 #: Status yang mewajibkan lembar pemeriksaan SOP dibuka.
 STATUS_WAJIB_PERIKSA = {PERLU_PEMERIKSAAN, INVESTIGASI, KELEBIHAN}
 
