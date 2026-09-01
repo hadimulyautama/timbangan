@@ -23,14 +23,19 @@
   <div>
     <div class="lbl" style="margin-bottom:8px">Pilih ukuran</div>
 
-    <a href="{{ PREFIX }}/transaksi/{{ trx.id }}/cetak/80mm" target="_blank"
-       rel="noopener" class="pilihan" style="margin-bottom:8px">
+    {# data-unduh: berkasnya diambil di latar lalu diserahkan ke lembar
+       Bagikan, yang memuat pilihan Cetak. Tanpa itu, di aplikasi yang
+       dipasang ke layar utama iOS PDF-nya menggantikan seluruh layar — tanpa
+       tombol cetak, tanpa tombol bagikan, dan tanpa jalan kembali.
+       target="_blank" tetap dipasang sebagai jalan terakhir bila JS mati. #}
+    <a href="{{ PREFIX }}/transaksi/{{ trx.id }}/cetak/80mm" data-unduh download
+       target="_blank" rel="noopener" class="pilihan" style="margin-bottom:8px">
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--aksi)"
            stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
         <rect x="7" y="3" width="10" height="18" rx="1.5"/>
         <path d="M10 7h4M10 11h4M10 15h2"/></svg>
       <div class="pilihan__isi">
-        <div class="pilihan__nama">Struk 80 mm</div>
+        <div class="pilihan__nama" data-teks>Struk 80 mm</div>
         <div class="pilihan__ket">
           Printer thermal di pos timbang. Langsung keluar, tidak perlu kertas
           khusus.
@@ -38,14 +43,14 @@
       </div>
     </a>
 
-    <a href="{{ PREFIX }}/transaksi/{{ trx.id }}/cetak/ncr" target="_blank"
-       rel="noopener" class="pilihan">
+    <a href="{{ PREFIX }}/transaksi/{{ trx.id }}/cetak/ncr" data-unduh download
+       target="_blank" rel="noopener" class="pilihan">
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--tinta-2)"
            stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
         <rect x="2.5" y="6" width="19" height="12" rx="1.5"/>
         <path d="M6 10h7M6 13.5h5"/><path d="M17 10v4.5"/></svg>
       <div class="pilihan__isi">
-        <div class="pilihan__nama">Setengah NCR · 215 × 165 mm</div>
+        <div class="pilihan__nama" data-teks>Setengah NCR · 215 × 165 mm</div>
         <div class="pilihan__ket">
           Kertas nota berlapis. Lembar 1 untuk
           {{ 'pengirim' if trx.arah == MASUK else 'pelanggan' }}, lembar 2 arsip

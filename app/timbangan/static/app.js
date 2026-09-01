@@ -344,13 +344,18 @@
 
   function unduhBerkas(tautan) {
     if (tautan.dataset.sibuk === '1') { return; }
-    var semula = tautan.textContent;
+    // Yang diganti hanya elemen berlabel `data-teks` bila ada. Tautan pilihan
+    // cetak berisi ikon dan keterangan; mengganti seluruh isinya dengan kata
+    // "Menyiapkan…" akan menghapus semuanya, dan tidak kembali utuh bila
+    // pengguna membatalkan lembar bagikan.
+    var label = tautan.querySelector('[data-teks]') || tautan;
+    var semula = label.textContent;
     tautan.dataset.sibuk = '1';
-    tautan.textContent = 'Menyiapkan…';
+    label.textContent = 'Menyiapkan…';
 
     var selesai = function () {
       tautan.dataset.sibuk = '';
-      tautan.textContent = semula;
+      label.textContent = semula;
     };
 
     fetch(tautan.href, { credentials: 'same-origin' })

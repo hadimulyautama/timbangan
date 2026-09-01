@@ -366,8 +366,18 @@ async def _pdf(db, transaksi_id, request, ncr: bool, akun=None):
     )
     if ncr:
         return b.trx, pdf.bukti_ncr(**umum)
+    # Selisih hanya dicetak bila ada yang benar-benar dibandingkan.
+    #
+    # `rahasia` menahan hasil kontrol gabah agar tidak sampai ke pengirim.
+    # Tetapi ada sebab kedua yang dulu terlewat: sebagian komoditas memang
+    # tidak punya dokumen sama sekali (jasa timbang, transfer internal), dan
+    # nota bisa saja belum diisi. Struknya lalu mencetak "Menurut dokumen
+    # 0 kg · Selisih 0,00 kg" — angka yang terbaca seperti pernyataan,
+    # padahal tidak ada dokumen yang menyatakannya.
+    ada_acuan = (aturan.acuan != logic.ACUAN_TIDAK_ADA
+                 and float(b.trx.berat_acuan_kg or 0) > 0)
     return b.trx, pdf.bukti_thermal(
-        **umum, tampilkan_selisih=not aturan.rahasia
+        **umum, tampilkan_selisih=(not aturan.rahasia) and ada_acuan
     )
 
 

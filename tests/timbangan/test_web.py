@@ -3211,3 +3211,46 @@ async def test_kalimat_karung_di_timbang_kedua_mengikuti_arah(
     tiket = await klien.get(f"{PREFIX}/tiket")
     trx_id = int(re.search(r"/tiket/(\d+)", tiket.text).group(1))
     assert kalimat in (await klien.get(f"{PREFIX}/tiket/{trx_id}")).text
+
+
+# ─────────────── Struk: selisih hanya bila ada pembandingnya ───────────────
+
+async def test_struk_jasa_timbang_tidak_mencetak_dokumen_nol(klien):
+    """Timbang bebas tidak punya dokumen. Mencetak "Menurut dokumen 0 kg ·
+    Selisih 0,00 kg" membuat angka nol terbaca seperti pernyataan, padahal
+    tidak ada dokumen yang menyatakannya."""
+    from pypdf import PdfReader
+    from io import BytesIO
+
+    await login(klien)
+    form = (await klien.get(f"{PREFIX}/timbang/BEBAS")).text
+    await klien.post(f"{PREFIX}/timbang/BEBAS", data={
+        "kode": kode_dari(form), "berat_kg": "14248", "cara_timbang": "SEKALI",
+        "supplier_id": "", "pihak_nama": "Pak Arif", "nomor_polisi": "AD 9262 BE",
+        "nama_sopir": "Pak Arif", "jumlah_karung": "0",
+        "tara_per_karung_kg": "0", "berat_acuan_kg": "0", "nomor_acuan": "",
+        "tara_lain_kg": "0", "waktu": "", "catatan": "",
+    })
+    trx_id = 1
+    r = await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak/80mm")
+    assert r.status_code == 200
+    teks = "\n".join(
+        h.extract_text() or "" for h in PdfReader(BytesIO(r.content)).pages)
+    assert "BERAT BARANG" in teks
+    assert "Menurut dokumen" not in teks
+    assert "Selisih" not in teks
+
+
+async def test_struk_tetap_mencetak_selisih_bila_dokumennya_ada(klien):
+    """Beras PK sengaja transparan (`rahasia=False`) — hasil kontrolnya
+    memang diserahkan ke pengirim, sesuai Sistem Tara butir 9. Gabah dan
+    seluruh pengiriman sebaliknya: selisihnya tidak pernah dicetak."""
+    from pypdf import PdfReader
+    from io import BytesIO
+
+    await login(klien)
+    trx_id = await _selesaikan(klien, "BERAS_PK")
+    r = await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak/80mm")
+    teks = "\n".join(
+        h.extract_text() or "" for h in PdfReader(BytesIO(r.content)).pages)
+    assert "Menurut dokumen" in teks and "Selisih" in teks
