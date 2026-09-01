@@ -881,6 +881,151 @@ async def simpan_timbang_kedua(
     return trx
 
 
+async def ubah_jenis(
+    db: AsyncSession,
+    *,
+    akun: TimbanganAkun,
+    trx: TimbanganTransaksi,
+    jenis_kode: str,
+    alasan: str,
+    tukar_timbangan: bool = False,
+    ip: str | None = None,
+) -> str:
+    """Ganti komoditas — dan karenanya arah barang — pada transaksi yang ada.
+
+    Operator memilih komoditas di awal, dan komoditas itulah yang menentukan
+    arah: gabah selalu masuk, menir selalu keluar. Salah pilih di layar
+    pertama karena itu berarti salah arah, dan salah arah membalik tafsir
+    kedua angka timbangnya.
+
+    **Biasanya angka timbangnya tidak perlu dipindah**, hanya ditafsirkan
+    ulang: pada barang masuk timbang pertama adalah truk bermuatan, pada
+    pengiriman ia truk kosong.
+
+    Tetapi kadang urutan angkanya ikut terbalik, dan itu bukan kebetulan.
+    Petugas mengetik mengikuti LABEL di layar, bukan urutan waktu — kalau
+    arahnya terlanjur salah, ia menaruh bacaan bermuatan di kolom yang
+    tertulis "truk kosong". `tukar_timbangan=True` menukar kedua angka
+    beserta jamnya untuk keadaan itu.
+
+    Kapan yang mana dibutuhkan tidak perlu ditebak: bila arah barunya membuat
+    truk kosong lebih berat daripada truk bermuatan — mustahil secara fisik —
+    layanan ini menolak dan menyebut penukaran sebagai jalan keluarnya, alih-
+    alih melempar galat "berat truk kosong harus lebih kecil" yang benar
+    tetapi tidak menolong siapa pun.
+
+    Boleh dilakukan **sebelum maupun sesudah timbang kedua**, dan hanya oleh
+    Admin (termasuk Super Admin). Bukan karena petugas tidak dipercaya,
+    melainkan karena mengubah arah mengubah seluruh hasil kontrol sebuah
+    transaksi yang sudah tersimpan — itu keputusan yang harus punya nama.
+    """
+    if not akun.is_admin:
+        raise LayananError(
+            "Hanya Admin yang boleh mengubah jenis atau arah barang."
+        )
+    if trx.status_transaksi == TRX_VOID:
+        raise LayananError("Transaksi sudah dibatalkan.")
+    if not (alasan or "").strip():
+        raise LayananError("Perubahan jenis barang harus disertai alasan.")
+
+    baru = (jenis_kode or "").strip().upper()
+    if not baru or baru == trx.jenis_kode:
+        return ""
+
+    aturan_baru = await aturan_untuk(db, baru)
+    aturan_lama = await aturan_untuk(db, trx.jenis_kode)
+
+    # Timbang sekali tidak punya angka kedua. Komoditas yang dikontrol
+    # terhadap dokumen menuntut dua angka; memindahkannya ke sana akan
+    # menghitung seluruh berat truk sebagai barang.
+    if (trx.cara_timbang == CARA_SEKALI
+            and aturan_baru.acuan != logic.ACUAN_TIDAK_ADA):
+        raise LayananError(
+            f"{aturan_baru.nama} butuh dua kali timbang, sedangkan transaksi "
+            "ini hanya ditimbang sekali. Batalkan lalu timbang ulang."
+        )
+
+    sebelum = {"jenis_kode": trx.jenis_kode, "arah": trx.arah,
+               "status_kontrol": trx.status_kontrol,
+               "selisih_kg": float(trx.selisih_kg or 0)}
+
+    trx.jenis_kode = baru
+    trx.arah = aturan_baru.arah
+    trx.aturan_snapshot = json.dumps(
+        aturan_baru.__dict__, ensure_ascii=False, default=str
+    )
+    trx.diubah_oleh_id = akun.id
+
+    await db.refresh(trx, ["muatan"])
+    tara_lama_bawaan = aturan_lama.tara_default()
+    for m in trx.muatan:
+        m.jenis_kode = baru
+        # Tara ikut berganti HANYA bila angkanya masih bawaan komoditas lama,
+        # yaitu angka yang tinggal diterima petugas dari formulir. Bila ia
+        # mengetiknya sendiri — hasil menimbang karung yang benar-benar ada —
+        # angkanya dihormati, karena itu pengamatan, bukan setelan.
+        if abs(float(m.tara_per_karung_kg or 0) - tara_lama_bawaan) < 1e-9:
+            m.tara_per_karung_kg = aturan_baru.tara_default()
+
+    if tukar_timbangan and trx.timbang2_kg is not None:
+        trx.timbang1_kg, trx.timbang2_kg = trx.timbang2_kg, trx.timbang1_kg
+        trx.timbang1_waktu, trx.timbang2_waktu = (
+            trx.timbang2_waktu, trx.timbang1_waktu)
+        trx.timbang1_petugas_id, trx.timbang2_petugas_id = (
+            trx.timbang2_petugas_id, trx.timbang1_petugas_id)
+        sebelum["timbang_ditukar"] = True
+
+    if trx.status_tiket == TIKET_SELESAI:
+        bermuatan, kosong = _bermuatan_dan_kosong(
+            trx.arah, float(trx.timbang1_kg), float(trx.timbang2_kg)
+            if trx.timbang2_kg is not None else None
+        )
+        if kosong is not None and kosong >= bermuatan:
+            # Angkanya diformat sendiri-sendiri. Pernah ditulis sebagai satu
+            # kalimat lalu `.replace(",", ".")` untuk pemisah ribuan — dan
+            # koma kalimatnya ikut termakan jadi titik.
+            def _kg(n: float) -> str:
+                return f"{n:,.0f}".replace(",", ".")
+
+            raise LayananError(
+                f"Dengan arah {aturan_baru.arah.lower()}, truk kosong "
+                f"({_kg(kosong)} kg) jadi lebih berat daripada truk bermuatan "
+                f"({_kg(bermuatan)} kg) — mustahil. Kemungkinan besar urutan "
+                "angkanya ikut terbalik karena petugas mengetik mengikuti "
+                "label di layar. Ulangi sambil mencentang "
+                "\u201cTukar urutan angka timbang\u201d."
+            )
+        trx.berat_bermuatan_kg = bermuatan
+        trx.berat_kosong_kg = kosong
+        _terapkan_hasil(trx, logic.hitung(
+            aturan=aturan_baru,
+            berat_bermuatan_kg=bermuatan,
+            berat_kosong_kg=kosong,
+            muatan=_baris_logic(trx.muatan),
+            tara_lain_kg=float(trx.tara_lain_kg or 0),
+            kapasitas_kg=(await setelan.semua(db))["kapasitas_jembatan_kg"],
+        ))
+
+    await catat_audit(
+        db, akun=akun, aksi="UBAH_JENIS", entitas="transaksi",
+        entitas_id=trx.kode,
+        ringkasan=f"{aturan_lama.nama} ({sebelum['arah']}) → "
+                  f"{aturan_baru.nama} ({trx.arah}) — {alasan.strip()}",
+        sebelum=sebelum,
+        sesudah={"jenis_kode": trx.jenis_kode, "arah": trx.arah,
+                 "status_kontrol": trx.status_kontrol,
+                 "selisih_kg": float(trx.selisih_kg or 0)},
+        perangkat=trx.perangkat_kode, ip=ip,
+    )
+
+    if trx.status_kontrol in logic.STATUS_WAJIB_PERIKSA:
+        await buka_pemeriksaan(db, akun=akun, trx=trx)
+
+    await db.commit()
+    await db.refresh(trx)
+    return f"{aturan_lama.nama} → {aturan_baru.nama}"
+
+
 async def koreksi_transaksi(
     db: AsyncSession,
     *,

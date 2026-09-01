@@ -2477,3 +2477,213 @@ async def test_lembar_terbuka_menyebut_bahwa_pemicunya_sudah_hilang(
     assert "sudah berubah sejak lembar ini dibuka" in rincian
     assert "Terbuka" in rincian          # tetap terbuka, tidak ditutup mesin
     assert "Tutup pemeriksaan" in rincian
+
+
+# ─────────────── Salah pilih arah barang ───────────────
+
+async def _mulai_masuk(klien, jenis="GABAH_BASAH", nopol="AD 5 BB") -> int:
+    form = (await klien.get(f"{PREFIX}/timbang/{jenis}")).text
+    await klien.post(f"{PREFIX}/timbang/{jenis}", data={
+        "kode": kode_dari(form), "berat_kg": "13600",
+        "cara_timbang": "DUA_KALI", "supplier_id": "1", "nomor_polisi": nopol,
+        "jumlah_karung": "120", "tara_per_karung_kg": "0,25",
+        "berat_acuan_kg": "10000", "tara_lain_kg": "0", "waktu": "",
+        "catatan": "", "nomor_acuan": "N-1", "nama_sopir": "", "pihak_nama": "",
+    })
+    tiket = await klien.get(f"{PREFIX}/tiket")
+    return int(re.search(r"/tiket/(\d+)", tiket.text).group(1))
+
+
+async def test_arah_bisa_dibetulkan_sebelum_timbang_kedua(klien, app_uji):
+    await login(klien, "budi")
+    trx_id = await _mulai_masuk(klien)
+    await klien.post(f"{PREFIX}/keluar")
+
+    await login(klien, "wahid")
+    r = await klien.post(f"{PREFIX}/transaksi/{trx_id}/jenis", data={
+        "jenis_kode": "BERAS", "alasan": "Salah pilih saat mulai menimbang"})
+    assert "Jenis barang diubah" in r.text
+
+    trx = await trx_oleh_id(trx_id)
+    assert trx.jenis_kode == "BERAS"
+    assert trx.arah == "KELUAR"
+    assert trx.status_tiket == TIKET_TERBUKA      # tiketnya tetap terbuka
+
+
+async def test_arah_bisa_dibetulkan_setelah_timbang_kedua(klien, app_uji):
+    """Angka timbangnya tidak perlu diketik ulang — hanya ditafsirkan ulang."""
+    await login(klien, "budi")
+    trx_id = await _mulai_masuk(klien)
+    await klien.post(f"{PREFIX}/tiket/{trx_id}", data={
+        "berat_kg": "3570", "jumlah_karung": "120",
+        "tara_per_karung_kg": "0,25", "berat_acuan_kg": "10000",
+        "nomor_acuan": "N-1", "waktu": "", "catatan": "", "aksi": "selesai",
+    })
+    await klien.post(f"{PREFIX}/keluar")
+
+    semula = await trx_oleh_id(trx_id)
+    assert semula.arah == "MASUK"
+    assert semula.berat_bermuatan_kg == 13600 and semula.berat_kosong_kg == 3570
+
+    await login(klien, "wahid")
+    # Komoditas lain pada ARAH YANG SAMA: angkanya tidak perlu disentuh sama
+    # sekali, hanya aturan kontrolnya yang berganti.
+    r = await klien.post(f"{PREFIX}/transaksi/{trx_id}/jenis", data={
+        "jenis_kode": "GABAH_KERING", "alasan": "Ternyata gabah kering"})
+    assert "dihitung ulang" in r.text
+
+    trx = await trx_oleh_id(trx_id)
+    assert trx.jenis_kode == "GABAH_KERING" and trx.arah == "MASUK"
+    assert trx.timbang1_kg == 13600 and trx.timbang2_kg == 3570
+    assert trx.berat_bermuatan_kg == 13600 and trx.berat_kosong_kg == 3570
+
+
+async def test_arah_mustahil_ditolak_sambil_menyebut_jalan_keluarnya(
+    klien, app_uji
+):
+    """Angka yang urutannya benar tidak bisa sekadar dibalik arahnya.
+
+    Truk yang datang 13,6 t lalu pergi 3,57 t secara fisik adalah barang
+    masuk — pengiriman selalu pergi lebih berat. Yang penting di sini bukan
+    penolakannya, melainkan bahwa penolakan itu MENYEBUT apa yang harus
+    dilakukan, alih-alih melempar galat "berat truk kosong harus lebih kecil"
+    yang benar tetapi tidak menolong siapa pun.
+    """
+    await login(klien, "budi")
+    trx_id = await _mulai_masuk(klien)
+    await klien.post(f"{PREFIX}/tiket/{trx_id}", data={
+        "berat_kg": "3570", "jumlah_karung": "120",
+        "tara_per_karung_kg": "0,25", "berat_acuan_kg": "10000",
+        "nomor_acuan": "N-1", "waktu": "", "catatan": "", "aksi": "selesai",
+    })
+    await klien.post(f"{PREFIX}/keluar")
+    await login(klien, "wahid")
+
+    r = await klien.post(f"{PREFIX}/transaksi/{trx_id}/jenis", data={
+        "jenis_kode": "BERAS", "alasan": "coba"})
+    assert "mustahil" in r.text
+    assert "Tukar urutan angka timbang" in r.text
+    assert (await trx_oleh_id(trx_id)).arah == "MASUK"   # tidak tersentuh
+
+    # Dengan penukaran, perbaikannya jalan dan angkanya masuk akal.
+    r = await klien.post(f"{PREFIX}/transaksi/{trx_id}/jenis", data={
+        "jenis_kode": "BERAS", "alasan": "Petugas mengetik mengikuti label",
+        "tukar_timbangan": "1"})
+    assert "dihitung ulang" in r.text
+    trx = await trx_oleh_id(trx_id)
+    assert trx.arah == "KELUAR"
+    assert trx.timbang1_kg == 3570 and trx.timbang2_kg == 13600
+    assert trx.berat_kosong_kg == 3570 and trx.berat_bermuatan_kg == 13600
+
+
+async def test_tara_bawaan_ikut_berganti_tapi_yang_diketik_dihormati(
+    klien, app_uji
+):
+    await login(klien, "budi")
+    # Tara 0,25 = bawaan gabah, jadi ia hanya diterima dari formulir.
+    bawaan = await _mulai_masuk(klien)
+    # Tara 0,4 diketik sendiri — hasil menimbang karung yang benar-benar ada.
+    form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
+    await klien.post(f"{PREFIX}/timbang/GABAH_BASAH", data={
+        "kode": kode_dari(form), "berat_kg": "13600",
+        "cara_timbang": "DUA_KALI", "supplier_id": "1", "nomor_polisi": "B 1 CD",
+        "jumlah_karung": "120", "tara_per_karung_kg": "0,4",
+        "berat_acuan_kg": "10000", "tara_lain_kg": "0", "waktu": "",
+        "catatan": "", "nomor_acuan": "N-2", "nama_sopir": "", "pihak_nama": "",
+    })
+    diketik = (await trx_oleh_kode(klien, "B 1 CD"))
+    await klien.post(f"{PREFIX}/keluar")
+
+    await login(klien, "wahid")
+    for tid in (bawaan, diketik):
+        await klien.post(f"{PREFIX}/transaksi/{tid}/jenis", data={
+            "jenis_kode": "BERAS", "alasan": "salah pilih"})
+
+    from app import database
+    from app.timbangan.models import TimbanganMuatan
+    from sqlalchemy import select
+    async with database.SessionLocal() as db:
+        tara = {}
+        for tid in (bawaan, diketik):
+            m = (await db.execute(select(TimbanganMuatan).where(
+                TimbanganMuatan.transaksi_id == tid))).scalars().first()
+            tara[tid] = float(m.tara_per_karung_kg)
+    assert tara[bawaan] == 0.05      # bawaan BERAS keluar
+    assert tara[diketik] == 0.4      # pengamatan petugas dihormati
+
+
+async def trx_oleh_kode(klien, nopol: str) -> int:
+    tiket = await klien.get(f"{PREFIX}/tiket")
+    potongan = tiket.text[:tiket.text.index(nopol)]
+    return int(re.findall(r"/tiket/(\d+)", potongan)[-1])
+
+
+@pytest.mark.parametrize("siapa", ["budi", "miftah"])
+async def test_petugas_tidak_boleh_mengubah_arah(klien, app_uji, siapa):
+    """Mengubah arah mengubah seluruh hasil kontrol transaksi yang sudah
+    tersimpan — keputusan yang harus punya nama."""
+    await login(klien, "budi")
+    trx_id = await _mulai_masuk(klien)
+    await klien.post(f"{PREFIX}/keluar")
+
+    await login(klien, siapa)
+    r = await klien.post(f"{PREFIX}/transaksi/{trx_id}/jenis", data={
+        "jenis_kode": "BERAS", "alasan": "mau ganti"})
+    assert r.status_code == 403
+    assert (await trx_oleh_id(trx_id)).arah == "MASUK"
+
+
+async def test_ubah_arah_wajib_beralasan_dan_tercatat(klien, app_uji):
+    from sqlalchemy import select
+
+    from app import database
+    from app.timbangan.models import TimbanganAudit
+
+    await login(klien, "budi")
+    trx_id = await _mulai_masuk(klien)
+    await klien.post(f"{PREFIX}/keluar")
+    await login(klien, "wahid")
+
+    r = await klien.post(f"{PREFIX}/transaksi/{trx_id}/jenis", data={
+        "jenis_kode": "BERAS", "alasan": "   "})
+    assert "disertai alasan" in r.text
+    assert (await trx_oleh_id(trx_id)).arah == "MASUK"
+
+    await klien.post(f"{PREFIX}/transaksi/{trx_id}/jenis", data={
+        "jenis_kode": "BERAS", "alasan": "Salah pilih saat mulai"})
+    async with database.SessionLocal() as db:
+        jejak = (await db.execute(select(TimbanganAudit).where(
+            TimbanganAudit.aksi == "UBAH_JENIS"))).scalars().one()
+    assert "Gabah Basah" in jejak.ringkasan and "Beras" in jejak.ringkasan
+    assert "MASUK" in jejak.nilai_sebelum and "KELUAR" in jejak.nilai_sesudah
+
+
+async def test_formulir_ubah_jenis_hanya_tampak_bagi_admin(klien, app_uji):
+    await login(klien, "budi")
+    trx_id = await _mulai_masuk(klien)
+    milik_petugas = (await klien.get(f"{PREFIX}/transaksi/{trx_id}/koreksi")).text
+    assert "Salah pilih jenis atau arah barang?" not in milik_petugas
+    await klien.post(f"{PREFIX}/keluar")
+
+    await login(klien, "wahid")
+    milik_admin = (await klien.get(f"{PREFIX}/transaksi/{trx_id}/koreksi")).text
+    assert "Salah pilih jenis atau arah barang?" in milik_admin
+    assert 'name="jenis_kode"' in milik_admin
+
+
+async def test_pesan_arah_mustahil_tidak_merusak_tanda_bacanya(klien, app_uji):
+    """Pemisah ribuan pernah ditulis dengan `.replace(",", ".")` atas seluruh
+    kalimat, sehingga koma kalimatnya ikut jadi titik."""
+    await login(klien, "budi")
+    trx_id = await _mulai_masuk(klien)
+    await klien.post(f"{PREFIX}/tiket/{trx_id}", data={
+        "berat_kg": "3570", "jumlah_karung": "120",
+        "tara_per_karung_kg": "0,25", "berat_acuan_kg": "10000",
+        "nomor_acuan": "N-1", "waktu": "", "catatan": "", "aksi": "selesai",
+    })
+    await klien.post(f"{PREFIX}/keluar")
+    await login(klien, "wahid")
+    r = await klien.post(f"{PREFIX}/transaksi/{trx_id}/jenis", data={
+        "jenis_kode": "BERAS", "alasan": "coba"})
+    assert "arah keluar, truk kosong" in r.text
+    assert "13.600 kg" in r.text and "3.570 kg" in r.text

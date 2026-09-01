@@ -78,4 +78,71 @@
       Simpan koreksi
     </button>
   </form>
+
+  {# Formulir TERPISAH dari koreksi di atas, dan sengaja diletakkan sesudah
+     tag penutupnya — bukan hanya soal kerapian: formulir bersarang tidak sah
+     di HTML, dan isian yang terlanjur berada di luar tag penutup tidak akan
+     ikut terkirim sama sekali.
+
+     Dipisahkan karena mengubah arah membalik tafsir kedua angka timbang dan
+     menghitung ulang seluruh hasil kontrol. Diletakkan di halaman ini karena
+     inilah tempat orang mencarinya begitu sadar salah pilih. #}
+  {% if akun.is_admin %}
+    <details class="kartu tanpa-cetak" style="margin-top:16px">
+      <summary style="cursor:pointer;font-weight:700;font-size:14px">
+        Salah pilih jenis atau arah barang?
+      </summary>
+      <div class="bantu" style="margin-top:10px">
+        Angka timbangnya tidak perlu diketik ulang. Petugas menimbang apa yang
+        ada di jembatan dan mengetiknya berurutan — yang keliru hanya labelnya.
+        Mengganti jenisnya membuat angka yang sama ditafsirkan ulang dengan
+        benar.
+        {% if trx.status_tiket == TIKET_TERBUKA %}
+          Tiket ini masih terbuka, jadi belum ada hasil yang perlu dihitung
+          ulang.
+        {% else %}
+          Hasil kontrolnya dihitung ulang seketika.
+        {% endif %}
+      </div>
+      <form method="post" action="{{ PREFIX }}/transaksi/{{ trx.id }}/jenis"
+            style="margin-top:12px;display:flex;flex-direction:column;gap:12px">
+        <div class="grup">
+          <div class="lbl">Jenis barang</div>
+          <select class="fld" name="jenis_kode" required data-cari="Ketik nama komoditas…">
+            {% for j in jenis %}
+              <option value="{{ j.kode }}" {{ 'selected' if j.kode == trx.jenis_kode }}>
+                {{ j.nama }} · {{ j.arah|lower }}</option>
+            {% endfor %}
+          </select>
+          <div class="bantu">
+            Arah barang mengikuti jenisnya — gabah selalu masuk, menir selalu
+            keluar.
+          </div>
+        </div>
+        {% if trx.timbang2_kg is not none %}
+          <label style="display:flex;gap:10px;align-items:flex-start">
+            <input type="checkbox" name="tukar_timbangan" value="1"
+                   style="margin-top:4px">
+            <span>
+              <b>Tukar urutan angka timbang</b>
+              <div class="bantu">
+                Centang bila petugas mengetik mengikuti label di layar, bukan
+                urutan waktu — biasanya terlihat dari truk kosong yang jadi
+                lebih berat daripada truk bermuatan. Sistem akan memberi tahu
+                bila ini yang dibutuhkan.
+              </div>
+            </span>
+          </label>
+        {% endif %}
+        <div class="grup">
+          <div class="lbl">Alasan</div>
+          <textarea class="fld" name="alasan" rows="2" required
+                    placeholder="Salah pilih saat mulai menimbang"></textarea>
+        </div>
+        <button type="submit" class="tbl bahaya" data-sibuk="Menghitung ulang…">
+          Ubah jenis &amp; arah
+        </button>
+      </form>
+    </details>
+  {% endif %}
 {% endblock %}

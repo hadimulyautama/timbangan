@@ -158,6 +158,7 @@ async def form_koreksi(
         request, "koreksi.html",
         b=b, aturan=await service.aturan_untuk(db, b.trx.jenis_kode),
         supplier_pilihan=await service.supplier_pilihan(db),
+        jenis=await service.daftar_jenis(db),
         kembali=f"{PREFIX}/transaksi/{transaksi_id}",
     )
 
@@ -404,6 +405,38 @@ async def cetak_80mm_pdf(
     return Response(
         isi, media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="{trx.kode}-80mm.pdf"'},
+    )
+
+
+@router.post("/transaksi/{transaksi_id}/jenis")
+async def ubah_jenis_transaksi(
+    transaksi_id: int,
+    request: Request,
+    jenis_kode: str = Form(...),
+    alasan: str = Form(""),
+    tukar_timbangan: str = Form(""),
+    akun: TimbanganAkun = Depends(butuh_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Betulkan komoditas — dan arah barang — yang salah dipilih di awal.
+
+    Terpisah dari koreksi biasa dan tertutup bagi petugas: mengubah arah
+    mengubah seluruh hasil kontrol transaksi yang sudah tersimpan.
+    """
+    b = await _ambil(db, transaksi_id, akun)
+    try:
+        pindah = await service.ubah_jenis(
+            db, akun=akun, trx=b.trx, jenis_kode=jenis_kode, alasan=alasan,
+            tukar_timbangan=bool(tukar_timbangan),
+            ip=request.client.host if request.client else None,
+        )
+    except (service.LayananError, logic.ValidasiError) as e:
+        return redirect(f"/transaksi/{transaksi_id}/koreksi", err=str(e))
+    if not pindah:
+        return redirect(f"/transaksi/{transaksi_id}", ok="Jenis barang tidak berubah.")
+    return redirect(
+        f"/transaksi/{transaksi_id}",
+        ok=f"Jenis barang diubah: {pindah}. Hasil kontrolnya dihitung ulang.",
     )
 
 
