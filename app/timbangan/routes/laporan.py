@@ -16,7 +16,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.timbangan import format as fmt
-from app.timbangan import service
+from app.timbangan import logic, service
 from app.timbangan.db import get_db, hari_ini
 from app.timbangan.models import TimbanganAkun
 from app.timbangan.security import butuh_admin
@@ -49,8 +49,9 @@ async def laporan(
         ringkasan=await service.ringkasan_dashboard(db, f),
         lembar_terbuka=await service.daftar_pemeriksaan_terbuka(db),
         perlu_periksa=await service.daftar_transaksi(
-            db, service.FilterTransaksi(dari=dari, sampai=sampai,
-                                        status_kontrol="PERLU_PEMERIKSAAN"),
+            db, service.FilterTransaksi(
+                dari=dari, sampai=sampai,
+                status_kontrol=sorted(logic.STATUS_WAJIB_PERIKSA)),
             batas=20,
         ),
         tara_jatuh_tempo=await service.tara_jatuh_tempo(db),

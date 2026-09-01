@@ -108,19 +108,30 @@
 
   {# ── Dokumen & muatan ── #}
   {% if transfer %}
-    {# Tanpa dokumen pembanding: yang dicatat cukup muatannya, supaya berat
-       barang bisa dihitung bersih dari karung bila memang berkarung. #}
+    {# Muatan berdiri sendiri, di luar kartu nota.
+       Nomor dan berat adalah isi kertas yang dibawa sopir; jumlah karung
+       adalah hitungan petugas. Dulu keduanya satu kartu bernama "Nota
+       supplier", dan itu mengundang angka karung disalin dari nota — padahal
+       justru hitungan sendiri itulah yang menentukan berat bersihnya.
+
+       Tetap ada di layar ini: kadang jumlahnya sudah pasti sejak truk datang.
+       Bila belum, ia bisa diisi di timbang kedua. Yang tidak boleh hanya
+       kosong di kedua-duanya — dijaga saat menyelesaikan penimbangan. #}
     <div class="kartu">
       <div class="kartu__judul">Muatan</div>
       <div style="display:flex;flex-direction:column;gap:14px">
         {{ isian('jumlah_karung', 'Jumlah karung', '', 'karung', 'text',
-                 'Kosongkan bila muatannya curah', false, false,
-                 'inputmode="numeric"') }}
-        {{ isian('tara_per_karung_kg', 'Tara per karung', '', 'kg', 'text', '',
+                 'Boleh dikosongkan dan dihitung saat bongkar.',
+                 false, false, 'inputmode="numeric"') }}
+        {{ isian('tara_per_karung_kg', 'Tara per karung',
+                 '%.3f'|format(tara) if tara else '', 'kg', 'text',
+                 'Dari sampling ' ~ (asal_tara.berlaku_mulai|tgl(true))
+                   if asal_tara else 'Nilai bawaan aturan komoditas',
                  false, false, 'inputmode="decimal" data-berat') }}
       </div>
     </div>
   {% elif not bebas %}
+    {# Kartu ini hanya isi dokumennya. Muatan punya kartunya sendiri. #}
     <div class="kartu">
       <div class="kartu__judul">
         {{ 'Nota supplier' if masuk else 'Surat jalan' }}
@@ -133,16 +144,32 @@
         {{ berat('berat_acuan_kg',
                  'Berat menurut ' ~ ('nota' if masuk else 'surat jalan'),
                  '', '', false) }}
-        {{ isian('jumlah_karung', 'Jumlah karung', '', 'karung', 'text', '',
+      </div>
+      <div class="bantu" style="margin-top:10px">
+        Boleh dikosongkan sekarang dan diisi saat timbang kedua.
+      </div>
+    </div>
+
+    {# Muatan berdiri sendiri, di luar kartu nota.
+       Nomor dan berat adalah isi kertas yang dibawa sopir; jumlah karung
+       adalah hitungan petugas. Dulu keduanya satu kartu bernama "Nota
+       supplier", dan itu mengundang angka karung disalin dari nota — padahal
+       justru hitungan sendiri itulah yang menentukan berat bersihnya.
+
+       Tetap ada di layar ini: kadang jumlahnya sudah pasti sejak truk datang.
+       Bila belum, ia bisa diisi di timbang kedua. Yang tidak boleh hanya
+       kosong di kedua-duanya — dijaga saat menyelesaikan penimbangan. #}
+    <div class="kartu">
+      <div class="kartu__judul">Muatan</div>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        {{ isian('jumlah_karung', 'Jumlah karung', '', 'karung', 'text',
+                 'Boleh dikosongkan dan dihitung saat bongkar.',
                  false, false, 'inputmode="numeric"') }}
         {{ isian('tara_per_karung_kg', 'Tara per karung',
                  '%.3f'|format(tara) if tara else '', 'kg', 'text',
                  'Dari sampling ' ~ (asal_tara.berlaku_mulai|tgl(true))
                    if asal_tara else 'Nilai bawaan aturan komoditas',
                  false, false, 'inputmode="decimal" data-berat') }}
-      </div>
-      <div class="bantu" style="margin-top:10px">
-        Boleh dikosongkan sekarang dan diisi setelah bongkar.
       </div>
     </div>
   {% else %}

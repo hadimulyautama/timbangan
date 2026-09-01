@@ -29,8 +29,15 @@
       <div class="petak__label">Total barang</div>
     </div>
     <div class="petak__sel">
+      {# Namanya menyebut FAKTA, bukan tugas.
+         Angka ini menghitung status kontrol, dan status adalah catatan
+         permanen tentang apa yang terjadi saat menimbang — ia tidak berubah
+         ketika pemeriksaannya ditutup. Dulu labelnya "Perlu diperiksa",
+         sehingga transaksi yang sudah tuntas ditelusuri tetap terbaca sebagai
+         pekerjaan yang menggantung. Daftar tugasnya ada di bawah: lembar
+         pemeriksaan yang masih terbuka. #}
       <div class="petak__nilai">{{ ringkasan.perlu_periksa }}</div>
-      <div class="petak__label">Perlu diperiksa</div>
+      <div class="petak__label">Di luar batas</div>
     </div>
     <div class="petak__sel">
       <div class="petak__nilai">{{ ringkasan.tiket_terbuka }}</div>
@@ -54,7 +61,13 @@
 
   {% if perlu_periksa %}
     <div>
-      <div class="lbl" style="margin-bottom:8px">Menunggu ditelusuri</div>
+      {# Istilahnya menyebut FAKTA, bukan tugas. "Menunggu ditelusuri"
+         membuat transaksi yang pemeriksaannya sudah ditutup tetap terbaca
+         sebagai pekerjaan menggantung — padahal statusnya memang tidak
+         pernah berubah, karena ia catatan tentang apa yang terjadi saat
+         menimbang. Daftar tugas yang sesungguhnya ada di atas: lembar
+         pemeriksaan yang masih terbuka. #}
+      <div class="lbl" style="margin-bottom:8px">Selisih di luar batas</div>
       {% for b in perlu_periksa %}
         <div style="margin-bottom:8px">{{ baris_transaksi(b) }}</div>
       {% endfor %}

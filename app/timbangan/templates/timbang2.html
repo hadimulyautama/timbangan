@@ -54,34 +54,46 @@
 
   {# Setelah bongkar, jumlah karung sudah pasti. Di sinilah biasanya angka
      yang tadi dikosongkan akhirnya diisi. #}
-  <div class="kartu">
-    <div class="kartu__judul">
-      {{ 'Muatan' if transfer else ('Nota supplier' if masuk else 'Surat jalan') }}
-    </div>
-    <div style="display:flex;flex-direction:column;gap:14px">
-      {# Transfer internal tidak punya dokumen pembanding — keputusan Direksi:
-         cukup dicatat berapa yang berpindah, tanpa selisih dan tanpa status
-         kontrol. Menampilkan kolomnya hanya mengundang angka yang tidak
-         akan pernah dipakai. #}
-      {% if not transfer %}
+  {% if not transfer %}
+    <div class="kartu">
+      <div class="kartu__judul">
+        {{ 'Nota supplier' if masuk else 'Surat jalan' }}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px">
         {{ isian('nomor_acuan', 'Nomor', m.nomor_acuan if m else '', '', 'text',
                  '', false, true) }}
         {{ berat('berat_acuan_kg', 'Berat menurut dokumen',
                  (m.berat_acuan_kg|round(0)|int) if m and m.berat_acuan_kg else '',
                  '', false) }}
-      {% endif %}
+      </div>
+    </div>
+  {% endif %}
+
+  {# Muatan berdiri sendiri, terpisah dari dokumennya. Nomor dan berat adalah
+     isi kertas yang dibawa sopir; jumlah karung adalah hitungan petugas saat
+     bongkar. Dulu keduanya satu kartu bernama "Nota supplier", dan itu
+     mengundang angka karung disalin dari nota — padahal justru hitungan
+     sendiri itulah yang menentukan berat bersihnya. #}
+  <div class="kartu">
+    <div class="kartu__judul">Muatan</div>
+    <div style="display:flex;flex-direction:column;gap:14px">
       {# Wajib untuk barang masuk: taranya dihitung per karung, jadi tanpa
          angka ini selisihnya keliru. Tombol Simpan sementara memakai
          formnovalidate supaya pagar ini tidak ikut menghalanginya. #}
       {{ isian('jumlah_karung', 'Jumlah karung',
                m.jumlah_karung if m and m.jumlah_karung else '', 'karung',
                'text',
-               'Diisi setelah bongkar rampung.' if masuk else '',
+               'Dihitung saat bongkar, bukan disalin dari nota.'
+                 if not transfer else 'Kosongkan bila muatannya curah',
                masuk, false, 'inputmode="numeric"') }}
       {{ isian('tara_per_karung_kg', 'Tara per karung',
-               '%.3f'|format(m.tara_per_karung_kg) if m and m.tara_per_karung_kg else '',
-               'kg', 'text', '', false, false,
-               'inputmode="decimal" data-berat') }}
+               '%.3f'|format(m.tara_per_karung_kg)
+                 if m and m.tara_per_karung_kg
+                 else ('%.3f'|format(tara) if tara else ''),
+               'kg', 'text',
+               ('Dari sampling ' ~ (asal_tara.berlaku_mulai|tgl(true)))
+                 if asal_tara else 'Nilai bawaan aturan komoditas',
+               false, false, 'inputmode="decimal" data-berat') }}
     </div>
   </div>
 

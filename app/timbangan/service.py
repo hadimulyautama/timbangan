@@ -1953,7 +1953,15 @@ def _terapkan_filter(q, f: FilterTransaksi):
     if f.jenis_kode:
         q = q.where(TimbanganTransaksi.jenis_kode == f.jenis_kode)
     if f.status_kontrol:
-        q = q.where(TimbanganTransaksi.status_kontrol == f.status_kontrol)
+        # Boleh satu status atau beberapa. Ringkasan memerlukan yang kedua:
+        # petaknya menghitung SEMUA status di luar batas, jadi daftarnya harus
+        # memuat semuanya juga — kalau tidak, angka dan daftarnya bercerita
+        # hal yang berbeda pada layar yang sama.
+        if isinstance(f.status_kontrol, (list, tuple, set)):
+            q = q.where(TimbanganTransaksi.status_kontrol.in_(
+                sorted(f.status_kontrol)))
+        else:
+            q = q.where(TimbanganTransaksi.status_kontrol == f.status_kontrol)
     if f.status_tiket:
         q = q.where(TimbanganTransaksi.status_tiket == f.status_tiket)
     if f.nomor_polisi:

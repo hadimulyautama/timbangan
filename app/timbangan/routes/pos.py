@@ -264,9 +264,17 @@ async def form_timbang_kedua(
         return redirect(f"/transaksi/{transaksi_id}")
 
     aturan = await service.aturan_untuk(db, baris.trx.jenis_kode)
+    # Sarannya dihitung DI SINI, bukan di timbang pertama seperti dulu.
+    # Kolom karung sudah pindah ke layar ini, dan justru di sini sarannya
+    # lebih tajam: pihaknya sudah diketahui, sehingga sampling khusus pihak
+    # itu bisa dipakai — di layar pertama pihaknya belum dipilih.
+    tara, asal = await service.tara_disarankan(
+        db, supplier_id=baris.trx.supplier_id, aturan=aturan
+    )
     return render(
         request, "timbang2.html",
         b=baris, aturan=aturan, sekarang=sekarang(),
+        tara=tara, asal_tara=asal,
         kembali=f"{PREFIX}/tiket",
     )
 

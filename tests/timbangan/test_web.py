@@ -3011,3 +3011,163 @@ async def test_isian_sopir_ditandai_wajib_di_layar(klien):
                     form.index('name="nama_sopir"') + 200]
     assert "required" in potongan
     assert "Nama sopir (boleh kosong)" not in form
+
+
+# ─────────────── Karung: boleh di tahap mana saja, asal tidak keduanya kosong ──
+
+async def test_karung_keluar_dari_kartu_nota_di_kedua_layar(klien):
+    """Nomor dan berat adalah isi kertas yang dibawa sopir; jumlah karung
+    adalah hitungan petugas. Satu kartu bernama "Nota supplier" mengundang
+    angka karung disalin dari nota."""
+    await login(klien)
+    form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
+    kartu_nota = form[form.index("Nota supplier"):form.index('name="jumlah_karung"')]
+    assert "berat_acuan_kg" in kartu_nota
+    assert "Muatan" in kartu_nota          # kartu terpisah dibuka sebelum karung
+    assert 'name="jumlah_karung"' in form  # tetap ada di layar ini
+
+
+async def test_karung_diisi_di_timbang_pertama_terbawa_ke_kedua(klien):
+    await login(klien)
+    form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
+    await klien.post(f"{PREFIX}/timbang/GABAH_BASAH", data={
+        "kode": kode_dari(form), "berat_kg": "13600",
+        "cara_timbang": "DUA_KALI", "supplier_id": "1", "pihak_nama": "",
+        "nomor_polisi": "AD 5 BB", "nama_sopir": "Slamet",
+        "jumlah_karung": "120", "tara_per_karung_kg": "0,25",
+        "berat_acuan_kg": "10000", "nomor_acuan": "N-1", "tara_lain_kg": "0",
+        "waktu": "", "catatan": "",
+    })
+    tiket = await klien.get(f"{PREFIX}/tiket")
+    trx_id = int(re.search(r"/tiket/(\d+)", tiket.text).group(1))
+    form2 = (await klien.get(f"{PREFIX}/tiket/{trx_id}")).text
+    assert 'value="120"' in form2
+
+    # Tidak perlu diketik ulang: langsung bisa diselesaikan.
+    r = await klien.post(f"{PREFIX}/tiket/{trx_id}", data={
+        "berat_kg": "3570", "jumlah_karung": "", "tara_per_karung_kg": "",
+        "berat_acuan_kg": "", "nomor_acuan": "", "waktu": "", "catatan": "",
+        "aksi": "selesai",
+    })
+    assert "selesai dan tersimpan" in r.text
+
+
+async def test_karung_boleh_baru_diisi_di_timbang_kedua(klien):
+    await login(klien)
+    form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
+    await klien.post(f"{PREFIX}/timbang/GABAH_BASAH", data={
+        "kode": kode_dari(form), "berat_kg": "13600",
+        "cara_timbang": "DUA_KALI", "supplier_id": "1", "pihak_nama": "",
+        "nomor_polisi": "AD 5 BB", "nama_sopir": "Slamet",
+        "jumlah_karung": "", "tara_per_karung_kg": "",
+        "berat_acuan_kg": "10000", "nomor_acuan": "N-1", "tara_lain_kg": "0",
+        "waktu": "", "catatan": "",
+    })
+    tiket = await klien.get(f"{PREFIX}/tiket")
+    trx_id = int(re.search(r"/tiket/(\d+)", tiket.text).group(1))
+    r = await klien.post(f"{PREFIX}/tiket/{trx_id}", data={
+        "berat_kg": "3570", "jumlah_karung": "120",
+        "tara_per_karung_kg": "0,25", "berat_acuan_kg": "", "nomor_acuan": "",
+        "waktu": "", "catatan": "", "aksi": "selesai",
+    })
+    assert "selesai dan tersimpan" in r.text
+    assert (await trx_oleh_id(trx_id)).jumlah_karung == 120
+
+
+async def test_tara_disarankan_juga_di_timbang_kedua(klien):
+    """Sarannya justru lebih tajam di sini: pihaknya sudah diketahui, jadi
+    sampling khusus pihak itu bisa dipakai."""
+    await login(klien)
+    form = (await klien.get(f"{PREFIX}/timbang/BERAS_PK")).text
+    await klien.post(f"{PREFIX}/timbang/BERAS_PK", data={
+        "kode": kode_dari(form), "berat_kg": "13600",
+        "cara_timbang": "DUA_KALI", "supplier_id": "1", "pihak_nama": "",
+        "nomor_polisi": "AD 5 BB", "nama_sopir": "Slamet",
+        "jumlah_karung": "", "tara_per_karung_kg": "",
+        "berat_acuan_kg": "10000", "nomor_acuan": "N-1", "tara_lain_kg": "0",
+        "waktu": "", "catatan": "",
+    })
+    tiket = await klien.get(f"{PREFIX}/tiket")
+    trx_id = int(re.search(r"/tiket/(\d+)", tiket.text).group(1))
+    form2 = (await klien.get(f"{PREFIX}/tiket/{trx_id}")).text
+    assert 'value="0.100"' in form2          # bawaan aturan Beras PK
+    assert "aturan komoditas" in form2
+
+
+# ─────────────── Istilah Ringkasan: fakta, bukan tugas ───────────────
+
+async def test_ringkasan_tidak_menyebut_pekerjaan_untuk_yang_sudah_tuntas(
+    klien, app_uji
+):
+    """Angka di petak menghitung STATUS KONTROL, dan status adalah catatan
+    permanen tentang apa yang terjadi saat menimbang — ia tidak berubah ketika
+    pemeriksaannya ditutup. Istilah "Perlu diperiksa" karena itu membuat
+    transaksi yang sudah tuntas ditelusuri terbaca sebagai pekerjaan
+    menggantung. Daftar tugas yang sesungguhnya adalah lembar yang terbuka.
+    """
+    await login(klien, "budi")
+    form = (await klien.get(f"{PREFIX}/timbang/BERAS")).text
+    await klien.post(f"{PREFIX}/timbang/BERAS", data={
+        "kode": kode_dari(form), "berat_kg": "3680", "cara_timbang": "DUA_KALI",
+        "supplier_id": "", "pihak_nama": "CV Uji", "nomor_polisi": "K 8 CC",
+        "nama_sopir": "Slamet", "jumlah_karung": "0",
+        "tara_per_karung_kg": "0", "berat_acuan_kg": "9000",
+        "tara_lain_kg": "0", "waktu": "", "catatan": "", "nomor_acuan": "SJ-1",
+    })
+    tiket = await klien.get(f"{PREFIX}/tiket")
+    trx_id = int(re.search(r"/tiket/(\d+)", tiket.text).group(1))
+    await klien.post(f"{PREFIX}/tiket/{trx_id}", data={
+        "berat_kg": "15680", "jumlah_karung": "", "tara_per_karung_kg": "",
+        "berat_acuan_kg": "", "nomor_acuan": "", "waktu": "", "catatan": "",
+        "aksi": "selesai",
+    })
+    await klien.post(f"{PREFIX}/keluar")
+    await _jadi_super(app_uji)
+    await login(klien, "wahid")
+
+    await klien.post(f"{PREFIX}/transaksi/{trx_id}/periksa", data={
+        "kategori_hasil": "SELISIH_WAJAR", "catatan_resolusi": "sudah dicek",
+        "dilaporkan_ke": "", "langkah_ulang_timbang": "",
+        "langkah_hitung_karung": "", "langkah_periksa_tara": "",
+        "langkah_periksa_dokumen": "", "langkah_periksa_muatan": "",
+        "langkah_lapor": "",
+    })
+
+    laporan = (await klien.get(f"{PREFIX}/laporan")).text
+    # Angkanya tetap ada — ia memang statistik, dan itu benar.
+    assert "Di luar batas" in laporan
+    assert "Selisih di luar batas" in laporan
+    # Tapi tidak lagi berbunyi seperti tugas yang menggantung.
+    assert "Perlu diperiksa" not in laporan
+    assert "Menunggu ditelusuri" not in laporan
+    assert "lembar pemeriksaan masih terbuka" not in laporan
+
+
+async def test_angka_dan_daftar_di_luar_batas_sepakat(klien, app_uji):
+    """Petaknya menghitung SEMUA status di luar batas; daftarnya dulu hanya
+    memuat PERLU_PEMERIKSAAN. Angka "1" dengan daftar kosong di layar yang
+    sama membuat orang mengira ada yang disembunyikan."""
+    await login(klien, "budi")
+    form = (await klien.get(f"{PREFIX}/timbang/BERAS")).text
+    await klien.post(f"{PREFIX}/timbang/BERAS", data={
+        "kode": kode_dari(form), "berat_kg": "3680", "cara_timbang": "DUA_KALI",
+        "supplier_id": "", "pihak_nama": "CV Uji", "nomor_polisi": "K 9 DD",
+        "nama_sopir": "Slamet", "jumlah_karung": "0",
+        "tara_per_karung_kg": "0", "berat_acuan_kg": "9000",
+        "tara_lain_kg": "0", "waktu": "", "catatan": "", "nomor_acuan": "SJ-9",
+    })
+    tiket = await klien.get(f"{PREFIX}/tiket")
+    trx_id = int(re.search(r"/tiket/(\d+)", tiket.text).group(1))
+    await klien.post(f"{PREFIX}/tiket/{trx_id}", data={
+        "berat_kg": "15680", "jumlah_karung": "", "tara_per_karung_kg": "",
+        "berat_acuan_kg": "", "nomor_acuan": "", "waktu": "", "catatan": "",
+        "aksi": "selesai",
+    })
+    assert (await trx_oleh_id(trx_id)).status_kontrol == "KELEBIHAN"
+
+    await klien.post(f"{PREFIX}/keluar")
+    await _jadi_super(app_uji)
+    await login(klien, "wahid")
+    laporan = (await klien.get(f"{PREFIX}/laporan")).text
+    assert "Selisih di luar batas" in laporan
+    assert f"/transaksi/{trx_id}" in laporan     # KELEBIHAN pun ikut terdaftar
