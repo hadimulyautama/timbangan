@@ -83,8 +83,9 @@
       {{ isian('jumlah_karung', 'Jumlah karung',
                m.jumlah_karung if m and m.jumlah_karung else '', 'karung',
                'text',
-               'Dihitung saat bongkar, bukan disalin dari nota.'
-                 if not transfer else 'Kosongkan bila muatannya curah',
+               ('Kosongkan bila muatannya curah' if transfer else
+                'Dihitung saat bongkar, bukan disalin dari nota.' if masuk else
+                'Dihitung saat muat, bukan disalin dari surat jalan.'),
                masuk, false, 'inputmode="numeric"') }}
       {{ isian('tara_per_karung_kg', 'Tara per karung',
                '%.3f'|format(m.tara_per_karung_kg)

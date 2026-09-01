@@ -6,6 +6,8 @@
 {% set transfer = aturan.arah == TRANSFER %}
 {# Datang bermuatan, ditimbang ulang setelah dibongkar. #}
 {% set bongkar = masuk or transfer %}
+{# Pengiriman: timbang pertama adalah truk KOSONG. #}
+{% set trx_keluar = aturan.arah == KELUAR %}
 
 {% block judul %}Timbang 1 · {{ aturan.nama }}{% endblock %}
 {% block bar_judul %}Timbang pertama{% endblock %}
@@ -120,7 +122,14 @@
     <div class="kartu">
       <div class="kartu__judul">Muatan</div>
       <div style="display:flex;flex-direction:column;gap:14px">
+        {# Kalimatnya mengikuti arah barang, karena kenyataannya berbeda:
+           pada barang masuk truk datang BERMUATAN, jadi karungnya sudah ada
+           dan boleh dihitung sekarang. Pada pengiriman truk datang KOSONG —
+           belum ada satu karung pun untuk dihitung, dan menyuruh
+           menghitungnya di sini hanya mengundang angka karangan. #}
         {{ isian('jumlah_karung', 'Jumlah karung', '', 'karung', 'text',
+                 'Truk masih kosong — biasanya baru dihitung saat muat, di '
+                 'timbang kedua.' if trx_keluar else
                  'Boleh dikosongkan dan dihitung saat bongkar.',
                  false, false, 'inputmode="numeric"') }}
         {{ isian('tara_per_karung_kg', 'Tara per karung',
@@ -162,7 +171,14 @@
     <div class="kartu">
       <div class="kartu__judul">Muatan</div>
       <div style="display:flex;flex-direction:column;gap:14px">
+        {# Kalimatnya mengikuti arah barang, karena kenyataannya berbeda:
+           pada barang masuk truk datang BERMUATAN, jadi karungnya sudah ada
+           dan boleh dihitung sekarang. Pada pengiriman truk datang KOSONG —
+           belum ada satu karung pun untuk dihitung, dan menyuruh
+           menghitungnya di sini hanya mengundang angka karangan. #}
         {{ isian('jumlah_karung', 'Jumlah karung', '', 'karung', 'text',
+                 'Truk masih kosong — biasanya baru dihitung saat muat, di '
+                 'timbang kedua.' if trx_keluar else
                  'Boleh dikosongkan dan dihitung saat bongkar.',
                  false, false, 'inputmode="numeric"') }}
         {{ isian('tara_per_karung_kg', 'Tara per karung',

@@ -3171,3 +3171,43 @@ async def test_angka_dan_daftar_di_luar_batas_sepakat(klien, app_uji):
     laporan = (await klien.get(f"{PREFIX}/laporan")).text
     assert "Selisih di luar batas" in laporan
     assert f"/transaksi/{trx_id}" in laporan     # KELEBIHAN pun ikut terdaftar
+
+
+# ─────────────── Kalimat karung mengikuti kenyataan arah barang ───────────────
+
+async def test_kalimat_karung_di_timbang_pertama_mengikuti_arah(klien):
+    """Pada pengiriman, timbang pertama adalah truk KOSONG — belum ada satu
+    karung pun untuk dihitung. Menyuruh menghitungnya di situ hanya mengundang
+    angka karangan."""
+    await login(klien)
+    masuk = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
+    assert "dihitung saat bongkar" in masuk
+    assert "Truk masih kosong" not in masuk
+
+    keluar = (await klien.get(f"{PREFIX}/timbang/BERAS")).text
+    assert "Truk masih kosong" in keluar
+    assert "baru dihitung saat muat" in keluar
+    assert "dihitung saat bongkar" not in keluar
+
+
+@pytest.mark.parametrize("jenis,kalimat", [
+    ("GABAH_BASAH", "Dihitung saat bongkar, bukan disalin dari nota."),
+    ("BERAS", "Dihitung saat muat, bukan disalin dari surat jalan."),
+    ("TRANSFER", "Kosongkan bila muatannya curah"),
+])
+async def test_kalimat_karung_di_timbang_kedua_mengikuti_arah(
+    klien, jenis, kalimat
+):
+    await login(klien)
+    form = (await klien.get(f"{PREFIX}/timbang/{jenis}")).text
+    await klien.post(f"{PREFIX}/timbang/{jenis}", data={
+        "kode": kode_dari(form), "berat_kg": "3680", "cara_timbang": "DUA_KALI",
+        "supplier_id": "1", "pihak_nama": "Gudang 1 → Gudang 2",
+        "nomor_polisi": "AD 5 BB", "nama_sopir": "Slamet",
+        "jumlah_karung": "", "tara_per_karung_kg": "",
+        "berat_acuan_kg": "9000", "nomor_acuan": "N", "tara_lain_kg": "0",
+        "waktu": "", "catatan": "",
+    })
+    tiket = await klien.get(f"{PREFIX}/tiket")
+    trx_id = int(re.search(r"/tiket/(\d+)", tiket.text).group(1))
+    assert kalimat in (await klien.get(f"{PREFIX}/tiket/{trx_id}")).text
