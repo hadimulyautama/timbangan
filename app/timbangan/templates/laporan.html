@@ -38,10 +38,18 @@
     </div>
   </div>
 
-  {% if ringkasan.pemeriksaan_terbuka %}
-    <div class="pesan pesan--err">
-      {{ ringkasan.pemeriksaan_terbuka }} lembar pemeriksaan masih terbuka.
+  {# Angkanya HARUS bisa dijangkau. Dulu ini teks polos, dan lembar yang
+     angkanya sudah dikoreksi tidak muncul di daftar mana pun — terhitung,
+     tapi tidak bisa ditemukan. #}
+  {% if lembar_terbuka %}
+    <div class="pesan pesan--err" style="margin-bottom:8px">
+      {{ lembar_terbuka|length }} lembar pemeriksaan masih terbuka. Mengoreksi
+      angkanya tidak menutup lembarnya — buka satu per satu lalu tutup dengan
+      kategori dan catatan.
     </div>
+    {% for b in lembar_terbuka %}
+      <div style="margin-bottom:8px">{{ baris_transaksi(b) }}</div>
+    {% endfor %}
   {% endif %}
 
   {% if perlu_periksa %}

@@ -2039,6 +2039,30 @@ class RingkasanDashboard:
     total_selisih_kg: float = 0.0
 
 
+async def daftar_pemeriksaan_terbuka(db: AsyncSession) -> list[BarisTransaksi]:
+    """Lembar pemeriksaan yang belum ditutup, beserta transaksinya.
+
+    Dipakai Ringkasan supaya angkanya bisa DIJANGKAU. Sebelumnya jumlahnya
+    hanya disebut sebagai teks polos, sementara daftar di bawahnya cuma memuat
+    transaksi yang STATUSNYA masih menuntut pemeriksaan — sehingga lembar yang
+    angkanya sudah dikoreksi tetap terhitung tetapi tidak muncul di mana pun.
+    Justru lembar itulah yang paling perlu ditutup, dan justru itu yang tidak
+    bisa ditemukan.
+    """
+    q = (
+        select(TimbanganTransaksi,
+               func.coalesce(Supplier.nama_supplier, Pelanggan.nama_pelanggan))
+        .join(TimbanganPemeriksaan,
+              TimbanganPemeriksaan.transaksi_id == TimbanganTransaksi.id)
+        .outerjoin(Supplier, Supplier.id == TimbanganTransaksi.supplier_id)
+        .outerjoin(Pelanggan, Pelanggan.id == TimbanganTransaksi.pelanggan_id)
+        .where(TimbanganPemeriksaan.status != PEMERIKSAAN_SELESAI)
+        .order_by(TimbanganPemeriksaan.id)
+    )
+    return [BarisTransaksi(trx=t, supplier_nama=n)
+            for t, n in (await db.execute(q)).all()]
+
+
 async def ringkasan_dashboard(
     db: AsyncSession, f: FilterTransaksi
 ) -> RingkasanDashboard:

@@ -47,6 +47,7 @@ async def laporan(
         request, "laporan.html",
         f=f,
         ringkasan=await service.ringkasan_dashboard(db, f),
+        lembar_terbuka=await service.daftar_pemeriksaan_terbuka(db),
         perlu_periksa=await service.daftar_transaksi(
             db, service.FilterTransaksi(dari=dari, sampai=sampai,
                                         status_kontrol="PERLU_PEMERIKSAAN"),
