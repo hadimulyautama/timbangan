@@ -303,7 +303,13 @@ class TimbanganTransaksi(Base, TimestampMixin):
     # Salinan aturan yang dipakai (JSON) — butir b.
     aturan_snapshot: Mapped[str | None] = mapped_column(Text)
 
+    #: Lawan transaksi pada arah MASUK.
     supplier_id: Mapped[int | None] = mapped_column(ForeignKey("suppliers.id"))
+    #: Lawan transaksi pada arah KELUAR. Dua kolom, bukan satu, karena
+    #: keduanya menunjuk tabel yang berbeda — dan satu kontak Kledo boleh
+    #: berperan sebagai vendor sekaligus pelanggan. Yang menentukan adalah
+    #: arah transaksi ini, bukan sifat orangnya.
+    pelanggan_id: Mapped[int | None] = mapped_column(ForeignKey("pelanggan.id"))
     # Untuk jasa timbang: pihak tidak selalu terdaftar sebagai supplier.
     pihak_nama: Mapped[str | None] = mapped_column(String(120))
     kendaraan_id: Mapped[int | None] = mapped_column(

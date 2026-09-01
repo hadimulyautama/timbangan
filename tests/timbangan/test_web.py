@@ -2783,3 +2783,79 @@ async def test_sebutan_ikut_berubah_saat_arahnya_dibetulkan(klien, app_uji):
     rincian = (await klien.get(f"{PREFIX}/transaksi/{trx_id}")).text
     assert "Pelanggan" in rincian
     assert "Supplier" not in rincian
+
+
+# ─────────────── Daftar pihak mengikuti arah ───────────────
+
+async def _tambah_pelanggan(nama: str) -> int:
+    from app import database
+    from app.models import Pelanggan
+
+    async with database.SessionLocal() as db:
+        p = Pelanggan(nama_pelanggan=nama)
+        db.add(p)
+        await db.commit()
+        return p.id
+
+
+async def test_barang_masuk_hanya_menawarkan_supplier(klien):
+    """Menawarkan pelanggan di sisi pembelian membuat petugas bisa mencatat
+    pembelian atas nama pembeli — salah pilih yang baru ketahuan
+    berbulan-bulan kemudian, saat rekonsiliasi tidak ketemu."""
+    await _tambah_pelanggan("Toko Beras Handoko")
+    await login(klien)
+    form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
+    assert "H. Anton" in form                    # supplier
+    assert "Toko Beras Handoko" not in form      # pelanggan tidak muncul
+
+
+async def test_pengiriman_hanya_menawarkan_pelanggan(klien):
+    await _tambah_pelanggan("Toko Beras Handoko")
+    await login(klien)
+    form = (await klien.get(f"{PREFIX}/timbang/BERAS")).text
+    assert "Toko Beras Handoko" in form
+    assert "H. Anton" not in form                # supplier tidak muncul
+
+
+async def test_pengiriman_menyimpan_ke_kolom_pelanggan(klien):
+    pid = await _tambah_pelanggan("Toko Beras Handoko")
+    await login(klien)
+    form = (await klien.get(f"{PREFIX}/timbang/BERAS")).text
+    await klien.post(f"{PREFIX}/timbang/BERAS", data={
+        "kode": kode_dari(form), "berat_kg": "3570", "cara_timbang": "DUA_KALI",
+        "supplier_id": str(pid), "nomor_polisi": "K 8482 CC",
+        "jumlah_karung": "100", "tara_per_karung_kg": "0,05",
+        "berat_acuan_kg": "9000", "tara_lain_kg": "0", "waktu": "",
+        "catatan": "", "nomor_acuan": "SJ-1", "nama_sopir": "", "pihak_nama": "",
+    })
+    tiket = await klien.get(f"{PREFIX}/tiket")
+    trx_id = int(re.search(r"/tiket/(\d+)", tiket.text).group(1))
+    trx = await trx_oleh_id(trx_id)
+    assert trx.pelanggan_id == pid
+    assert trx.supplier_id is None          # tidak pernah keduanya
+    assert "Toko Beras Handoko" in tiket.text
+
+
+async def test_barang_masuk_menyimpan_ke_kolom_supplier(klien):
+    await login(klien)
+    trx_id = await _mulai_masuk(klien)
+    trx = await trx_oleh_id(trx_id)
+    assert trx.supplier_id == 1
+    assert trx.pelanggan_id is None
+
+
+async def test_ubah_arah_menyelamatkan_nama_pihak_ke_teks(klien, app_uji):
+    """Supplier id 5 bukan pelanggan id 5 — idnya tidak bisa dibawa. Tetapi
+    namanya bisa, dan itulah yang dibutuhkan catatan."""
+    await login(klien, "budi")
+    trx_id = await _mulai_masuk(klien)          # MASUK, supplier H. Anton
+    await klien.post(f"{PREFIX}/keluar")
+
+    await login(klien, "wahid")
+    await klien.post(f"{PREFIX}/transaksi/{trx_id}/jenis", data={
+        "jenis_kode": "BERAS", "alasan": "Ternyata pengiriman"})
+
+    trx = await trx_oleh_id(trx_id)
+    assert trx.arah == "KELUAR"
+    assert trx.supplier_id is None and trx.pelanggan_id is None
+    assert trx.pihak_nama == "H. Anton"         # tidak hilang diam-diam

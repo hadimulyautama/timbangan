@@ -1,10 +1,11 @@
 """Model milik sistem penggilingan yang ikut dibaca modul ini.
 
-**Tabel-tabel ini bukan milik repo ini.** Keempatnya — `users`, `suppliers`,
-`purchase_batches`, `pk_purchase_batches` — dimiliki dan dimigrasikan oleh
-sistem penggilingan. Di sini mereka dipetakan seperlunya saja, supaya empat
-foreign key dari `timbangan_*` punya sasaran yang dikenal SQLAlchemy, dan
-supaya `suppliers` bisa dibaca untuk daftar pilihan.
+**Tabel-tabel ini bukan milik repo ini.** Kelimanya — `users`, `suppliers`,
+`pelanggan`, `purchase_batches`, `pk_purchase_batches` — dimiliki dan
+dimigrasikan oleh sistem penggilingan. Di sini mereka dipetakan seperlunya
+saja, supaya foreign key dari `timbangan_*` punya sasaran yang dikenal
+SQLAlchemy, dan supaya `suppliers` serta `pelanggan` bisa dibaca untuk daftar
+pilihan.
 
 Inilah jahitan yang tersisa setelah pemisahan repo: **kodenya terpisah,
 databasenya tidak.** Siapa pun yang mengubah bentuk keempat tabel itu di repo
@@ -27,7 +28,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base, TimestampMixin
 
-__all__ = ["Base", "PkPurchaseBatch", "PurchaseBatch", "Supplier", "User"]
+__all__ = ["Base", "Pelanggan", "PkPurchaseBatch", "PurchaseBatch",
+           "Supplier", "User"]
 
 
 class User(Base, TimestampMixin):
@@ -51,6 +53,26 @@ class User(Base, TimestampMixin):
     nama: Mapped[str] = mapped_column(String(100), nullable=False)
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="aktif")
+
+
+class Pelanggan(Base, TimestampMixin):
+    """Pembeli beras dan hasil samping. Disinkron dari kontak Kledo tipe 3.
+
+    Dipakai pada arah KELUAR, sebagaimana `Supplier` dipakai pada arah MASUK.
+    Sengaja dua tabel, bukan satu tabel berpenanda: di Kledo satu kontak boleh
+    sekaligus vendor dan pelanggan — 24 kontak memang begitu — tetapi yang
+    menentukan di sini adalah perannya pada transaksi ini.
+    """
+
+    __tablename__ = "pelanggan"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    nama_pelanggan: Mapped[str] = mapped_column(String(150), nullable=False)
+    no_telfon: Mapped[str | None] = mapped_column(String(30))
+    alamat: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="aktif")
+    deleted_at: Mapped[datetime | None] = mapped_column()
+    kledo_contact_id: Mapped[int | None] = mapped_column(BigInteger, index=True)
 
 
 class Supplier(Base, TimestampMixin):

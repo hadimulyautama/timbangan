@@ -155,13 +155,16 @@ async def form_timbang_pertama(
         return redirect("/", err=str(e))
 
     tara, asal = await service.tara_disarankan(db, supplier_id=None, aturan=aturan)
-    sering, lainnya = await service.supplier_pilihan(db)
+    # Daftar mengikuti arah: barang masuk hanya supplier, pengiriman
+    # hanya pelanggan. Lihat `service.PIHAK_ARAH`.
+    sering, lainnya = await service.pihak_pilihan(db, aturan.arah)
     return render(
         request, "timbang1.html",
         aturan=aturan,
         kode=await service.kode_baru(db, akun),
-        supplier_sering=sering,
-        supplier_lainnya=lainnya,
+        pihak_sering=sering,
+        pihak_lainnya=lainnya,
+        kolom_nama=service.nama_kolom_pihak(aturan.arah),
         tara=tara,
         asal_tara=asal,
         sekarang=sekarang(),

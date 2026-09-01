@@ -29,6 +29,7 @@ MIGRASI = (
     AKAR / "migrations" / "versions" / "0023_timbangan_config.py",
     AKAR / "migrations" / "versions" / "0024_timbangan_aturan_cetak.py",
     AKAR / "migrations" / "versions" / "0025_timbangan_cetak_format.py",
+    AKAR / "migrations" / "versions" / "0027_pelanggan_transaksi.py",
 )
 
 # Kata yang tidak boleh muncul sebagai nama kolom di modul ini.

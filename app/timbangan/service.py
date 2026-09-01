@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from zoneinfo import ZoneInfo
 
 from app.config import settings
-from app.models import Supplier
+from app.models import Pelanggan, Supplier
 from app.timbangan import logic, setelan
 from app.timbangan.config import tsettings
 from app.timbangan.db import berzona, sekarang
@@ -237,31 +237,78 @@ async def profil_supplier(
     return profil
 
 
+#: Lawan transaksi menurut arah: model, kolomnya di transaksi, nama kolomnya.
+#:
+#: **Barang masuk hanya supplier, pengiriman hanya pelanggan.** Menawarkan
+#: keduanya di kedua arah membuat petugas bisa mencatat penjualan atas nama
+#: pemasok karung — dan salah pilih semacam itu baru ketahuan berbulan-bulan
+#: kemudian, saat rekonsiliasi tidak ketemu.
+PIHAK_ARAH: dict[str, tuple] = {
+    logic.MASUK: (Supplier, "supplier_id", "nama_supplier"),
+    logic.KELUAR: (Pelanggan, "pelanggan_id", "nama_pelanggan"),
+}
+
+
+def pihak_untuk(arah: str) -> tuple | None:
+    """(model, kolom transaksi, kolom nama) — atau None bila arah ini tidak
+    memakai master pihak sama sekali (jasa timbang, transfer internal)."""
+    return PIHAK_ARAH.get(arah)
+
+
+def nama_kolom_pihak(arah: str) -> str:
+    """Nama atribut yang memuat nama pihak, supaya template tidak perlu tahu
+    tabel mana yang sedang dipakai."""
+    pihak = pihak_untuk(arah)
+    return pihak[2] if pihak else "nama"
+
+
+async def daftar_pihak(db: AsyncSession, arah: str) -> list:
+    """Seluruh calon lawan transaksi untuk arah ini, terurut nama."""
+    pihak = pihak_untuk(arah)
+    if pihak is None:
+        return []
+    model, _, kolom_nama = pihak
+    return list((await db.execute(
+        select(model).order_by(getattr(model, kolom_nama))
+    )).scalars())
+
+
+async def pihak_pilihan(
+    db: AsyncSession, arah: str, *, hari: int = 120
+) -> tuple[list, list]:
+    """Dipecah dua: yang benar-benar dipakai belakangan, dan sisanya.
+
+    Daftar dari Kledo memuat seluruh kontak — termasuk pemasok karung dan
+    sablon yang tidak pernah lewat jembatan timbang, dan 301 pelanggan yang
+    sebagian membeli sekali setahun. Petugas hanya berurusan dengan belasan
+    nama; menyuruhnya menggulir ratusan nama di ponsel, sambil truk menunggu,
+    adalah cara membuat orang salah pilih.
+    """
+    pihak = pihak_untuk(arah)
+    if pihak is None:
+        return [], []
+    _, kolom_trx, _ = pihak
+    kolom = getattr(TimbanganTransaksi, kolom_trx)
+
+    batas = sekarang().date() - timedelta(days=hari)
+    terpakai = set((await db.execute(
+        select(kolom).where(
+            kolom.is_not(None),
+            TimbanganTransaksi.tanggal >= batas,
+            TimbanganTransaksi.status_transaksi == TRX_AKTIF,
+        ).distinct()
+    )).scalars())
+
+    semua = await daftar_pihak(db, arah)
+    return ([s for s in semua if s.id in terpakai],
+            [s for s in semua if s.id not in terpakai])
+
+
 async def supplier_pilihan(
     db: AsyncSession, *, hari: int = 120
 ) -> tuple[list[Supplier], list[Supplier]]:
-    """Supplier dipecah dua: yang benar-benar dipakai belakangan, dan sisanya.
-
-    Daftar dari Kledo memuat seluruh vendor — termasuk pemasok karung dan
-    sablon yang tidak pernah lewat jembatan timbang. Petugas hanya berurusan
-    dengan belasan nama; menyuruhnya menggulir ratusan nama di ponsel, sambil
-    truk menunggu, adalah cara membuat orang salah pilih.
-    """
-    batas = sekarang().date() - timedelta(days=hari)
-    terpakai = set((await db.execute(
-        select(TimbanganTransaksi.supplier_id)
-        .where(
-            TimbanganTransaksi.supplier_id.is_not(None),
-            TimbanganTransaksi.tanggal >= batas,
-            TimbanganTransaksi.status_transaksi == TRX_AKTIF,
-        )
-        .distinct()
-    )).scalars())
-
-    semua = await daftar_supplier(db)
-    sering = [s for s in semua if s.id in terpakai]
-    lainnya = [s for s in semua if s.id not in terpakai]
-    return sering, lainnya
+    """Khusus arah masuk. Dipertahankan karena dipakai layar tara standar."""
+    return await pihak_pilihan(db, logic.MASUK, hari=hari)
 
 
 async def daftar_supplier(
@@ -668,6 +715,33 @@ def _wajib_nopol(arah: str, nomor_polisi: str | None) -> None:
         )
 
 
+async def nama_pihak(db: AsyncSession, trx: TimbanganTransaksi) -> str | None:
+    """Nama lawan transaksi dari tabel mana pun yang terisi."""
+    for model, kolom_trx, kolom_nama in PIHAK_ARAH.values():
+        pid = getattr(trx, kolom_trx)
+        if pid:
+            baris = await db.get(model, pid)
+            if baris is not None:
+                return getattr(baris, kolom_nama)
+    return None
+
+
+def _pasang_pihak(
+    trx: TimbanganTransaksi, arah: str, pihak_id: int | None
+) -> None:
+    """Taruh id lawan transaksi pada kolom yang sesuai arahnya, kosongkan yang lain.
+
+    Mengosongkan yang lain bukan kerapian: kalau keduanya terisi, laporan yang
+    menggabungkan nama dari dua tabel akan menampilkan salah satu secara acak,
+    dan tidak ada yang bisa menebak mana yang benar.
+    """
+    pihak = pihak_untuk(arah)
+    trx.supplier_id = None
+    trx.pelanggan_id = None
+    if pihak is not None and pihak_id:
+        setattr(trx, pihak[1], pihak_id)
+
+
 async def simpan_timbang_pertama(
     db: AsyncSession, *, akun: TimbanganAkun, data: InputTimbang, ip: str | None = None
 ) -> TimbanganTransaksi:
@@ -710,7 +784,10 @@ async def simpan_timbang_pertama(
     trx.aturan_snapshot = json.dumps(
         aturan.__dict__, ensure_ascii=False, default=str
     )
-    trx.supplier_id = data.supplier_id
+    # Barang masuk mengisi supplier_id, pengiriman mengisi pelanggan_id, dan
+    # tidak pernah keduanya. `data.supplier_id` membawa id dari daftar yang
+    # ditawarkan layar, dan layar hanya menawarkan satu daftar per arah.
+    _pasang_pihak(trx, data.arah, data.supplier_id)
     trx.pihak_nama = data.pihak_nama
     trx.kendaraan_id = kendaraan.id if kendaraan else None
     trx.nomor_polisi = normalisasi_nopol(data.nomor_polisi)
@@ -949,6 +1026,17 @@ async def ubah_jenis(
                "status_kontrol": trx.status_kontrol,
                "selisih_kg": float(trx.selisih_kg or 0)}
 
+    # Pindah arah berarti pindah TABEL pihak: supplier id 5 bukan pelanggan
+    # id 5. Idnya karena itu tidak bisa dibawa — tetapi namanya bisa, dan
+    # itulah yang benar-benar dibutuhkan catatan. Namanya diselamatkan ke
+    # kolom teks bebas supaya tidak ada yang hilang diam-diam.
+    if pihak_untuk(trx.arah) != pihak_untuk(aturan_baru.arah):
+        nama_lama = await nama_pihak(db, trx)
+        if nama_lama and not trx.pihak_nama:
+            trx.pihak_nama = nama_lama
+        trx.supplier_id = None
+        trx.pelanggan_id = None
+
     trx.jenis_kode = baru
     trx.arah = aturan_baru.arah
     trx.aturan_snapshot = json.dumps(
@@ -1046,7 +1134,8 @@ async def koreksi_transaksi(
         raise LayananError(sebab)
 
     dapat_diubah = {
-        "supplier_id", "pihak_nama", "nomor_polisi", "nama_sopir",
+        "supplier_id", "pelanggan_id", "pihak_nama", "nomor_polisi",
+        "nama_sopir",
         "timbang1_kg", "timbang2_kg", "timbang1_waktu", "timbang2_waktu",
         "tara_lain_kg", "catatan",
     }
@@ -1845,8 +1934,13 @@ async def daftar_transaksi(
     db: AsyncSession, f: FilterTransaksi, *, batas: int = 100, offset: int = 0
 ) -> list[BarisTransaksi]:
     q = _terapkan_filter(
-        select(TimbanganTransaksi, Supplier.nama_supplier)
-        .outerjoin(Supplier, Supplier.id == TimbanganTransaksi.supplier_id),
+        # Nama pihak diambil dari tabel mana pun yang terisi: supplier untuk
+        # barang masuk, pelanggan untuk pengiriman. Satu transaksi tidak
+        # pernah mengisi keduanya.
+        select(TimbanganTransaksi,
+               func.coalesce(Supplier.nama_supplier, Pelanggan.nama_pelanggan))
+        .outerjoin(Supplier, Supplier.id == TimbanganTransaksi.supplier_id)
+        .outerjoin(Pelanggan, Pelanggan.id == TimbanganTransaksi.pelanggan_id),
         f,
     ).order_by(
         TimbanganTransaksi.tanggal.desc(), TimbanganTransaksi.id.desc()
@@ -1873,8 +1967,10 @@ async def tiket_menganggur(db: AsyncSession) -> list[BarisTransaksi]:
     jam = (await setelan.semua(db))["jam_tiket_menganggur"]
     batas = sekarang() - timedelta(hours=jam)
     q = (
-        select(TimbanganTransaksi, Supplier.nama_supplier)
+        select(TimbanganTransaksi,
+               func.coalesce(Supplier.nama_supplier, Pelanggan.nama_pelanggan))
         .outerjoin(Supplier, Supplier.id == TimbanganTransaksi.supplier_id)
+        .outerjoin(Pelanggan, Pelanggan.id == TimbanganTransaksi.pelanggan_id)
         .where(
             TimbanganTransaksi.status_tiket == TIKET_TERBUKA,
             TimbanganTransaksi.status_transaksi == TRX_AKTIF,
@@ -1889,8 +1985,10 @@ async def ambil_transaksi(
     db: AsyncSession, transaksi_id: int
 ) -> BarisTransaksi | None:
     baris = (await db.execute(
-        select(TimbanganTransaksi, Supplier.nama_supplier)
+        select(TimbanganTransaksi,
+               func.coalesce(Supplier.nama_supplier, Pelanggan.nama_pelanggan))
         .outerjoin(Supplier, Supplier.id == TimbanganTransaksi.supplier_id)
+        .outerjoin(Pelanggan, Pelanggan.id == TimbanganTransaksi.pelanggan_id)
         .where(TimbanganTransaksi.id == transaksi_id)
     )).first()
     if baris is None:

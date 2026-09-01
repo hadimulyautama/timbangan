@@ -38,13 +38,14 @@
       <select class="fld" name="supplier_id"
               data-cari="Ketik nama {{ PIHAK_LABEL.get(trx.arah, 'pihak')|lower }}…">
         <option value="">— tidak diubah —</option>
-        {% for kelompok, daftar in [('Sering datang', supplier_pilihan[0]),
-                                    ('Lainnya', supplier_pilihan[1])] %}
+        {% for kelompok, daftar in [('Sering datang', pihak_pilihan[0]),
+                                    ('Lainnya', pihak_pilihan[1])] %}
           {% if daftar %}
             <optgroup label="{{ kelompok }}">
               {% for s in daftar %}
-                <option value="{{ s.id }}" {{ 'selected' if trx.supplier_id == s.id }}>
-                  {{ s.nama_supplier }}</option>
+                <option value="{{ s.id }}"
+                        {{ 'selected' if (trx.supplier_id or trx.pelanggan_id) == s.id }}>
+                  {{ s[kolom_nama] }}</option>
               {% endfor %}
             </optgroup>
           {% endif %}

@@ -157,7 +157,8 @@ async def form_koreksi(
     return render(
         request, "koreksi.html",
         b=b, aturan=await service.aturan_untuk(db, b.trx.jenis_kode),
-        supplier_pilihan=await service.supplier_pilihan(db),
+        pihak_pilihan=await service.pihak_pilihan(db, b.trx.arah),
+        kolom_nama=service.nama_kolom_pihak(b.trx.arah),
         jenis=await service.daftar_jenis(db),
         kembali=f"{PREFIX}/transaksi/{transaksi_id}",
     )
@@ -202,7 +203,10 @@ async def simpan_koreksi(
     if nama_sopir:
         perubahan["nama_sopir"] = nama_sopir
     if supplier_id.isdigit():
-        perubahan["supplier_id"] = int(supplier_id)
+        # Kolomnya ditentukan arah transaksi, bukan nama isian di formulir.
+        pihak = service.pihak_untuk(b.trx.arah)
+        if pihak is not None:
+            perubahan[pihak[1]] = int(supplier_id)
     if catatan:
         perubahan["catatan"] = catatan.strip()
 
