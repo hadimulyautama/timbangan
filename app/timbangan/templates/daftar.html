@@ -61,7 +61,9 @@
               <td>{{ b.trx.tanggal|tgl(true) }}</td>
               <td>{{ b.trx.nomor_polisi or b.trx.kode }}</td>
               <td>{{ b.supplier_nama or b.trx.pihak_nama or '—' }}</td>
-              <td>{{ NAMA_JENIS.get(b.trx.jenis_kode, b.trx.jenis_kode) }}</td>
+              <td>{{ NAMA_JENIS.get(b.trx.jenis_kode, b.trx.jenis_kode) }}
+                <div class="bantu" style="margin:0">
+                  {{ ARAH_LABEL.get(b.trx.arah, b.trx.arah|lower) }}</div></td>
               <td class="angka">{{ b.trx.berat_barang_kg|angka }}</td>
               <td class="angka">
                 {% if b.trx.status_tiket == TIKET_SELESAI %}

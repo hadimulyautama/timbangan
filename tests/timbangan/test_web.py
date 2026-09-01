@@ -2687,3 +2687,67 @@ async def test_pesan_arah_mustahil_tidak_merusak_tanda_bacanya(klien, app_uji):
         "jenis_kode": "BERAS", "alasan": "coba"})
     assert "arah keluar, truk kosong" in r.text
     assert "13.600 kg" in r.text and "3.570 kg" in r.text
+
+
+# ─────────────── Arah barang terbaca di daftar ───────────────
+
+async def test_tiket_menyebut_arah_dan_tidak_memakai_kata_masuk_untuk_jam(
+    klien, app_uji
+):
+    """Baris tiket dulu berbunyi "Beras · masuk 09:43" yang bermaksud JAM
+    KEDATANGAN — dan terbaca sebagai arah barang. Pada pengiriman itu
+    langsung menyesatkan.
+    """
+    await login(klien, "budi")
+    form = (await klien.get(f"{PREFIX}/timbang/BERAS")).text
+    await klien.post(f"{PREFIX}/timbang/BERAS", data={
+        "kode": kode_dari(form), "berat_kg": "3570", "cara_timbang": "DUA_KALI",
+        "supplier_id": "1", "nomor_polisi": "K 8482 CC", "jumlah_karung": "0",
+        "tara_per_karung_kg": "0", "berat_acuan_kg": "10000",
+        "tara_lain_kg": "0", "waktu": "", "catatan": "", "nomor_acuan": "SJ-1",
+        "nama_sopir": "", "pihak_nama": "",
+    })
+    for jalur in (f"{PREFIX}/tiket", f"{PREFIX}/"):
+        teks = (await klien.get(jalur)).text
+        blok = teks[teks.index("K 8482 CC"):]
+        blok = blok[:blok.index("</a>")]
+        assert "pengiriman" in blok, jalur
+        assert "masuk" not in blok, jalur      # tidak ada lagi kata itu
+        assert "sejak" in blok, jalur
+
+
+async def test_beras_masuk_dan_beras_keluar_bisa_dibedakan_di_daftar(
+    klien, app_uji
+):
+    """Keduanya sama-sama bernama "Beras" — tanpa arahnya, satu daftar
+    memuat dua baris yang tampak identik."""
+    await login(klien, "budi")
+    for jenis, nopol, berat in (("BERAS_MASUK", "AD 1 AA", "13600"),
+                                ("BERAS", "AD 2 BB", "3570")):
+        form = (await klien.get(f"{PREFIX}/timbang/{jenis}")).text
+        await klien.post(f"{PREFIX}/timbang/{jenis}", data={
+            "kode": kode_dari(form), "berat_kg": berat,
+            "cara_timbang": "DUA_KALI", "supplier_id": "1",
+            "nomor_polisi": nopol, "jumlah_karung": "100",
+            "tara_per_karung_kg": "0,1", "berat_acuan_kg": "9000",
+            "tara_lain_kg": "0", "waktu": "", "catatan": "",
+            "nomor_acuan": "N", "nama_sopir": "", "pihak_nama": "",
+        })
+    teks = (await klien.get(f"{PREFIX}/tiket")).text
+    for nopol, arah in (("AD 1 AA", "barang masuk"), ("AD 2 BB", "pengiriman")):
+        blok = teks[teks.index(nopol):]
+        assert arah in blok[:blok.index("</a>")], nopol
+
+
+async def test_catatan_menyebut_arah_pada_kolom_komoditas(klien, app_uji):
+    await login(klien, "budi")
+    await _selesaikan(klien, "GABAH_BASAH")
+    await klien.post(f"{PREFIX}/keluar")
+
+    await _jadi_super(app_uji)
+    await login(klien, "wahid")
+    teks = (await klien.get(f"{PREFIX}/transaksi")).text
+    # Hanya isi tabelnya: daftar saringan di atas juga memuat nama komoditas.
+    tabel = teks[teks.index("<tbody>"):teks.index("</tbody>")]
+    blok = tabel[tabel.index("Gabah Basah"):]
+    assert "barang masuk" in blok[:220]

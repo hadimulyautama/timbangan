@@ -99,6 +99,7 @@
       {{ judul_truk(b) }}
       <div class="pilihan__ket">
         {{ NAMA_JENIS.get(b.trx.jenis_kode, b.trx.jenis_kode) }} ·
+        {{ ARAH_LABEL.get(b.trx.arah, b.trx.arah|lower) }} ·
         {{ b.trx.tanggal|tgl(true) }}
       </div>
     </div>

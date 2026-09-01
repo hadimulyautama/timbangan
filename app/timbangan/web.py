@@ -34,7 +34,7 @@ BASE_DIR = Path(__file__).parent
 PREFIX = "/timbangan"
 
 # Dinaikkan bila CSS/JS berubah, supaya perangkat tidak memakai berkas lama.
-VERSI = "14"
+VERSI = "15"
 
 #: Warna tiap status. Dipisahkan dari `logic` karena ini urusan tampilan.
 NADA_STATUS = {
@@ -47,6 +47,20 @@ NADA_STATUS = {
 }
 
 NAMA_JENIS = {a.kode: a.nama for a in logic.JENIS_AWAL}
+
+#: Arah barang dalam kata yang dipakai petugas, bukan kode.
+#:
+#: Perlu ditampilkan karena nama komoditas saja tidak cukup membedakan: BERAS
+#: (pengiriman) dan BERAS_MASUK (pembelian) sama-sama bernama "Beras", jadi di
+#: daftar keduanya tampak identik. Dan kata "masuk" tidak boleh dipakai untuk
+#: hal lain di layar yang sama — dulu baris tiket berbunyi "Beras · masuk
+#: 09:43" yang bermaksud JAM KEDATANGAN, dan terbaca sebagai arah barang.
+ARAH_LABEL = {
+    logic.MASUK: "barang masuk",
+    logic.KELUAR: "pengiriman",
+    logic.BEBAS: "jasa timbang",
+    logic.TRANSFER: "transfer internal",
+}
 
 
 def ringkas_aturan(aturan: logic.AturanJenis) -> str:
@@ -94,6 +108,7 @@ templates.env.globals.update({
     "STATUS_WAJIB_PERIKSA": logic.STATUS_WAJIB_PERIKSA,
     "NADA_STATUS": NADA_STATUS,
     "NAMA_JENIS": NAMA_JENIS,
+    "ARAH_LABEL": ARAH_LABEL,
     "ringkas_aturan": ringkas_aturan,
     "MASUK": logic.MASUK,
     "KELUAR": logic.KELUAR,

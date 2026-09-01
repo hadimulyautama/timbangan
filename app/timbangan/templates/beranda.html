@@ -21,7 +21,8 @@
             {{ judul_truk(b) }}
             <div class="pilihan__ket">
               {{ NAMA_JENIS.get(b.trx.jenis_kode, b.trx.jenis_kode) }} ·
-              masuk {{ b.trx.timbang1_waktu|jam }}
+              {{ ARAH_LABEL.get(b.trx.arah, b.trx.arah|lower) }} ·
+              sejak {{ b.trx.timbang1_waktu|jam }}
             </div>
           </div>
           {% if b.trx.id in menganggur %}
