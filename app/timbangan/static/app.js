@@ -334,10 +334,34 @@
    * unduhan biasa lewat blob. Bila keduanya gagal, barulah tautannya
    * dibuka apa adanya — lebih baik tersangkut daripada tidak dapat berkas.
    */
+  /* Hanya iOS/iPadOS yang dicegat.
+   *
+   * Di sanalah jalan buntunya nyata: aplikasi yang dipasang ke layar utama
+   * tidak punya bilah peramban, sehingga berkas menggantikan seluruh layar
+   * tanpa tombol cetak, bagikan, maupun kembali. Lembar Bagikan iOS memuat
+   * pilihan Cetak, jadi alur mencetak tetap utuh.
+   *
+   * Di Mac dan peramban meja JANGAN dicegat: di sana tautan biasa membuka
+   * tab dengan penampil PDF lengkap beserta tombol cetaknya — sedangkan
+   * lembar Bagikan macOS TIDAK punya pilihan Cetak sama sekali (hanya
+   * AirDrop, Mail, Messages). Mencegatnya di sana justru menghapus satu-
+   * satunya cara mencetak.
+   *
+   * iPadOS mengaku sebagai Mac di user agent; yang membedakannya titik
+   * sentuh. Mac tidak punya.
+   */
+  function perlu_lembar_bagikan() {
+    var ua = navigator.userAgent || '';
+    var iOS = /iP(hone|ad|od)/.test(ua) ||
+              (/Mac/.test(ua) && navigator.maxTouchPoints > 1);
+    return iOS && !!navigator.share;
+  }
+
   document.addEventListener('click', function (e) {
     if (!e.target.closest) { return; }
     var tautan = e.target.closest('a[data-unduh]');
     if (!tautan) { return; }
+    if (!perlu_lembar_bagikan()) { return; }   // biarkan tautan bekerja apa adanya
     e.preventDefault();
     unduhBerkas(tautan);
   });

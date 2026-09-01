@@ -3254,3 +3254,31 @@ async def test_struk_tetap_mencetak_selisih_bila_dokumennya_ada(klien):
     teks = "\n".join(
         h.extract_text() or "" for h in PdfReader(BytesIO(r.content)).pages)
     assert "Menurut dokumen" in teks and "Selisih" in teks
+
+
+async def test_tautan_cetak_dibuka_bukan_diunduh(klien):
+    """Di peramban meja PDF harus TERBUKA di penampil — di situlah tombol
+    cetaknya. Atribut `download` akan membuatnya langsung terunduh, sehingga
+    mencetak jadi dua langkah lebih jauh.
+
+    `data-unduh` tetap ada untuk iOS, yang mencegatnya ke lembar Bagikan;
+    lembar Bagikan macOS TIDAK punya pilihan Cetak, jadi cegatan itu memang
+    hanya boleh berlaku di iOS. Penjaganya di app.js.
+    """
+    await login(klien, "budi")
+    trx_id = await _selesaikan(klien, "GABAH_BASAH")
+    teks = (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak")).text
+    for jalur in ("cetak/80mm", "cetak/ncr"):
+        potongan = teks[max(0, teks.index(jalur) - 200):teks.index(jalur) + 120]
+        assert "data-unduh" in potongan, jalur
+        assert 'target="_blank"' in potongan, jalur
+        assert "download" not in potongan, jalur
+
+
+async def test_tautan_csv_tetap_diunduh(klien, app_uji):
+    """CSV sebaliknya: menampilkannya mentah di tab tidak berguna."""
+    await _jadi_super(app_uji)
+    await login(klien, "wahid")
+    teks = (await klien.get(f"{PREFIX}/transaksi")).text
+    potongan = teks[max(0, teks.index("ekspor.csv") - 200):teks.index("ekspor.csv")]
+    assert "data-unduh" in potongan and "download" in potongan
