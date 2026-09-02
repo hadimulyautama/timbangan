@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block judul %}Printer struk{% endblock %}
+{% block bar_judul %}Printer struk{% endblock %}
+{% block bar_sub %}Penyiapan perangkat ini{% endblock %}
+
+{% block isi %}
+
+  <div class="bantu" style="line-height:1.55">
+    Struk dikirim dari <b>perangkat ini</b> langsung ke printer di jaringan pos
+    timbang — bukan dari server. Karena itu penyiapannya dilakukan sekali di
+    tiap ponsel atau tablet, dan tidak ikut berpindah ke perangkat lain.
+  </div>
+
+  <div class="pesan" data-hasil-cetak hidden></div>
+
+  <div class="grup">
+    <div class="lbl">Alamat printer</div>
+    <input class="fld teks" name="printer_url" type="text" inputmode="url"
+           autocomplete="off" autocapitalize="none" spellcheck="false"
+           placeholder="{{ PRINTER_URL }}">
+    <div class="bantu">
+      Harus diawali <b>https://</b>. Halaman ini disajikan lewat HTTPS, dan
+      browser menolak menghubungi alamat <b>http://</b> dari halaman HTTPS.
+    </div>
+  </div>
+  <button type="button" class="tbl halus blok" data-simpan-printer>
+    Simpan alamat di perangkat ini</button>
+
+  <div class="kartu">
+    <div class="kartu__judul">Dua izin, sekali seumur perangkat</div>
+
+    <div class="baris" style="align-items:flex-start;gap:10px">
+      <span><b>1. Terima sertifikat printer</b><br>
+        <span class="bantu">
+          Printer memakai sertifikat buatannya sendiri, jadi browser
+          mencurigainya. Buka alamat printer sekali di tab lain, lalu pilih
+          <i>Lanjutkan</i> pada peringatan yang muncul. Setelah itu tab boleh
+          ditutup.
+        </span>
+      </span>
+    </div>
+    <a class="tbl halus blok" data-buka-printer target="_blank" rel="noopener"
+       style="margin:4px 0 14px">
+      Buka <span data-alamat-printer style="font-family:var(--mono)"></span>
+      di tab baru</a>
+
+    <div class="baris" style="align-items:flex-start;gap:10px">
+      <span><b>2. Izinkan akses jaringan lokal</b><br>
+        <span class="bantu">
+          Saat pertama kali mencetak, browser bertanya apakah halaman ini boleh
+          menghubungi alat di jaringan setempat. Pilih <i>Izinkan</i>. Bila
+          pertanyaannya terlewat, cetakan akan menggantung sampai batas waktu —
+          ulangi saja, pertanyaannya muncul lagi.
+        </span>
+      </span>
+    </div>
+  </div>
+
+  <div class="grup">
+    <div class="lbl">Uji cetak</div>
+    <a class="tbl blok" href="{{ PREFIX }}/printer/uji"
+       data-cetak="{{ PREFIX }}/printer/uji">
+      <span data-teks>Cetak halaman uji</span></a>
+    <div class="bantu">
+      Yang keluar memuat penggaris 48 kolom. Bila penggaris itu patah menjadi
+      dua baris, kertas yang terpasang bukan 80 mm.
+    </div>
+  </div>
+
+  <div class="bantu" style="line-height:1.55">
+    Printer tetap bisa dilewati: pada layar cetak, <b>Struk 80 mm (PDF)</b>
+    selalu tersedia dan bisa dicetak lewat dialog berbagi ponsel, atau
+    dikirim lewat WhatsApp.
+  </div>
+
+  <a href="{{ PREFIX }}/" class="tbl halus blok">Kembali ke beranda</a>
+
+{% endblock %}

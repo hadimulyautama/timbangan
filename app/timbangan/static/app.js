@@ -426,4 +426,213 @@
       });
   }
 
+  // ── Printer struk (ePOS-Print) ─────────────────────────────────────
+  //
+  // Server tidak bisa mencetak: ia berjalan di Railway, printer berdiri di
+  // jaringan gudang. Jadi perangkat inilah kurirnya — ia mengambil perintah
+  // cetak dari server, lalu menyerahkannya ke printer di jaringan setempat.
+  //
+  // Dua hal yang harus diberikan sekali per perangkat, dan keduanya diminta
+  // browser, bukan aplikasi:
+  //   1. sertifikat printer diterima (alamatnya dibuka sekali di tab lain);
+  //   2. izin "akses jaringan lokal" diklik saat browser bertanya.
+  // Tanpa keduanya permintaan tidak gagal dengan pesan — ia menggantung.
+  // Itulah sebabnya ada tenggat waktu di bawah, dan sebabnya pesan gagal
+  // menunjuk ke halaman penyiapan alih-alih berkata "terjadi kesalahan".
+
+  var PRINTER = 'timbangan-printer';   // localStorage: alamat printer perangkat
+  var TENGGAT_MS = 20000;
+
+  function alamatPrinter() {
+    try {
+      var simpanan = (localStorage.getItem(PRINTER) || '').trim();
+      if (simpanan) { return simpanan.replace(/\/+$/, ''); }
+    } catch (e) { /* penyimpanan diblokir — pakai bawaan dari server */ }
+    return (document.body.dataset.printer || '').trim().replace(/\/+$/, '');
+  }
+
+  function simpanPrinter(alamat) {
+    try {
+      alamat = (alamat || '').trim().replace(/\/+$/, '');
+      if (alamat) { localStorage.setItem(PRINTER, alamat); }
+      else { localStorage.removeItem(PRINTER); }
+      return true;
+    } catch (e) { return false; }
+  }
+
+  // Kode kesalahan printer diterjemahkan ke hal yang bisa DIKERJAKAN petugas.
+  // "EPTR_REC_EMPTY" tidak berarti apa pun bagi orang yang sedang berdiri di
+  // samping truk; "kertas habis" berarti sesuatu.
+  var ARTI_GAGAL = {
+    EPTR_COVER_OPEN: 'Penutup printer terbuka. Tutup, lalu cetak lagi.',
+    EPTR_REC_EMPTY: 'Kertas habis. Ganti gulungannya, lalu cetak lagi.',
+    EPTR_AUTOMATICAL: 'Printer berhenti karena kesalahan alat. ' +
+      'Matikan dan nyalakan kembali.',
+    EPTR_UNRECOVERABLE: 'Printer perlu dimatikan dan dinyalakan kembali.',
+    EPTR_REC_ERROR: 'Kepala cetak terlalu panas. Tunggu sebentar, lalu ulangi.',
+    DeviceNotFound: 'Printer menjawab, tetapi kepala cetaknya tidak dikenali. ' +
+      'Periksa nama perangkat di halaman penyiapan printer.',
+    PrintSystemError: 'Printer menolak perintah cetak. Coba matikan dan ' +
+      'nyalakan kembali.',
+    SchemaError: 'Perintah cetak ditolak printer. Laporkan ke Admin — ' +
+      'ini kekeliruan aplikasi, bukan kekeliruan alat.'
+  };
+
+  function KirimGagal(pesan, penyiapan) {
+    var e = new Error(pesan);
+    e.penyiapan = !!penyiapan;   // arahkan ke halaman penyiapan printer
+    return e;
+  }
+
+  /* Kirim satu perintah cetak. `sumber` adalah alamat di server ini yang
+   * menyusun perintahnya — perangkat tidak pernah menyusun sendiri. */
+  function cetakKePrinter(sumber) {
+    var alamat = alamatPrinter();
+    if (!alamat) {
+      return Promise.reject(
+        KirimGagal('Printer belum disetel di perangkat ini.', true));
+    }
+
+    return fetch(sumber, { credentials: 'same-origin' })
+      .then(function (r) {
+        if (!r.ok) { throw new Error('Gagal menyiapkan struk (' + r.status + ').'); }
+        return r.text();
+      })
+      .then(function (perintah) {
+        var devid = document.body.dataset.printerDevid || 'local_printer';
+        var tujuan = alamat + '/cgi-bin/epos/service.cgi?devid=' +
+                     encodeURIComponent(devid) + '&timeout=10000';
+
+        // AbortController dipakai langsung, bukan AbortSignal.timeout: yang
+        // kedua belum ada di Safari lama, dan tablet gudang jarang diperbarui.
+        var henti = new AbortController();
+        var jam = setTimeout(function () { henti.abort(); }, TENGGAT_MS);
+
+        return fetch(tujuan, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/xml; charset=utf-8' },
+          body: perintah,
+          signal: henti.signal
+        }).then(function (r) {
+          clearTimeout(jam);
+          return r.text();
+        }, function (err) {
+          clearTimeout(jam);
+          // Baik permintaan yang ditolak maupun yang menggantung sampai batas
+          // waktu berujung di sini, dan keduanya bermuara pada hal yang sama:
+          // browser ini belum diizinkan menghubungi printer.
+          throw KirimGagal(
+            err && err.name === 'AbortError'
+              ? 'Printer tidak menjawab dalam ' + (TENGGAT_MS / 1000) +
+                ' detik. Biasanya izin jaringan lokal belum diberikan, atau ' +
+                'perangkat ini ada di jaringan yang berbeda.'
+              : 'Perangkat ini belum bisa menghubungi printer di ' + alamat + '.',
+            true);
+        });
+      })
+      .then(function (jawaban) {
+        if (/success="true"/.test(jawaban)) { return true; }
+        var kode = (jawaban.match(/code="([^"]*)"/) || [])[1] || '';
+        throw new Error(ARTI_GAGAL[kode] ||
+          ('Printer menolak mencetak' + (kode ? ' (' + kode + ')' : '') + '.'));
+      });
+  }
+
+  /* Tombol cetak. `data-cetak` berisi alamat penyusun perintah di server. */
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest) { return; }
+    var tombol = e.target.closest('[data-cetak]');
+    if (!tombol) { return; }
+    e.preventDefault();
+    if (tombol.dataset.sibuk === '1') { return; }
+
+    var label = tombol.querySelector('[data-teks]') || tombol;
+    var semula = label.textContent;
+    tombol.dataset.sibuk = '1';
+    label.textContent = 'Mencetak…';
+    lapor('');
+
+    cetakKePrinter(tombol.dataset.cetak)
+      .then(function () {
+        tombol.dataset.sibuk = '';
+        label.textContent = semula;
+        lapor('Struk keluar di printer.', 'ok');
+        catatCetak();
+      })
+      .catch(function (err) {
+        tombol.dataset.sibuk = '';
+        label.textContent = semula;
+        lapor(err.message, 'err', err.penyiapan);
+      });
+  });
+
+  function lapor(pesan, nada, penyiapan) {
+    var kotak = document.querySelector('[data-hasil-cetak]');
+    if (!kotak) { if (pesan) { alert(pesan); } return; }
+    kotak.textContent = '';
+    kotak.hidden = !pesan;
+    if (!pesan) { return; }
+    kotak.className = 'pesan pesan--' + (nada === 'ok' ? 'ok' : 'err');
+    kotak.appendChild(document.createTextNode(pesan + ' '));
+    if (penyiapan) {
+      var a = document.createElement('a');
+      a.href = PREFIX + '/printer';
+      a.textContent = 'Buka penyiapan printer';
+      kotak.appendChild(a);
+    }
+  }
+
+  /* Kertas sudah keluar, jadi jejak audit harus menyebutkannya.
+   *
+   * Hanya cetakan PERTAMA yang dicatat sendiri. Cetak ulang wajib beralasan,
+   * dan alasan tidak boleh dikarang aplikasi — formulirnya dibiarkan terisi
+   * separuh supaya petugas mengetiknya. */
+  function catatCetak() {
+    var form = document.querySelector('form[data-catat-cetak]');
+    if (!form) { return; }
+    var pilihan = form.querySelector('select[name="format"]');
+    if (pilihan) { pilihan.value = '80MM'; }
+    var alasan = form.querySelector('input[name="alasan"]');
+    if (alasan && alasan.required) {
+      alasan.focus();
+      return;
+    }
+    form.submit();
+  }
+
+  /* Penyiapan printer: simpan alamat, lalu uji. */
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest) { return; }
+    var tombol = e.target.closest('[data-simpan-printer]');
+    if (!tombol) { return; }
+    e.preventDefault();
+    var isian = document.querySelector('input[name="printer_url"]');
+    if (!isian) { return; }
+    if (!simpanPrinter(isian.value)) {
+      lapor('Perangkat ini menolak menyimpan setelan. ' +
+            'Matikan mode penyamaran, lalu ulangi.', 'err');
+      return;
+    }
+    lapor('Alamat printer disimpan di perangkat ini. Sekarang coba uji cetak.',
+          'ok');
+    document.querySelectorAll('[data-alamat-printer]').forEach(function (el) {
+      el.textContent = alamatPrinter();
+    });
+    document.querySelectorAll('a[data-buka-printer]').forEach(function (a) {
+      a.href = alamatPrinter() || '#';
+    });
+  });
+
+  document.addEventListener('DOMContentLoaded', function () {
+    var isian = document.querySelector('input[name="printer_url"]');
+    if (isian && !isian.value) { isian.value = alamatPrinter(); }
+    document.querySelectorAll('[data-alamat-printer]').forEach(function (el) {
+      el.textContent = alamatPrinter() || '(belum disetel)';
+    });
+    document.querySelectorAll('a[data-buka-printer]').forEach(function (a) {
+      a.href = alamatPrinter() || '#';
+    });
+  });
+
+
 })();

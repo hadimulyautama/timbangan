@@ -20,8 +20,37 @@
     </div>
   {% endif %}
 
+  <div class="pesan" data-hasil-cetak hidden></div>
+
   <div>
-    <div class="lbl" style="margin-bottom:8px">Pilih ukuran</div>
+    <div class="lbl" style="margin-bottom:8px">Langsung ke printer</div>
+
+    {# Satu ketukan: perintah cetak diambil dari server lalu diserahkan ke
+       printer pos timbang. Tetap berupa <a> dengan href yang sah supaya, bila
+       JavaScript mati, tautannya membuka perintah itu apa adanya — janggal,
+       tetapi jujur, dan dua pilihan PDF di bawah tetap bekerja. #}
+    <a href="{{ PREFIX }}/transaksi/{{ trx.id }}/cetak/epos"
+       data-cetak="{{ PREFIX }}/transaksi/{{ trx.id }}/cetak/epos"
+       class="pilihan" style="margin-bottom:8px">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--aksi)"
+           stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M7 9V4h10v5"/><rect x="4" y="9" width="16" height="7" rx="1.5"/>
+        <path d="M7 14h10v6H7z"/></svg>
+      <div class="pilihan__isi">
+        <div class="pilihan__nama" data-teks>Cetak struk 80 mm</div>
+        <div class="pilihan__ket">
+          Keluar seketika di printer pos timbang, tanpa membuka berkas apa pun.
+        </div>
+      </div>
+    </a>
+    {# Tautan penyiapan berdiri di luar tombol: menyarangkan tautan di dalam
+       tautan bukan HTML yang sah, dan ketukannya akan tertelan tombol cetak. #}
+    <div class="bantu" style="margin:-2px 0 0">
+      Belum pernah dipakai di perangkat ini?
+      <a href="{{ PREFIX }}/printer">Siapkan printer dulu</a> — sekali saja.
+    </div>
+
+    <div class="lbl" style="margin:16px 0 8px">Sebagai berkas PDF</div>
 
     {# data-unduh: berkasnya diambil di latar lalu diserahkan ke lembar
        Bagikan, yang memuat pilihan Cetak. Tanpa itu, di aplikasi yang
@@ -61,13 +90,18 @@
   </div>
 
   <div class="bantu" style="line-height:1.55">
-    Keduanya terbuka sebagai <b>PDF</b>. Dari situ bisa langsung dicetak, atau
+    Kedua pilihan di atas terbuka sebagai <b>PDF</b>. Dari situ bisa dicetak, atau
     dibagikan lewat WhatsApp dan surel memakai tombol Bagikan bawaan ponsel.
     Ukurannya sudah pasti, dan tidak ada tanggal, jam, nomor halaman, maupun
     alamat aplikasi yang ikut tercetak.
   </div>
 
+  {# data-catat-cetak: setelah printer menjawab berhasil, app.js mengirim
+     formulir ini sendiri — kertas yang benar-benar keluar harus muncul di
+     jejak audit tanpa bergantung pada petugas yang ingat menekannya.
+     Cetak ulang dikecualikan: alasannya wajib, dan tidak boleh dikarang. #}
   <form method="post" action="{{ PREFIX }}/transaksi/{{ trx.id }}/cetak"
+        data-catat-cetak
         style="display:flex;flex-direction:column;gap:10px">
     <div class="grup">
       <div class="lbl">Catat sudah dicetak</div>

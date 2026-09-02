@@ -3284,3 +3284,60 @@ async def test_tautan_csv_tetap_diunduh(klien, app_uji):
     teks = (await klien.get(f"{PREFIX}/transaksi")).text
     potongan = teks[max(0, teks.index("ekspor.csv") - 200):teks.index("ekspor.csv")]
     assert "data-unduh" in potongan and "download" in potongan
+
+
+# ─────────────────── Cetak langsung ke printer ───────────────────
+
+async def test_perintah_cetak_epos_sejalan_dengan_struk_pdf(klien):
+    """Dua jalur cetak, satu isi.
+
+    Kertas dari printer dan kertas dari PDF sama-sama ditandatangani pengirim
+    barang. Bila angkanya bisa berbeda, salah satunya adalah bukti palsu —
+    dan tidak ada yang tahu yang mana.
+    """
+    await login(klien)
+    trx_id = await _selesaikan(klien, "BERAS_PK")
+
+    r = await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak/epos")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/xml")
+
+    from xml.etree import ElementTree
+    akar = ElementTree.fromstring(r.text)
+    ruang = "{http://www.epson-pos.com/schemas/2011/03/epos-print}"
+    teks = "\n".join((el.text or "") for el in akar.iter(ruang + "text"))
+    assert "B U K T I   T I M B A N G" in teks
+    assert "BERAT BARANG" in teks
+    # Beras PK transparan — selisihnya memang diserahkan ke pengirim.
+    assert "Menurut dokumen" in teks and "Selisih" in teks
+
+
+async def test_perintah_cetak_epos_ikut_menutup_selisih_yang_rahasia(klien):
+    """SOP butir 8 berlaku di printer persis seperti di PDF."""
+    await login(klien)
+    trx_id = await _selesaikan(klien, "GABAH_KERING")
+    r = await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak/epos")
+    assert "Selisih" not in r.text and "Menurut dokumen" not in r.text
+
+
+async def test_halaman_penyiapan_printer_menyebut_kedua_izin(klien):
+    """Tanpa keduanya tombol cetak hanya diam, dan petugas menyimpulkan
+    aplikasinya rusak — jadi keduanya harus tertulis, bukan disiratkan."""
+    await login(klien)
+    r = await klien.get(f"{PREFIX}/printer")
+    assert r.status_code == 200
+    assert "sertifikat" in r.text.lower()
+    assert "jaringan lokal" in r.text.lower()
+
+
+async def test_penyiapan_printer_tertutup_bagi_yang_belum_masuk(klien):
+    r = await klien.get(f"{PREFIX}/printer")
+    assert "Kata sandi" in r.text
+
+
+async def test_cetak_uji_bisa_diminta_tanpa_transaksi(klien):
+    """Printer harus bisa diuji sebelum ada barang datang — bukan sesudah."""
+    await login(klien)
+    r = await klien.get(f"{PREFIX}/printer/uji")
+    assert r.status_code == 200
+    assert 'cut type="feed"' in r.text

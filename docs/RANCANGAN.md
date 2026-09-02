@@ -78,7 +78,7 @@ Modul ini berjalan sebagai **service Railway sendiri**, terpisah dari agen AI da
 | Aplikasi di HP | PWA: service worker + IndexedDB, dipasang ke layar utama |
 | Autentikasi | scrypt (pustaka standar) + cookie bertanda tangan HMAC-SHA256 |
 | Grafik | SVG digambar sendiri, tanpa pustaka chart |
-| Cetak | Halaman HTML `@page 72mm` lewat dialog cetak sistem |
+| Cetak | Perintah ePOS-Print langsung ke printer 80 mm; PDF sebagai cadangan (lihat §11.1) |
 | Ekspor | CSV (stdlib), XLSX (openpyxl), PDF (reportlab) |
 
 Tambahan pada `requirements.txt`: `jinja2`, `python-multipart`, `openpyxl`, `reportlab`.
@@ -508,17 +508,27 @@ Aplikasi ini **webapp yang dipasang ke layar utama** (PWA) — satu kode, berjal
 | Foto dari kamera | ✅ | ✅ |
 | **Cetak ke printer thermal** | ✅ langsung lewat Bluetooth | ❌ **tidak bisa** — iOS tidak mengizinkan browser mengakses Bluetooth |
 
-**Cetak adalah satu-satunya perbedaan yang nyata.** Keputusan Direksi: **printer ber-AirPrint dan Mopria**, dicetak lewat dialog cetak bawaan sistem. Tidak ada relai, tidak ada perangkat tambahan yang harus dijaga tetap menyala.
+**Cetak adalah satu-satunya perbedaan yang nyata.** Rencana semula: printer ber-AirPrint dan Mopria, dicetak lewat dialog cetak bawaan sistem — tanpa relai, tanpa perangkat tambahan yang harus dijaga tetap menyala.
+
+**Direvisi 2 September 2026 setelah printer ada di tangan.** Printer yang terpasang, **EPSON TM-m30III** (192.168.1.128), ternyata **tidak punya AirPrint dan tidak bisa dinyalakan**: tidak ada menunya di panel admin mana pun, dan printer mengiklankan dirinya di jaringan hanya sebagai `pdl=application/octet-stream` tanpa `URF` — ia tidak bisa menerima PDF. Yang sempat terlihat seperti AirPrint adalah antrean CUPS di sebuah Mac yang membagikan printer itu; jalur tersebut mati bila Mac-nya mati, jadi bukan jalur yang boleh dipakai pos timbang.
+
+Gantinya justru lebih baik: **ePOS-Print**, layanan bawaan Epson yang memang dirancang dipanggil dari halaman web. Perintah cetak dikirim sebagai XML ke `/cgi-bin/epos/service.cgi`, dan printer menjawab `Access-Control-Allow-Origin: *` beserta `Access-Control-Allow-Private-Network: true`. Struk keluar dengan **satu ketukan**, tanpa membuka berkas apa pun.
+
+Yang mengirim tetap **perangkat petugas, bukan server** — aplikasi berjalan di Railway dan tidak punya jalan ke jaringan gudang. Server hanya menyusun perintahnya (`app/timbangan/epos.py`); browser meneruskannya.
 
 Konsekuensinya pada rancangan:
 
 | Hal | Akibat |
 |---|---|
-| Bukti timbang bukan perintah printer, melainkan **halaman cetak** | Ditata dengan CSS `@page { size: 72mm auto; margin: 0 }` — lebar cetak efektif kertas 80 mm |
-| Kertas thermal hanya hitam-putih | Tidak ada latar berwarna maupun abu-abu pada dokumen cetak; garis dan bingkai hitam penuh |
-| Huruf tidak boleh bergantung internet | Struk memakai monospace bawaan sistem, bukan font dari Google Fonts — agar cetakan sama persis saat pos sedang tanpa internet |
-| Menekan Cetak membuka dialog sistem | Satu ketukan lebih banyak daripada cetak langsung. Wajar, dan sekaligus memberi kesempatan memilih printer bila ada lebih dari satu |
-| Printer dan HP harus satu jaringan WiFi | Cetak tetap jalan meski **internet mati**, selama WiFi lokal di pos hidup — AirPrint dan Mopria bekerja di jaringan lokal |
+| Bukti timbang adalah **perintah printer**, bukan halaman cetak | Disusun di server sebagai XML ePOS-Print, 48 kolom. PDF 80 mm tetap ada — untuk dibagikan lewat WhatsApp, dan untuk printer mana pun yang bukan Epson |
+| Angka pada kedua jalur wajib sama | Baris angkanya satu sumber (`app/timbangan/bukti.py`), dipakai jalur PDF maupun ePOS. Kertas dari dua jalur yang berbeda sama-sama ditandatangani pengirim barang |
+| `dw` dan `em` adalah **saklar pada alat**, bukan sifat satu baris | Tiap baris menuliskan gaya hurufnya sendiri secara penuh. Sekali hal ini terlewat, seluruh struk tercetak dua kali lebar dan setiap baris patah di tengah kata |
+| Kertas thermal hanya hitam-putih | Tidak ada latar berwarna maupun abu-abu; garis dan bingkai hitam penuh |
+| Code page satu byte | Huruf beraksen diturunkan ke ASCII sebelum dikirim — satu simbol acak di tengah nama membuat bukti terlihat palsu |
+| Halaman HTTPS tidak boleh memanggil `http://` | Alamat printer wajib `https://`. Sertifikatnya buatan sendiri, jadi tiap perangkat menerimanya sekali di tab lain |
+| Browser meminta izin **akses jaringan lokal** | Sekali per perangkat. Bila terlewat, cetakan menggantung tanpa pesan — karena itu ada tenggat 20 detik dan halaman `/timbangan/printer` yang menjelaskan keduanya |
+| Alamat printer milik **tempat**, bukan perusahaan | Disimpan di perangkat (localStorage), bukan di database: tablet pos menunjuk printer pos, ponsel Direksi tidak menunjuk apa pun |
+| Printer dan HP harus satu jaringan WiFi | Cetak tetap jalan meski **internet mati**, selama WiFi lokal pos hidup dan halamannya sudah termuat |
 | HP yang sedang memakai data seluler | Tidak menemukan printer. Perangkat pos harus tersambung WiFi pos, bukan data seluler |
 
 ### 11.2 Printer: spesifikasi pembelian

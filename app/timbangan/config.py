@@ -62,6 +62,19 @@ class TimbanganSettings:
     # ditutup paksa (truk tidak jadi bongkar, atau petugas lupa).
     jam_tiket_menganggur: int = _i("TIMBANGAN_JAM_TIKET_MENGANGGUR", 12)
 
+    # ── Printer struk di pos timbang ──
+    # Alamat printer Epson ber-ePOS-Print di jaringan lokal gudang. Yang
+    # memakainya BUKAN server ini melainkan browser petugas: server berjalan
+    # di Railway dan tidak punya jalan ke jaringan gudang. Nilai di sini hanya
+    # bawaan yang dikirim ke layar, dan tiap perangkat boleh menimpanya.
+    #
+    # Harus https:// — halaman aplikasi disajikan lewat HTTPS, dan browser
+    # menolak permintaan http:// dari halaman HTTPS (mixed content).
+    printer_url: str = os.getenv("TIMBANGAN_PRINTER_URL", "https://192.168.1.128")
+    # Nama perangkat di printer. Bawaan pabrik Epson untuk kepala cetaknya
+    # sendiri; berubah hanya bila ada perangkat lain digantung di ePOS-Device.
+    printer_devid: str = os.getenv("TIMBANGAN_PRINTER_DEVID", "local_printer")
+
     # ── Identitas pada bukti timbang ──
     perusahaan_nama: str = os.getenv("TIMBANGAN_PERUSAHAAN", "PT Hadi Mulya Utama")
     perusahaan_alamat: str = os.getenv("TIMBANGAN_ALAMAT", "Masaran, Kab. Sragen")
