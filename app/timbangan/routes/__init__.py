@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.timbangan import setelan
 from app.timbangan.db import get_db
-from app.timbangan.routes import auth, laporan, master, pos, transaksi
+from app.timbangan.routes import auth, laporan, master, pos, printer, transaksi
 
 
 async def _muat_setelan(request: Request, db: AsyncSession = Depends(get_db)):
@@ -36,6 +36,7 @@ router = APIRouter(dependencies=[Depends(_muat_setelan)])
 router.include_router(auth.router)
 router.include_router(laporan.router)
 router.include_router(master.router)
+router.include_router(printer.router)
 router.include_router(transaksi.router)
 router.include_router(pos.router)
 

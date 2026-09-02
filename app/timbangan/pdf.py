@@ -19,12 +19,12 @@ punya warna.
 from __future__ import annotations
 
 import io
-from dataclasses import dataclass
 
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas as rl_canvas
 
 from app.timbangan import format as fmt
+from app.timbangan.bukti import baris_angka
 
 # Setengah folio, melintang.
 NCR_L, NCR_T = 215 * mm, 165 * mm
@@ -34,13 +34,6 @@ STRUK_L = 72 * mm
 
 TEBAL = "Helvetica-Bold"
 BIASA = "Helvetica"
-
-
-@dataclass
-class Baris:
-    label: str
-    nilai: str
-    jam: str = ""
 
 
 def _potong(c, teks: str, font: str, ukuran: float, lebar: float) -> str:
@@ -136,7 +129,7 @@ def bukti_ncr(*, trx, aturan, pihak: str, petugas: str, muatan,
     # ── Tabel angka ──
     y -= 13 * mm
     tabel_l = L - 66 * mm            # sisakan ruang tanda tangan di kanan
-    for b in _baris_angka(trx, arah_masuk):
+    for b in baris_angka(trx, arah_masuk):
         y -= 7.4 * mm
         c.setFont(BIASA, 8.2)
         c.setFillGray(0)
@@ -215,47 +208,6 @@ def bukti_ncr(*, trx, aturan, pihak: str, petugas: str, muatan,
     c.showPage()
     c.save()
     return buf.getvalue()
-
-
-def _baris_angka(trx, arah_masuk: bool) -> list[Baris]:
-    # Partai kecil: yang dicetak adalah RINCIANNYA, bukan satu angka bruto.
-    # Orang yang menjual 60 kg dalam empat kali timbang membawa pulang kertas
-    # yang bisa ia cocokkan sendiri; total tanpa rincian tak bisa diperiksa
-    # siapa pun setelah barangnya tercampur di gudang.
-    if getattr(trx, "partai", False):
-        b = [Baris(f"Timbang {p.urutan}", f"{fmt.angka(p.berat_kg)} kg",
-                   fmt.jam(p.waktu))
-             for p in trx.penimbangan]
-        b.append(Baris(f"Jumlah {len(trx.penimbangan)} kali timbang",
-                       f"{fmt.angka(trx.netto_timbangan_kg)} kg"))
-        if trx.jumlah_karung:
-            per = float(trx.total_tara_kg or 0) / trx.jumlah_karung
-            b.append(Baris(
-                f"Tara karung  {trx.jumlah_karung} × {fmt.angka(per, 3)} kg",
-                f"- {fmt.angka(trx.total_tara_kg, 2)} kg"))
-        if trx.tara_lain_kg:
-            b.append(Baris("Tara lain", f"- {fmt.angka(trx.tara_lain_kg, 2)} kg"))
-        return b
-
-    b = [Baris("Bruto — truk bermuatan",
-               f"{fmt.angka(trx.berat_bermuatan_kg)} kg",
-               fmt.jam(trx.timbang1_waktu if arah_masuk else trx.timbang2_waktu))]
-    if trx.berat_kosong_kg is not None:
-        b.append(Baris(
-            f"Tara truk — {'setelah bongkar' if arah_masuk else 'sebelum muat'}",
-            f"{fmt.angka(trx.berat_kosong_kg)} kg",
-            fmt.jam(trx.timbang2_waktu if arah_masuk else trx.timbang1_waktu)))
-    b.append(Baris("Netto timbangan", f"{fmt.angka(trx.netto_timbangan_kg)} kg"))
-    if trx.jumlah_karung:
-        per = float(trx.total_tara_kg or 0) / trx.jumlah_karung
-        b.append(Baris(
-            f"Tara karung  {trx.jumlah_karung} × {fmt.angka(per, 3)} kg",
-            f"- {fmt.angka(trx.total_tara_kg, 2)} kg"))
-    if trx.tara_lain_kg:
-        b.append(Baris("Tara lain", f"- {fmt.angka(trx.tara_lain_kg, 2)} kg"))
-    return b
-
-
 def bukti_thermal(*, trx, aturan, pihak: str, petugas: str, muatan,
                   perusahaan: str, alamat: str, telepon: str,
                   arah_masuk: bool, tampilkan_selisih: bool) -> bytes:
@@ -265,7 +217,7 @@ def bukti_thermal(*, trx, aturan, pihak: str, petugas: str, muatan,
     gabah tanpa selisih (SOP butir 8), beras PK dengan selisih (Sistem Tara
     butir 9). Karena itu ia menerima `tampilkan_selisih`.
     """
-    baris = _baris_angka(trx, arah_masuk)
+    baris = baris_angka(trx, arah_masuk)
     tinggi = (58 + 5.2 * len(baris) + (14 if tampilkan_selisih else 0)
               + (8 if trx.catatan else 0) + 28) * mm
 

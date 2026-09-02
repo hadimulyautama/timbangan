@@ -8,7 +8,7 @@ from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.timbangan import logic, pdf, service
+from app.timbangan import epos, logic, pdf, service
 from app.timbangan.config import tsettings
 from app.timbangan.db import get_db, hari_ini
 from app.timbangan.models import TimbanganAkun, TimbanganCetak
@@ -352,9 +352,10 @@ async def _bahan_cetak(db: AsyncSession, transaksi_id: int, akun):
     return b, aturan, petugas
 
 
-async def _pdf(db, transaksi_id, request, ncr: bool, akun=None):
+async def _isi_bukti(db, transaksi_id, akun):
+    """Satu kamus data untuk semua bentuk cetakan bukti timbang."""
     b, aturan, petugas = await _bahan_cetak(db, transaksi_id, akun)
-    umum = dict(
+    return b, aturan, dict(
         trx=b.trx, aturan=aturan,
         pihak=(b.supplier_nama or b.trx.pihak_nama or ""),
         petugas=petugas.get(b.trx.petugas_bukti_id, ""),
@@ -364,20 +365,17 @@ async def _pdf(db, transaksi_id, request, ncr: bool, akun=None):
         telepon=tsettings.perusahaan_telepon,
         arah_masuk=b.trx.arah == logic.MASUK,
     )
+
+
+async def _pdf(db, transaksi_id, request, ncr: bool, akun=None):
+    b, aturan, umum = await _isi_bukti(db, transaksi_id, akun)
     if ncr:
         return b.trx, pdf.bukti_ncr(**umum)
-    # Selisih hanya dicetak bila ada yang benar-benar dibandingkan.
-    #
-    # `rahasia` menahan hasil kontrol gabah agar tidak sampai ke pengirim.
-    # Tetapi ada sebab kedua yang dulu terlewat: sebagian komoditas memang
-    # tidak punya dokumen sama sekali (jasa timbang, transfer internal), dan
-    # nota bisa saja belum diisi. Struknya lalu mencetak "Menurut dokumen
-    # 0 kg · Selisih 0,00 kg" — angka yang terbaca seperti pernyataan,
-    # padahal tidak ada dokumen yang menyatakannya.
-    ada_acuan = (aturan.acuan != logic.ACUAN_TIDAK_ADA
-                 and float(b.trx.berat_acuan_kg or 0) > 0)
+    # Selisih hanya dicetak bila ada yang benar-benar dibandingkan; syaratnya
+    # ada di `epos.tampilkan_selisih` supaya kedua jalur cetak memakai satu
+    # keputusan yang sama. Lihat penjelasannya di sana.
     return b.trx, pdf.bukti_thermal(
-        **umum, tampilkan_selisih=(not aturan.rahasia) and ada_acuan
+        **umum, tampilkan_selisih=epos.tampilkan_selisih(b.trx, aturan)
     )
 
 
@@ -419,6 +417,36 @@ async def cetak_80mm_pdf(
     return Response(
         isi, media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="{trx.kode}-80mm.pdf"'},
+    )
+
+
+@router.get("/transaksi/{transaksi_id}/cetak/epos")
+async def cetak_epos(
+    transaksi_id: int,
+    request: Request,
+    akun: TimbanganAkun = Depends(butuh_akun),
+    db: AsyncSession = Depends(get_db),
+):
+    """Perintah ePOS-Print untuk struk 80 mm — bukan berkas, melainkan cetakan.
+
+    Yang dikembalikan di sini tidak dibuka siapa pun; perangkat mengambilnya
+    lalu meneruskannya ke printer di jaringan pos timbang. Server tidak bisa
+    mengirimnya sendiri: ia berjalan di Railway, dan printer ada di balik
+    jaringan lokal gudang yang tidak punya alamat dari luar.
+
+    Karena itu keberhasilan cetak TIDAK diketahui dari sini. Yang mencatat
+    "sudah dicetak" tetap `catat_cetak`, dipanggil perangkat setelah printer
+    menjawab — jejak audit hanya boleh mencatat kertas yang benar-benar keluar.
+    """
+    try:
+        b, aturan, umum = await _isi_bukti(db, transaksi_id, akun)
+    except service.LayananError as e:
+        return redirect("/transaksi" if akun.is_admin else "/", err=str(e))
+    return Response(
+        epos.struk_timbang(
+            **umum, tampilkan_selisih=epos.tampilkan_selisih(b.trx, aturan)
+        ),
+        media_type="text/xml; charset=utf-8",
     )
 
 
