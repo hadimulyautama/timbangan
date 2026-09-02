@@ -1,86 +1,176 @@
 {% extends "base.html" %}
-{% from "macros.html" import isian, konteks_jenis %}
+{% from "macros.html" import konteks_jenis %}
 
-{% set trx = b.trx %}
+{# Satu halaman untuk dua keadaan: memulai tiket baru, dan melanjutkan tiket
+   yang sudah terbuka. Bedanya cuma pihak sudah terkunci dan ada daftar yang
+   sudah ditimbang — bukan alur yang lain, jadi bukan layar yang lain. #}
+{% set trx = b.trx if b else None %}
+{% set aksi_url = (PREFIX ~ '/partai/' ~ trx.id) if trx
+                  else (PREFIX ~ '/partai/' ~ aturan.kode ~ '/baru') %}
 
-{% block judul %}Partai kecil · {{ trx.kode }}{% endblock %}
+{% block judul %}Partai kecil · {{ trx.kode if trx else aturan.nama }}{% endblock %}
 {% block bar_judul %}Timbang partai kecil{% endblock %}
-{% block bar_sub %}{{ b.supplier_nama or trx.pihak_nama or trx.kode }}{% endblock %}
+{% block bar_sub %}
+  {{ (b.supplier_nama or trx.pihak_nama or trx.kode) if trx else aturan.nama }}
+{% endblock %}
 
+{# Pita komoditas ditulis sendiri, bukan lewat `konteks_jenis`: ringkasan
+   aturan di sana menyebut tara per karung dan ambang selisih nota — dua hal
+   yang justru TIDAK berlaku pada partai kecil. Menampilkannya di layar ini
+   membuat petugas mengira taranya akan dipotong. #}
 {% block konteks %}
-  {{ konteks_jenis(aturan) }}
+  <div class="konteks">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3a352c"
+         stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3v18"/><path d="M5 7h14"/><path d="M5 7l-3 7h6z"/>
+      <path d="M19 7l-3 7h6z"/></svg>
+    <div style="flex-grow:1;min-width:0">
+      <div class="konteks__nama">{{ aturan.nama }}</div>
+      <div class="konteks__aturan">
+        Timbangan kecil · tanpa tara karung · angka apa adanya
+      </div>
+    </div>
+  </div>
 {% endblock %}
 
 {% block isi %}
 
-<div class="kartu">
-  <div class="baris">
-    <span>Nomor transaksi</span><b>{{ trx.kode }}</b>
-  </div>
-  <div class="baris">
-    <span>{{ b.supplier_nama or trx.pihak_nama or 'Pihak' }}</span>
-    <b style="font-family:var(--teks);font-size:14px">{{ aturan.nama }}</b>
-  </div>
-</div>
-
-{# Angka berjalan ditaruh paling atas dan dibuat besar: inilah satu-satunya
-   hal yang ingin dilihat petugas maupun penjualnya di antara dua timbangan. #}
-<div class="hasil {{ 'hasil--aman' if trx.penimbangan else 'hasil--netral' }}">
-  <div class="hasil__angka">{{ '%g'|format(trx.timbang1_kg or 0) }} <span class="sat">kg</span></div>
-  <div class="hasil__ket">
-    {{ trx.penimbangan|length }} kali timbang · masih berjalan
-  </div>
-</div>
-
-{# Kolom berat SENGAJA tidak memakai macro `berat`: macro itu memasang
-   peringatan "bukan kelipatan 10 kg", yang benar untuk jembatan truk dan
-   salah di sini. Partai kecil ditimbang pada alat yang membaca sampai
-   kilogram — 2 kg memang 2 kg. #}
-<form method="post" action="{{ PREFIX }}/partai/{{ trx.id }}/tambah" class="grup">
-  {{ isian('berat_kg', 'Berat timbangan ini', '', 'kg', 'text',
-           'Angka apa adanya, tanpa dibulatkan.', true, true,
-           'inputmode="decimal" autocomplete="off" autofocus') }}
-  {{ isian('catatan', 'Keterangan (bila perlu)', '', '', 'text',
-           'Mis. karung basah, campur', false, false) }}
-  <button type="submit" class="tbl blok" data-sibuk="Menyimpan…">
-    Tambah timbangan
-  </button>
-</form>
-
-<div class="kartu">
-  <div class="kartu__judul">Sudah ditimbang</div>
-  {% if not trx.penimbangan %}
-    <div class="kosong">Belum ada.</div>
-  {% endif %}
-  {% for p in trx.penimbangan %}
+{% if trx %}
+  <div class="kartu">
+    <div class="baris"><span>Nomor transaksi</span><b>{{ trx.kode }}</b></div>
     <div class="baris">
-      <span>
-        <b style="font-family:var(--mono)">{{ '%02d'|format(p.urutan) }}</b>
-        &nbsp;{{ '%g'|format(p.berat_kg) }} kg
-        {% if p.catatan %}<span class="bantu"> · {{ p.catatan }}</span>{% endif %}
-      </span>
-      {% if trx.penimbangan|length > 1 %}
-        <form method="post" action="{{ PREFIX }}/partai/{{ trx.id }}/hapus"
-              style="display:inline"
-              onsubmit="return confirm('Hapus timbangan {{ '%g'|format(p.berat_kg) }} kg?')">
-          <input type="hidden" name="urutan" value="{{ p.urutan }}">
-          <button type="submit" class="tbl halus kecil">Hapus</button>
-        </form>
-      {% endif %}
+      <span>{{ b.supplier_nama or trx.pihak_nama or 'Pihak' }}</span>
+      <b style="font-family:var(--teks);font-size:14px">{{ aturan.nama }}</b>
     </div>
-  {% endfor %}
-</div>
+  </div>
 
-<form method="post" action="{{ PREFIX }}/partai/{{ trx.id }}/selesai"
-      onsubmit="return confirm('Tutup tiket ini? Total {{ '%g'|format(trx.timbang1_kg or 0) }} kg dari {{ trx.penimbangan|length }} kali timbang.')">
-  <button type="submit" class="tbl blok" data-sibuk="Menutup…">
-    Selesai — total {{ '%g'|format(trx.timbang1_kg or 0) }} kg
-  </button>
+  {# Angka berjalan besar-besar: inilah satu-satunya hal yang ingin dilihat
+     petugas maupun penjualnya di antara dua timbangan. #}
+  <div class="hasil hasil--aman">
+    <div class="hasil__angka">{{ '%g'|format(trx.timbang1_kg or 0) }} <span class="sat">kg</span></div>
+    <div class="hasil__ket">{{ trx.penimbangan|length }} kali timbang · belum ditutup</div>
+  </div>
+
+  <div class="kartu">
+    <div class="kartu__judul">Sudah ditimbang</div>
+    {% for p in trx.penimbangan %}
+      <div class="baris">
+        <span>
+          <b style="font-family:var(--mono)">{{ '%02d'|format(p.urutan) }}</b>
+          &nbsp;{{ '%g'|format(p.berat_kg) }} kg
+          <span class="bantu">· {{ p.waktu|jam }}</span>
+        </span>
+        {% if trx.penimbangan|length > 1 %}
+          <form method="post" action="{{ PREFIX }}/partai/{{ trx.id }}/hapus"
+                style="display:inline"
+                onsubmit="return confirm('Hapus timbangan {{ '%g'|format(p.berat_kg) }} kg?')">
+            <input type="hidden" name="urutan" value="{{ p.urutan }}">
+            <button type="submit" class="tbl halus kecil">Hapus</button>
+          </form>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
+
+<form method="post" action="{{ aksi_url }}">
+  {% if not trx %}
+    <input type="hidden" name="kode" value="{{ kode }}">
+
+    <div class="grup">
+      <div class="lbl">{{ PIHAK_LABEL.get(aturan.arah, 'Pihak') }}</div>
+      <select class="fld" name="supplier_id"
+              data-cari="Ketik nama {{ PIHAK_LABEL.get(aturan.arah, 'pihak')|lower }}…">
+        <option value="">— pilih —</option>
+        {% if pihak_sering %}
+          <optgroup label="Sering datang">
+            {% for s in pihak_sering %}
+              <option value="{{ s.id }}">{{ s[kolom_nama] }}</option>
+            {% endfor %}
+          </optgroup>
+        {% endif %}
+        <optgroup label="Lainnya">
+          {% for s in pihak_lainnya %}
+            <option value="{{ s.id }}">{{ s[kolom_nama] }}</option>
+          {% endfor %}
+        </optgroup>
+      </select>
+    </div>
+
+    {# Petani dan pedagang kecil justru sering belum terdaftar, jadi kolom
+       ketik ini bukan jalur pengecualian melainkan jalur biasa. #}
+    <div class="grup">
+      <div class="lbl">
+        Nama {{ PIHAK_LABEL.get(aturan.arah, 'pihak')|lower }}
+        <span style="text-transform:none;letter-spacing:0;font-weight:500">
+          (bila belum terdaftar)</span>
+      </div>
+      <input class="fld teks" name="pihak_nama" type="text">
+      <div class="bantu">Isi ini bila tidak memilih dari daftar di atas.</div>
+    </div>
+  {% endif %}
+
+  {# Kolom berat SENGAJA tidak memakai macro `berat`: macro itu memasang
+     peringatan "bukan kelipatan 10 kg", yang benar untuk jembatan truk dan
+     salah di sini. Timbangan kecil membaca sampai kilogram — 2 kg ya 2 kg. #}
+  <div class="grup" style="margin-top:18px">
+    <div class="lbl">{{ 'Timbangan berikutnya' if trx else 'Berat timbangan' }}</div>
+    <div id="berat-daftar" style="display:flex;flex-direction:column;gap:8px">
+      <div class="berat-baris" style="display:flex;gap:8px;align-items:center">
+        <span class="bantu" style="min-width:22px;font-family:var(--mono)" data-nomor></span>
+        <input class="fld" name="berat_kg" type="text" inputmode="decimal"
+               autocomplete="off" placeholder="kg" style="flex:1">
+      </div>
+    </div>
+    <button type="button" class="tbl halus" id="tambah-berat"
+            style="margin-top:8px">+ Tambah timbangan</button>
+    <div class="bantu">Angka apa adanya, tanpa dibulatkan. Kolom kosong diabaikan.</div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px">
+    <button type="submit" name="aksi" value="sementara" class="tbl halus blok"
+            data-sibuk="Menyimpan…">
+      Simpan sementara
+    </button>
+    <button type="submit" name="aksi" value="selesai" class="tbl blok"
+            data-sibuk="Menutup…"
+            onclick="return confirm('Tutup tiket ini? Setelah ditutup, timbangan tidak bisa ditambah lagi.')">
+      Timbang selesai
+    </button>
+  </div>
 </form>
 
 <p class="bantu" style="margin-top:14px">
-  Tiket ini tetap satu kode. Selama belum ditutup, ia muncul di daftar tiket
-  terbuka dan bisa dilanjutkan kapan saja.
+  <b>Simpan sementara</b> menaruh tiket ini di daftar tiket terbuka — barang yang
+  datang menyusul, bahkan besok, tetap masuk ke kode yang sama.
+  <b>Timbang selesai</b> menutupnya dan menjumlahkan seluruh timbangan.
 </p>
 
+<script>
+/* Kolom berat ditambah sesuai kebutuhan, bukan disediakan sepuluh sekaligus:
+   sepuluh kolom kosong membuat layar terlihat seperti pekerjaan yang belum
+   selesai. Tanpa JavaScript, satu kolom pertama tetap bisa dipakai — dan
+   "Simpan sementara" membuat sisanya bisa dicatat berikutnya. */
+(function () {
+  var daftar = document.getElementById('berat-daftar');
+  var tombol = document.getElementById('tambah-berat');
+  if (!daftar || !tombol) { return; }
+  var sudah = {{ (trx.penimbangan|length) if trx else 0 }};
+
+  function nomori() {
+    Array.prototype.forEach.call(daftar.querySelectorAll('[data-nomor]'),
+      function (el, i) { el.textContent = ('0' + (sudah + i + 1)).slice(-2); });
+  }
+
+  tombol.addEventListener('click', function () {
+    var baris = daftar.querySelector('.berat-baris').cloneNode(true);
+    baris.querySelector('input').value = '';
+    daftar.appendChild(baris);
+    nomori();
+    baris.querySelector('input').focus();
+  });
+
+  nomori();
+})();
+</script>
 {% endblock %}

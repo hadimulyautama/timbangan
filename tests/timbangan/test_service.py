@@ -655,3 +655,27 @@ async def test_partai_boleh_menunggu_lintas_hari(db, petugas):
     )
     assert float(trx.timbang1_kg) == 24
     assert trx.status_tiket == TIKET_TERBUKA
+
+
+async def test_partai_menerima_beberapa_berat_sekaligus(db, petugas):
+    """Petugas menimbang lima karung berturut-turut lalu mencatatnya sekali —
+    bukan bolak-balik ke layar setiap satu karung."""
+    await service.simpan_timbang_pertama(
+        db, akun=petugas, data=partai("TRX-20260902-P1-009", 12.5)
+    )
+    trx = await service.tambah_penimbangan(
+        db, akun=petugas, kode="TRX-20260902-P1-009", berat=[8, 31.25, 6]
+    )
+    assert [float(p.berat_kg) for p in trx.penimbangan] == [12.5, 8, 31.25, 6]
+    assert float(trx.timbang1_kg) == 57.75
+    assert [p.urutan for p in trx.penimbangan] == [1, 2, 3, 4]
+
+
+async def test_partai_menolak_kiriman_tanpa_satu_pun_berat(db, petugas):
+    await service.simpan_timbang_pertama(
+        db, akun=petugas, data=partai("TRX-20260902-P1-010", 12.5)
+    )
+    with pytest.raises(service.LayananError, match="Isi dulu berat"):
+        await service.tambah_penimbangan(
+            db, akun=petugas, kode="TRX-20260902-P1-010", berat=[]
+        )

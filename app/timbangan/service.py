@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import math
+from typing import Sequence
 import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
@@ -946,38 +947,49 @@ def _jumlahkan_partai(trx: TimbanganTransaksi) -> None:
 
 
 async def tambah_penimbangan(
-    db: AsyncSession, *, akun: TimbanganAkun, kode: str, berat_kg: float,
+    db: AsyncSession, *, akun: TimbanganAkun, kode: str,
+    berat_kg: float | None = None, berat: Sequence[float] | None = None,
     catatan: str | None = None, waktu_operator: datetime | None = None,
     ip: str | None = None,
 ) -> TimbanganTransaksi:
-    """Naikkan satu barang lagi ke timbangan, pada kode yang sama."""
-    if berat_kg is None or float(berat_kg) <= 0:
+    """Naikkan satu atau beberapa barang lagi ke timbangan, pada kode yang sama.
+
+    Menerima beberapa sekaligus karena begitulah kenyataannya di pos: petugas
+    menimbang lima karung berturut-turut lalu mencatatnya, bukan bolak-balik ke
+    layar setiap satu karung.
+    """
+    sumber = list(berat) if berat is not None else ([] if berat_kg is None else [berat_kg])
+    daftar = [float(b) for b in sumber if b is not None and str(b).strip() != ""]
+    if not daftar:
+        raise LayananError("Isi dulu berat timbangannya.")
+    if any(b <= 0 for b in daftar):
         raise LayananError("Berat timbang harus lebih dari 0 kg.")
+
     trx = _pastikan_partai_terbuka(await ambil_kode(db, kode), kode)
 
-    # Pagarnya kapasitas TIMBANGAN KECIL, bukan jembatan truk: alat inilah yang
-    # dipakai partai kecil. Memakai batas jembatan berarti 1500 kg yang salah
-    # ketik untuk 15 kg lolos tanpa suara.
     kapasitas = (await setelan.semua(db))["kapasitas_timbangan_kecil_kg"]
-    if float(berat_kg) > kapasitas:
+    lebih = [b for b in daftar if b > kapasitas]
+    if lebih:
         raise LayananError(
-            f"Melebihi kapasitas timbangan kecil ({kapasitas:g} kg) — "
-            "periksa lagi angkanya."
+            f"{lebih[0]:g} kg melebihi kapasitas timbangan kecil "
+            f"({kapasitas:g} kg) — periksa lagi angkanya."
         )
 
     waktu = sekarang()
-    trx.penimbangan.append(TimbanganPenimbangan(
-        urutan=len(trx.penimbangan) + 1, berat_kg=float(berat_kg),
-        waktu=waktu_operator or waktu, petugas_id=akun.id,
-        catatan=(catatan or None),
-    ))
+    for b in daftar:
+        trx.penimbangan.append(TimbanganPenimbangan(
+            urutan=len(trx.penimbangan) + 1, berat_kg=b,
+            waktu=waktu_operator or waktu, petugas_id=akun.id,
+            catatan=(catatan or None),
+        ))
     _jumlahkan_partai(trx)
+    ringkas = " + ".join(f"{b:g}" for b in daftar)
     await catat_audit(
         db, akun=akun, aksi="TAMBAH_PENIMBANGAN", entitas="transaksi",
         entitas_id=trx.kode,
-        ringkasan=f"+{float(berat_kg):g} kg (baris {len(trx.penimbangan)}) "
-                  f"→ total {trx.timbang1_kg:g} kg",
-        sesudah={"berat_kg": float(berat_kg), "total_kg": float(trx.timbang1_kg)},
+        ringkasan=f"+{ringkas} kg → total {trx.timbang1_kg:g} kg "
+                  f"({len(trx.penimbangan)} baris)",
+        sesudah={"berat_kg": daftar, "total_kg": float(trx.timbang1_kg)},
         perangkat=trx.perangkat_kode, ip=ip,
     )
     await db.commit()

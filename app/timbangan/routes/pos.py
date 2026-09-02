@@ -160,10 +160,6 @@ async def form_timbang_pertama(
     except service.LayananError as e:
         return redirect("/", err=str(e))
 
-    # Partai kecil masuk lewat pintunya sendiri di beranda; penandanya
-    # dibawa sampai ke sini supaya layar ini langsung berbentuk benar —
-    # bukan meminta petugas memilih ulang cara timbang yang sudah ia putuskan.
-    partai = request.query_params.get("partai") == "1"
     tara, asal = await service.tara_disarankan(db, supplier_id=None, aturan=aturan)
     # Daftar mengikuti arah: barang masuk hanya supplier, pengiriman
     # hanya pelanggan. Lihat `service.PIHAK_ARAH`.
@@ -178,8 +174,7 @@ async def form_timbang_pertama(
         tara=tara,
         asal_tara=asal,
         sekarang=sekarang(),
-        partai=partai,
-        kembali=f"{PREFIX}/pilih/{aturan.arah}" + ("?partai=1" if partai else ""),
+        kembali=f"{PREFIX}/pilih/{aturan.arah}",
     )
 
 
@@ -240,9 +235,6 @@ async def simpan_timbang_pertama(
     except (service.LayananError, logic.ValidasiError) as e:
         return redirect(f"/timbang/{jenis_kode}", err=str(e))
 
-    if trx.partai:
-        return redirect(f"/partai/{trx.id}",
-                        ok="Timbangan pertama tercatat. Lanjutkan menimbang.")
     if trx.selesai:
         return redirect(f"/transaksi/{trx.id}", ok="Timbangan tersimpan.")
     return redirect(f"/transaksi/{trx.id}", ok="Timbang pertama tersimpan.")
@@ -251,10 +243,91 @@ async def simpan_timbang_pertama(
 # ═══════════════════════ Partai kecil (satu kode) ═══════════════════════
 #
 # Petani dan pedagang kecil menjual sedikit-sedikit, jadi barangnya ditimbang
-# satu per satu. Yang tidak boleh pecah adalah KODE-nya: satu penjualan tetap
-# satu tiket, satu nota, satu baris rekap per pihak.
+# satu per satu — kadang kedatangannya pun bertahap. Yang tidak boleh pecah
+# adalah KODE-nya: satu penjualan tetap satu tiket, satu nota, satu baris
+# rekap per pihak.
+#
+# Satu halaman saja, dipakai untuk memulai maupun melanjutkan: nama pihak,
+# beberapa kolom berat yang bisa ditambah sendiri, lalu simpan sementara atau
+# tutup. Bolak-balik antar layar untuk tiap karung adalah alur yang salah.
 
-@router.get("/partai/{transaksi_id}")
+
+def _daftar_berat(nilai: list[str]) -> list[float]:
+    """Kolom berat yang benar-benar diisi. Kolom kosong diabaikan, bukan nol."""
+    keluar = []
+    for v in nilai or []:
+        if (v or "").strip():
+            keluar.append(_angka(v))
+    return keluar
+
+
+@router.get("/partai/{jenis_kode}/baru")
+async def form_partai_baru(
+    jenis_kode: str,
+    request: Request,
+    akun: TimbanganAkun = Depends(butuh_akun),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        aturan = await service.aturan_untuk(db, jenis_kode.upper())
+    except service.LayananError as e:
+        return redirect("/", err=str(e))
+    sering, lainnya = await service.pihak_pilihan(db, aturan.arah)
+    return render(
+        request, "partai.html",
+        b=None, aturan=aturan,
+        kode=await service.kode_baru(db, akun),
+        pihak_sering=sering, pihak_lainnya=lainnya,
+        kolom_nama=service.nama_kolom_pihak(aturan.arah),
+        kembali=f"{PREFIX}/pilih/{aturan.arah}?partai=1",
+    )
+
+
+@router.post("/partai/{jenis_kode}/baru")
+async def buat_partai(
+    jenis_kode: str,
+    request: Request,
+    kode: str = Form(...),
+    supplier_id: str = Form(""),
+    pihak_nama: str = Form(""),
+    berat_kg: list[str] = Form([]),
+    aksi: str = Form("sementara"),
+    akun: TimbanganAkun = Depends(butuh_akun),
+    db: AsyncSession = Depends(get_db),
+):
+    jenis_kode = jenis_kode.upper()
+    berat = _daftar_berat(berat_kg)
+    if not berat:
+        return redirect(f"/partai/{jenis_kode}/baru",
+                        err="Isi dulu berat timbangannya, minimal satu.")
+
+    aturan = await service.aturan_untuk(db, jenis_kode)
+    data = service.InputTimbang(
+        kode=kode.strip(), arah=aturan.arah, jenis_kode=jenis_kode,
+        berat_kg=berat[0], cara_timbang=CARA_PARTAI,
+        supplier_id=int(supplier_id) if supplier_id.isdigit() else None,
+        pihak_nama=pihak_nama.strip() or None,
+        perangkat_kode=akun.perangkat_kode,
+    )
+    ip = request.client.host if request.client else None
+    try:
+        trx = await service.simpan_timbang_pertama(db, akun=akun, data=data, ip=ip)
+        if berat[1:]:
+            trx = await service.tambah_penimbangan(
+                db, akun=akun, kode=trx.kode, berat=berat[1:], ip=ip
+            )
+        if aksi == "selesai":
+            trx = await service.selesaikan_partai(db, akun=akun, kode=trx.kode, ip=ip)
+    except (service.LayananError, logic.ValidasiError) as e:
+        return redirect(f"/partai/{jenis_kode}/baru", err=str(e))
+
+    if aksi == "selesai":
+        return redirect(f"/transaksi/{trx.id}", ok="Timbangan selesai.")
+    return redirect(f"/partai/{trx.id}",
+                    ok=f"Tersimpan sementara. Total {trx.timbang1_kg:g} kg.")
+
+
+@router.get("/partai/{transaksi_id:int}")
 async def layar_partai(
     transaksi_id: int,
     request: Request,
@@ -264,44 +337,49 @@ async def layar_partai(
     baris = await service.ambil_transaksi(db, transaksi_id)
     if baris is None:
         return redirect("/tiket", err="Tiket tidak ditemukan.")
-    if not baris.trx.partai:
-        return redirect(f"/transaksi/{transaksi_id}")
-    if baris.trx.selesai:
+    if not baris.trx.partai or baris.trx.selesai:
         return redirect(f"/transaksi/{transaksi_id}")
     return render(
         request, "partai.html",
         b=baris,
         aturan=await service.aturan_untuk(db, baris.trx.jenis_kode),
-        sekarang=sekarang(),
         kembali=f"{PREFIX}/tiket",
     )
 
 
-@router.post("/partai/{transaksi_id}/tambah")
-async def tambah_penimbangan(
+@router.post("/partai/{transaksi_id:int}")
+async def lanjut_partai(
     transaksi_id: int,
     request: Request,
-    berat_kg: str = Form(...),
-    catatan: str = Form(""),
+    berat_kg: list[str] = Form([]),
+    aksi: str = Form("sementara"),
     akun: TimbanganAkun = Depends(butuh_akun),
     db: AsyncSession = Depends(get_db),
 ):
     baris = await service.ambil_transaksi(db, transaksi_id)
     if baris is None:
         return redirect("/tiket", err="Tiket tidak ditemukan.")
+    kode, ip = baris.trx.kode, (request.client.host if request.client else None)
+    berat = _daftar_berat(berat_kg)
     try:
-        trx = await service.tambah_penimbangan(
-            db, akun=akun, kode=baris.trx.kode, berat_kg=_angka(berat_kg),
-            catatan=catatan.strip() or None,
-            ip=request.client.host if request.client else None,
-        )
+        # Menutup tanpa menambah apa pun sah: barangnya sudah habis ditimbang
+        # pada kunjungan sebelumnya.
+        if berat:
+            await service.tambah_penimbangan(db, akun=akun, kode=kode,
+                                             berat=berat, ip=ip)
+        if aksi == "selesai":
+            await service.selesaikan_partai(db, akun=akun, kode=kode, ip=ip)
     except (service.LayananError, logic.ValidasiError) as e:
         return redirect(f"/partai/{transaksi_id}", err=str(e))
+
+    if aksi == "selesai":
+        return redirect(f"/transaksi/{transaksi_id}", ok="Timbangan selesai.")
+    trx = await service.ambil_kode(db, kode)
     return redirect(f"/partai/{transaksi_id}",
-                    ok=f"Tercatat. Total {trx.timbang1_kg:g} kg.")
+                    ok=f"Tersimpan sementara. Total {trx.timbang1_kg:g} kg.")
 
 
-@router.post("/partai/{transaksi_id}/hapus")
+@router.post("/partai/{transaksi_id:int}/hapus")
 async def hapus_penimbangan(
     transaksi_id: int,
     request: Request,
@@ -321,26 +399,6 @@ async def hapus_penimbangan(
         return redirect(f"/partai/{transaksi_id}", err=str(e))
     return redirect(f"/partai/{transaksi_id}",
                     ok=f"Baris dihapus. Total {trx.timbang1_kg:g} kg.")
-
-
-@router.post("/partai/{transaksi_id}/selesai")
-async def selesaikan_partai(
-    transaksi_id: int,
-    request: Request,
-    akun: TimbanganAkun = Depends(butuh_akun),
-    db: AsyncSession = Depends(get_db),
-):
-    baris = await service.ambil_transaksi(db, transaksi_id)
-    if baris is None:
-        return redirect("/tiket", err="Tiket tidak ditemukan.")
-    try:
-        await service.selesaikan_partai(
-            db, akun=akun, kode=baris.trx.kode,
-            ip=request.client.host if request.client else None,
-        )
-    except (service.LayananError, logic.ValidasiError) as e:
-        return redirect(f"/partai/{transaksi_id}", err=str(e))
-    return redirect(f"/transaksi/{transaksi_id}", ok="Timbangan selesai.")
 
 
 # ═══════════════════════════ Timbang kedua ═══════════════════════════
