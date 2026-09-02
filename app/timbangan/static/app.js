@@ -123,7 +123,10 @@
 
     form.querySelectorAll('button[type=submit]').forEach(function (t) {
       t.disabled = true;
-      if (t.dataset.sibuk) { t.textContent = t.dataset.sibuk; }
+      if (t.dataset.sibuk) {
+        t.textContent = t.dataset.sibuk;
+        t.classList.add('tbl--sibuk');
+      }
     });
     // Bila navigasi gagal (jaringan putus di tengah), tombol dibuka kembali
     // supaya petugas tidak terjebak di layar yang tidak bisa apa-apa.
@@ -131,6 +134,7 @@
       form.dataset.terkirim = '';
       form.querySelectorAll('button[type=submit]').forEach(function (t) {
         t.disabled = false;
+        t.classList.remove('tbl--sibuk');
       });
     }, 8000);
   });

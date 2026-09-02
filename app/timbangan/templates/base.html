@@ -29,6 +29,43 @@
   <link rel="stylesheet" href="{{ PREFIX }}/static/app.css?v={{ VERSI }}">
 </head>
 <body data-kelipatan="{{ KELIPATAN_TERA }}">
+
+{# ── Layar pembuka ──
+   Ditulis di sini, bukan di akhir halaman, supaya ia sudah tergambar sebelum
+   apa pun yang lain — itulah gunanya. Disembunyikan secara bawaan dan hanya
+   dibuka oleh skrip kecil di bawah: kalau JavaScript mati, ia tidak pernah
+   muncul, sehingga tak mungkin ada layar yang menutupi aplikasi selamanya. #}
+<div class="pembuka" id="pembuka" hidden aria-hidden="true">
+  <img src="{{ PREFIX }}/static/ikon.svg" width="84" height="84" alt="">
+  <div class="pembuka__nama">Pos Timbang</div>
+  <div class="pembuka__sub">{{ PERUSAHAAN }}</div>
+  <div class="pembuka__bar"><span></span></div>
+</div>
+<script>
+(function () {
+  /* Sekali saja per sesi peramban. Menampilkannya di tiap pindah halaman
+     akan mengubah aplikasi yang cepat menjadi aplikasi yang terasa lambat. */
+  try {
+    if (sessionStorage.getItem('pembuka')) { return; }
+    sessionStorage.setItem('pembuka', '1');
+  } catch (e) { /* mode privat: tampilkan saja, tak ada ruginya */ }
+
+  var el = document.getElementById('pembuka');
+  if (!el) { return; }
+  el.hidden = false;
+
+  var tutup = function () {
+    if (!el.parentNode) { return; }
+    el.classList.add('pembuka--pergi');
+    setTimeout(function () { if (el.parentNode) { el.remove(); } }, 320);
+  };
+  if (document.readyState === 'complete') { setTimeout(tutup, 400); }
+  else { window.addEventListener('load', function () { setTimeout(tutup, 300); }); }
+  /* Jaring pengaman: apa pun yang gagal dimuat, layar ini tetap pergi. */
+  setTimeout(tutup, 2500);
+})();
+</script>
+
 <div class="bingkai {% block lebar %}{% endblock %}">
 
   {% block bar %}
