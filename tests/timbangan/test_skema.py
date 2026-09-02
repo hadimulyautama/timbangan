@@ -30,6 +30,7 @@ MIGRASI = (
     AKAR / "migrations" / "versions" / "0024_timbangan_aturan_cetak.py",
     AKAR / "migrations" / "versions" / "0025_timbangan_cetak_format.py",
     AKAR / "migrations" / "versions" / "0027_pelanggan_transaksi.py",
+    AKAR / "migrations" / "versions" / "0028_timbangan_partai.py",
 )
 
 # Kata yang tidak boleh muncul sebagai nama kolom di modul ini.
@@ -72,7 +73,8 @@ def kolom_migrasi() -> dict[str, set[str]]:
 
 def test_migrasi_membuat_semua_tabel_model(kolom_migrasi):
     assert sorted(kolom_migrasi) == tabel_model()
-    assert len(kolom_migrasi) == 13
+    # 14 sejak `timbangan_penimbangan` (partai kecil, migrasi 0028).
+    assert len(kolom_migrasi) == 14
 
 
 @pytest.mark.parametrize("nama", tabel_model())

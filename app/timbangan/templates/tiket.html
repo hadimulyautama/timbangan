@@ -2,7 +2,7 @@
 {% from "macros.html" import judul_truk %}
 {% block judul %}Tiket terbuka{% endblock %}
 {% block bar_judul %}Tiket terbuka{% endblock %}
-{% block bar_sub %}{{ terbuka|length }} truk menunggu timbang kedua{% endblock %}
+{% block bar_sub %}{{ terbuka|length }} tiket belum ditutup{% endblock %}
 
 {% block isi %}
   {% for b in terbuka %}
@@ -11,17 +11,26 @@
         {{ judul_truk(b) }}
         <div class="pilihan__ket">
           {{ NAMA_JENIS.get(b.trx.jenis_kode, b.trx.jenis_kode) }} ·
-          {{ ARAH_LABEL.get(b.trx.arah, b.trx.arah|lower) }} ·
+          {% if b.trx.partai %}
+            {{ b.trx.penimbangan|length }} kali timbang ·
+            {{ '%g'|format(b.trx.timbang1_kg or 0) }} kg sementara ·
+          {% else %}
+            {{ ARAH_LABEL.get(b.trx.arah, b.trx.arah|lower) }} ·
+          {% endif %}
           sejak {{ b.trx.timbang1_waktu|tgl_jam }}
         </div>
       </div>
-      {% if b.trx.id in menganggur %}
+      {# Partai kecil TIDAK ditandai "Lama": kedatangannya memang bertahap,
+         kadang lintas hari, dan tanda itu akan menuduh alur yang normal. #}
+      {% if b.trx.partai %}
+        <span class="lencana">Partai</span>
+      {% elif b.trx.id in menganggur %}
         <span class="lencana lencana--hati">Lama</span>
       {% endif %}
     </a>
   {% else %}
     <div class="kartu kosong">
-      Tidak ada truk yang sedang menunggu.<br>Semua penimbangan sudah tuntas.
+      Tidak ada tiket yang sedang terbuka.<br>Semua penimbangan sudah tuntas.
     </div>
   {% endfor %}
 {% endblock %}

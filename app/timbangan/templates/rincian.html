@@ -116,10 +116,29 @@
         </div>
       {% endif %}
     {% endfor %}
+    {% if trx.partai %}
+      {# Rinciannya ditampilkan, bukan cuma totalnya: yang menjual berhak
+         melihat tiap angka yang menyusun jumlahnya, dan justru itu yang
+         ditanyakan bila kelak ada selisih. #}
+      <div class="baris">
+        <span>Timbang</span>
+        <b>{{ trx.penimbangan|length }}× · total {{ trx.timbang1_kg|kg }}</b>
+      </div>
+      <div style="border-top:1px solid var(--garis);margin-top:6px;padding-top:8px">
+        {% for p in trx.penimbangan %}
+          <div class="baris">
+            <span style="font-family:var(--mono)">{{ '%02d'|format(p.urutan) }}
+              {%- if p.catatan %} <span class="bantu">{{ p.catatan }}</span>{% endif %}</span>
+            <b>{{ p.berat_kg|kg }} · {{ p.waktu|jam }}</b>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
     <div class="baris">
       <span>Timbang 1</span>
       <b>{{ trx.timbang1_kg|kg }} · {{ trx.timbang1_waktu|jam }}</b>
     </div>
+    {% endif %}
     {% if trx.timbang2_kg is not none %}
       <div class="baris">
         <span>Timbang 2</span>

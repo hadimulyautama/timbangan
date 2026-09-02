@@ -81,6 +81,17 @@ DAFTAR: tuple[Definisi, ...] = (
         minimum=1, maksimum=100, desimal=2,
     ),
     Definisi(
+        kunci="kapasitas_timbangan_kecil_kg",
+        nama="Kapasitas timbangan kecil",
+        satuan="kg",
+        arti="Batas sekali timbang pada partai kecil — pagar salah ketik.",
+        env="TIMBANGAN_KAPASITAS_KECIL_KG",
+        bawaan=lambda: tsettings.kapasitas_timbangan_kecil_kg,
+        # Di bawah 10 kg bukan timbangan dagang; di atas 2 ton itu sudah
+        # jembatan, dan partai kecil tak memakainya.
+        minimum=10, maksimum=2_000, desimal=2,
+    ),
+    Definisi(
         kunci="jam_kunci_otomatis",
         nama="Transaksi terkunci setelah",
         satuan="jam",

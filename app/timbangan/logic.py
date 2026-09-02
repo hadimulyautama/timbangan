@@ -37,6 +37,12 @@ KAPASITAS_JEMBATAN_KG = 20_000.0
 #: Pembulatan tera: pembacaan selalu kelipatan 10 kg.
 KELIPATAN_TERA_KG = 10.0
 
+#: Kapasitas TIMBANGAN KECIL — alat untuk partai kecil, bukan jembatan truk.
+#: Dipakai sebagai pagar salah ketik: mengetik 1500 untuk 15 kg akan tertahan
+#: di sini. Kelipatan tera 10 kg TIDAK berlaku pada alat ini; ia membaca
+#: sampai kilogram, dan 2 kg memang 2 kg.
+KAPASITAS_TIMBANGAN_KECIL_KG = 500.0
+
 # Arah pergerakan barang
 MASUK = "MASUK"
 KELUAR = "KELUAR"

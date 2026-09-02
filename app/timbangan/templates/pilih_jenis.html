@@ -21,7 +21,7 @@
   <div style="display:flex;flex-direction:column;gap:8px">
     {% for j in jenis %}
       {% set aturan = peta.get(j.kode) %}
-      <a href="{{ PREFIX }}/timbang/{{ j.kode }}" class="pilihan">
+      <a href="{{ PREFIX }}/timbang/{{ j.kode }}{{ '?partai=1' if partai else '' }}" class="pilihan">
         <div class="pilihan__isi">
           <div class="pilihan__nama">{{ j.nama }}</div>
           <div class="pilihan__ket">

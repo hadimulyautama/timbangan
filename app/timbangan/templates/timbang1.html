@@ -98,15 +98,24 @@
     </div>
   {% endif %}
 
+  {# Cara timbang sudah diputuskan di beranda: partai kecil punya pintunya
+     sendiri di sana. Menanyakannya lagi di sini berarti meminta petugas
+     memilih dua kali hal yang sama. #}
+  {% if partai %}<input type="hidden" name="cara_timbang" value="PARTAI">{% endif %}
+
   {# Wajib untuk barang masuk dan barang keluar: keduanya melibatkan pihak
      luar, jadi catatannya harus bisa menunjuk kendaraan tertentu bila kelak
-     ada sengketa. Jasa timbang dan transfer internal boleh kosong. #}
-  {{ isian('nomor_polisi', 'Nomor polisi', '', '', 'text',
-           'Contoh: AD 1234 XY', masuk or (not bebas and not transfer), true,
-           'autocapitalize="characters" autocomplete="off"') }}
-  {# Wajib: sopir satu-satunya orang yang hadir di jembatan saat angkanya
-     dibaca. Tanpa namanya, sengketa muatan tidak punya saksi. #}
-  {{ isian('nama_sopir', 'Nama sopir', '', '', 'text', '', true, true) }}
+     ada sengketa. Jasa timbang, transfer internal, dan partai kecil boleh
+     kosong — partai kecil sering datang tanpa kendaraan bernomor sama sekali. #}
+  {% if not partai %}
+    {{ isian('nomor_polisi', 'Nomor polisi', '', '', 'text',
+             'Contoh: AD 1234 XY', masuk or (not bebas and not transfer), true,
+             'autocapitalize="characters" autocomplete="off"') }}
+    {# Wajib: sopir satu-satunya orang yang hadir di jembatan saat angkanya
+       dibaca. Tanpa namanya, sengketa muatan tidak punya saksi. Pada partai
+       kecil syarat itu dipenuhi pihaknya sendiri, yang memang berdiri di situ. #}
+    {{ isian('nama_sopir', 'Nama sopir', '', '', 'text', '', true, true) }}
+  {% endif %}
 
   {# ── Dokumen & muatan ── #}
   {% if transfer %}
@@ -221,7 +230,8 @@
   </div>
 
   <button type="submit" class="tbl blok" data-sibuk="Menyimpan…">
-    Simpan timbang pertama
+    {{ 'Mulai timbang partai' if partai else 'Simpan timbang pertama' }}
   </button>
 </form>
+
 {% endblock %}

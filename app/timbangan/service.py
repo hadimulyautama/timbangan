@@ -14,6 +14,7 @@ Dua hal yang membentuk seluruh rancangan modul ini:
 from __future__ import annotations
 
 import json
+import math
 import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
@@ -30,6 +31,7 @@ from app.timbangan.config import tsettings
 from app.timbangan.db import berzona, sekarang
 from app.timbangan.models import (
     CARA_DUA_KALI,
+    CARA_PARTAI,
     CARA_SEKALI,
     PEMERIKSAAN_DIBUKA,
     PEMERIKSAAN_SELESAI,
@@ -42,6 +44,7 @@ from app.timbangan.models import (
     TRX_AKTIF,
     TRX_VOID,
     TimbanganAkun,
+    TimbanganPenimbangan,
     TimbanganAudit,
     TimbanganCetak,
     TimbanganFoto,
@@ -729,18 +732,32 @@ def _wajib_pihak(arah: str, *, punya_id: bool, pihak_nama: str | None) -> None:
     )
 
 
-def _wajib_sopir(nama_sopir: str | None) -> None:
+def _wajib_sopir(nama_sopir: str | None, *, cara: str = CARA_DUA_KALI) -> None:
     """Nama sopir wajib, apa pun arah barangnya.
 
     Sopir adalah satu-satunya orang yang benar-benar hadir di jembatan saat
     angka itu dibaca. Tanpa namanya, sengketa tentang muatan tidak punya
     saksi.
+
+    PARTAI KECIL dikecualikan — dan bukan karena syaratnya dilonggarkan,
+    melainkan karena syaratnya sudah terpenuhi orang lain: yang datang membawa
+    beberapa karung adalah petani atau pedagangnya sendiri, dan namanya WAJIB
+    terisi sebagai pihak. Menuntut "nama sopir" pada orang yang datang naik
+    motor hanya memaksa petugas mengarang isian.
     """
+    if cara == CARA_PARTAI:
+        return
     if not (nama_sopir or "").strip():
         raise LayananError("Nama sopir wajib diisi.")
 
 
-def _wajib_nopol(arah: str, nomor_polisi: str | None) -> None:
+def _wajib_nopol(
+    arah: str, nomor_polisi: str | None, *, cara: str = CARA_DUA_KALI
+) -> None:
+    """Nomor polisi wajib pada barang masuk & keluar — kecuali partai kecil,
+    yang sering datang tanpa kendaraan bernomor sama sekali."""
+    if cara == CARA_PARTAI:
+        return
     if arah in ARAH_WAJIB_NOPOL and not (nomor_polisi or "").strip():
         raise LayananError(
             "Nomor polisi wajib diisi untuk barang masuk dan barang keluar."
@@ -786,17 +803,26 @@ async def simpan_timbang_pertama(
         raise LayananError("Berat timbang harus lebih dari 0 kg.")
 
     aturan = await aturan_untuk(db, data.jenis_kode)
-    _wajib_nopol(aturan.arah, data.nomor_polisi)
+    _wajib_nopol(aturan.arah, data.nomor_polisi, cara=data.cara_timbang)
     _wajib_pihak(
         aturan.arah,
         punya_id=bool(data.supplier_id),
         pihak_nama=data.pihak_nama,
     )
-    _wajib_sopir(data.nama_sopir)
-    kapasitas = (await setelan.semua(db))["kapasitas_jembatan_kg"]
+    _wajib_sopir(data.nama_sopir, cara=data.cara_timbang)
+    _setelan = await setelan.semua(db)
+    kapasitas = _setelan["kapasitas_jembatan_kg"]
     # Diperiksa SEKARANG, bukan nanti di timbang kedua. Salah ketik yang baru
     # ketahuan setelah truk selesai bongkar sudah terlambat untuk diperbaiki.
-    if data.berat_kg > kapasitas:
+    if data.cara_timbang == CARA_PARTAI:
+        # Alatnya timbangan kecil, bukan jembatan truk.
+        kecil = _setelan["kapasitas_timbangan_kecil_kg"]
+        if data.berat_kg > kecil:
+            raise LayananError(
+                f"Melebihi kapasitas timbangan kecil ({kecil:g} kg) — "
+                "periksa lagi angkanya."
+            )
+    elif data.berat_kg > kapasitas:
         raise LayananError(
             f"Melebihi kapasitas jembatan timbang ({kapasitas:.0f} kg) — "
             "angka ini tidak mungkin."
@@ -846,7 +872,24 @@ async def simpan_timbang_pertama(
     await db.flush()
     await _pasang_muatan(db, trx, data.muatan)
 
-    if data.cara_timbang == CARA_SEKALI:
+    if data.cara_timbang == CARA_PARTAI:
+        # Timbang pertama SEKALIGUS baris pertama. Tiketnya tetap terbuka:
+        # barang berikutnya menyusul naik timbangan, satu kode yang sama.
+        #
+        # Koleksinya dimuat lewat `refresh`, bukan disentuh langsung: pada
+        # transaksi yang baru dibuat ia belum termuat, dan menyentuhnya di
+        # jalur async memicu pemuatan malas di luar greenlet — yang berakhir
+        # sebagai 500, bukan sebagai kesalahan yang bisa dibaca.
+        await db.refresh(trx, ["penimbangan"])
+        for lama in list(trx.penimbangan):
+            trx.penimbangan.remove(lama)
+        trx.penimbangan.append(TimbanganPenimbangan(
+            urutan=1, berat_kg=float(data.berat_kg),
+            waktu=data.waktu_operator or waktu, petugas_id=akun.id,
+        ))
+        trx.status_tiket = TIKET_TERBUKA
+        _kosongkan_hasil(trx)
+    elif data.cara_timbang == CARA_SEKALI:
         # Jasa timbang sekali: tidak ada pembanding, tidak ada kontrol.
         trx.berat_bermuatan_kg = trx.timbang1_kg
         trx.berat_kosong_kg = None
@@ -870,6 +913,147 @@ async def simpan_timbang_pertama(
         ringkasan=f"{trx.arah} {trx.jenis_kode} {trx.nomor_polisi or ''} "
                   f"{trx.timbang1_kg:.0f} kg".strip(),
         sesudah={"timbang1_kg": float(trx.timbang1_kg)},
+        perangkat=trx.perangkat_kode, ip=ip,
+    )
+    await db.commit()
+    await db.refresh(trx)
+    return trx
+
+
+def _pastikan_partai_terbuka(trx: TimbanganTransaksi | None, kode: str) -> TimbanganTransaksi:
+    if trx is None:
+        raise LayananError(f"Kode timbang {kode} tidak ditemukan.")
+    if trx.status_transaksi == TRX_VOID:
+        raise LayananError("Transaksi ini sudah dibatalkan.")
+    if not trx.partai:
+        raise LayananError("Transaksi ini bukan partai kecil.")
+    if trx.selesai:
+        raise LayananError("Tiket ini sudah ditutup — tak bisa ditambah lagi.")
+    if trx.terkunci:
+        raise LayananError("Transaksi ini sudah dikunci.")
+    return trx
+
+
+def _jumlahkan_partai(trx: TimbanganTransaksi) -> None:
+    """Salin jumlah seluruh baris ke `timbang1_kg`.
+
+    Satu angka itulah yang dibaca laporan, bukti cetak, dan jembatan ke modul
+    produksi — bentuk khusus partai kecil berhenti di layar yang mencatatnya.
+    """
+    for i, baris in enumerate(trx.penimbangan, start=1):
+        baris.urutan = i
+    trx.timbang1_kg = round(trx.total_penimbangan_kg, 3)
+
+
+async def tambah_penimbangan(
+    db: AsyncSession, *, akun: TimbanganAkun, kode: str, berat_kg: float,
+    catatan: str | None = None, waktu_operator: datetime | None = None,
+    ip: str | None = None,
+) -> TimbanganTransaksi:
+    """Naikkan satu barang lagi ke timbangan, pada kode yang sama."""
+    if berat_kg is None or float(berat_kg) <= 0:
+        raise LayananError("Berat timbang harus lebih dari 0 kg.")
+    trx = _pastikan_partai_terbuka(await ambil_kode(db, kode), kode)
+
+    # Pagarnya kapasitas TIMBANGAN KECIL, bukan jembatan truk: alat inilah yang
+    # dipakai partai kecil. Memakai batas jembatan berarti 1500 kg yang salah
+    # ketik untuk 15 kg lolos tanpa suara.
+    kapasitas = (await setelan.semua(db))["kapasitas_timbangan_kecil_kg"]
+    if float(berat_kg) > kapasitas:
+        raise LayananError(
+            f"Melebihi kapasitas timbangan kecil ({kapasitas:g} kg) — "
+            "periksa lagi angkanya."
+        )
+
+    waktu = sekarang()
+    trx.penimbangan.append(TimbanganPenimbangan(
+        urutan=len(trx.penimbangan) + 1, berat_kg=float(berat_kg),
+        waktu=waktu_operator or waktu, petugas_id=akun.id,
+        catatan=(catatan or None),
+    ))
+    _jumlahkan_partai(trx)
+    await catat_audit(
+        db, akun=akun, aksi="TAMBAH_PENIMBANGAN", entitas="transaksi",
+        entitas_id=trx.kode,
+        ringkasan=f"+{float(berat_kg):g} kg (baris {len(trx.penimbangan)}) "
+                  f"→ total {trx.timbang1_kg:g} kg",
+        sesudah={"berat_kg": float(berat_kg), "total_kg": float(trx.timbang1_kg)},
+        perangkat=trx.perangkat_kode, ip=ip,
+    )
+    await db.commit()
+    await db.refresh(trx)
+    return trx
+
+
+async def hapus_penimbangan(
+    db: AsyncSession, *, akun: TimbanganAkun, kode: str, urutan: int,
+    ip: str | None = None,
+) -> TimbanganTransaksi:
+    """Buang satu baris yang salah ketik — hanya selama tiket masih terbuka.
+
+    Sesudah tiket ditutup, koreksi menempuh jalur `koreksi_transaksi` yang
+    meninggalkan jejak revisi; salah ketik di tengah penimbangan tidak perlu
+    seberat itu.
+    """
+    trx = _pastikan_partai_terbuka(await ambil_kode(db, kode), kode)
+    if len(trx.penimbangan) <= 1:
+        raise LayananError(
+            "Baris terakhir tak bisa dihapus — batalkan tiketnya bila memang salah."
+        )
+    sasaran = next((p for p in trx.penimbangan if p.urutan == int(urutan)), None)
+    if sasaran is None:
+        raise LayananError("Baris timbang itu tidak ada.")
+    dibuang = float(sasaran.berat_kg)
+    trx.penimbangan.remove(sasaran)
+    _jumlahkan_partai(trx)
+    await catat_audit(
+        db, akun=akun, aksi="HAPUS_PENIMBANGAN", entitas="transaksi",
+        entitas_id=trx.kode,
+        ringkasan=f"−{dibuang:g} kg (baris {urutan}) → total {trx.timbang1_kg:g} kg",
+        sebelum={"berat_kg": dibuang}, perangkat=trx.perangkat_kode, ip=ip,
+    )
+    await db.commit()
+    await db.refresh(trx)
+    return trx
+
+
+async def selesaikan_partai(
+    db: AsyncSession, *, akun: TimbanganAkun, kode: str, ip: str | None = None
+) -> TimbanganTransaksi:
+    """Tutup tiket partai kecil: nettonya jumlah seluruh baris."""
+    trx = _pastikan_partai_terbuka(await ambil_kode(db, kode), kode)
+    if not trx.penimbangan:
+        raise LayananError("Belum ada satu pun penimbangan.")
+
+    aturan = await aturan_untuk(db, trx.jenis_kode)
+    _jumlahkan_partai(trx)
+    trx.berat_bermuatan_kg = trx.timbang1_kg
+    trx.berat_kosong_kg = None
+    # Kapasitas TIDAK diperiksa terhadap jumlah: tiap baris sudah diperiksa
+    # sendiri saat ditimbang, dan wajar bila totalnya melampaui kapasitas
+    # sekali angkat — itu justru gunanya menimbang berulang.
+    _terapkan_hasil(trx, logic.hitung(
+        aturan=aturan,
+        berat_bermuatan_kg=trx.timbang1_kg,
+        berat_kosong_kg=None,
+        muatan=_baris_logic(trx.muatan),
+        tara_lain_kg=trx.tara_lain_kg,
+        kapasitas_kg=math.inf,
+    ))
+    waktu = sekarang()
+    trx.timbang2_kg = None
+    trx.timbang2_waktu = waktu
+    trx.timbang2_waktu_sistem = waktu
+    trx.timbang2_petugas_id = akun.id
+    trx.status_tiket = TIKET_SELESAI
+    trx.tanggal = waktu.date()
+
+    await catat_audit(
+        db, akun=akun, aksi="SELESAI_PARTAI", entitas="transaksi",
+        entitas_id=trx.kode,
+        ringkasan=f"{len(trx.penimbangan)} kali timbang → {trx.timbang1_kg:g} kg",
+        sesudah={"total_kg": float(trx.timbang1_kg),
+                 "jumlah_baris": len(trx.penimbangan)},
         perangkat=trx.perangkat_kode, ip=ip,
     )
     await db.commit()

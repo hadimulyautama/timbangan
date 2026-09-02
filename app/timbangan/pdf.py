@@ -218,6 +218,25 @@ def bukti_ncr(*, trx, aturan, pihak: str, petugas: str, muatan,
 
 
 def _baris_angka(trx, arah_masuk: bool) -> list[Baris]:
+    # Partai kecil: yang dicetak adalah RINCIANNYA, bukan satu angka bruto.
+    # Orang yang menjual 60 kg dalam empat kali timbang membawa pulang kertas
+    # yang bisa ia cocokkan sendiri; total tanpa rincian tak bisa diperiksa
+    # siapa pun setelah barangnya tercampur di gudang.
+    if getattr(trx, "partai", False):
+        b = [Baris(f"Timbang {p.urutan}", f"{fmt.angka(p.berat_kg)} kg",
+                   fmt.jam(p.waktu))
+             for p in trx.penimbangan]
+        b.append(Baris(f"Jumlah {len(trx.penimbangan)} kali timbang",
+                       f"{fmt.angka(trx.netto_timbangan_kg)} kg"))
+        if trx.jumlah_karung:
+            per = float(trx.total_tara_kg or 0) / trx.jumlah_karung
+            b.append(Baris(
+                f"Tara karung  {trx.jumlah_karung} × {fmt.angka(per, 3)} kg",
+                f"- {fmt.angka(trx.total_tara_kg, 2)} kg"))
+        if trx.tara_lain_kg:
+            b.append(Baris("Tara lain", f"- {fmt.angka(trx.tara_lain_kg, 2)} kg"))
+        return b
+
     b = [Baris("Bruto — truk bermuatan",
                f"{fmt.angka(trx.berat_bermuatan_kg)} kg",
                fmt.jam(trx.timbang1_waktu if arah_masuk else trx.timbang2_waktu))]

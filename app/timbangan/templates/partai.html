@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% from "macros.html" import isian, konteks_jenis %}
+
+{% set trx = b.trx %}
+
+{% block judul %}Partai kecil · {{ trx.kode }}{% endblock %}
+{% block bar_judul %}Timbang partai kecil{% endblock %}
+{% block bar_sub %}{{ b.supplier_nama or trx.pihak_nama or trx.kode }}{% endblock %}
+
+{% block konteks %}
+  {{ konteks_jenis(aturan) }}
+{% endblock %}
+
+{% block isi %}
+
+<div class="kartu">
+  <div class="baris">
+    <span>Nomor transaksi</span><b>{{ trx.kode }}</b>
+  </div>
+  <div class="baris">
+    <span>{{ b.supplier_nama or trx.pihak_nama or 'Pihak' }}</span>
+    <b style="font-family:var(--teks);font-size:14px">{{ aturan.nama }}</b>
+  </div>
+</div>
+
+{# Angka berjalan ditaruh paling atas dan dibuat besar: inilah satu-satunya
+   hal yang ingin dilihat petugas maupun penjualnya di antara dua timbangan. #}
+<div class="hasil {{ 'hasil--aman' if trx.penimbangan else 'hasil--netral' }}">
+  <div class="hasil__angka">{{ '%g'|format(trx.timbang1_kg or 0) }} <span class="sat">kg</span></div>
+  <div class="hasil__ket">
+    {{ trx.penimbangan|length }} kali timbang · masih berjalan
+  </div>
+</div>
+
+{# Kolom berat SENGAJA tidak memakai macro `berat`: macro itu memasang
+   peringatan "bukan kelipatan 10 kg", yang benar untuk jembatan truk dan
+   salah di sini. Partai kecil ditimbang pada alat yang membaca sampai
+   kilogram — 2 kg memang 2 kg. #}
+<form method="post" action="{{ PREFIX }}/partai/{{ trx.id }}/tambah" class="grup">
+  {{ isian('berat_kg', 'Berat timbangan ini', '', 'kg', 'text',
+           'Angka apa adanya, tanpa dibulatkan.', true, true,
+           'inputmode="decimal" autocomplete="off" autofocus') }}
+  {{ isian('catatan', 'Keterangan (bila perlu)', '', '', 'text',
+           'Mis. karung basah, campur', false, false) }}
+  <button type="submit" class="tbl blok" data-sibuk="Menyimpan…">
+    Tambah timbangan
+  </button>
+</form>
+
+<div class="kartu">
+  <div class="kartu__judul">Sudah ditimbang</div>
+  {% if not trx.penimbangan %}
+    <div class="kosong">Belum ada.</div>
+  {% endif %}
+  {% for p in trx.penimbangan %}
+    <div class="baris">
+      <span>
+        <b style="font-family:var(--mono)">{{ '%02d'|format(p.urutan) }}</b>
+        &nbsp;{{ '%g'|format(p.berat_kg) }} kg
+        {% if p.catatan %}<span class="bantu"> · {{ p.catatan }}</span>{% endif %}
+      </span>
+      {% if trx.penimbangan|length > 1 %}
+        <form method="post" action="{{ PREFIX }}/partai/{{ trx.id }}/hapus"
+              style="display:inline"
+              onsubmit="return confirm('Hapus timbangan {{ '%g'|format(p.berat_kg) }} kg?')">
+          <input type="hidden" name="urutan" value="{{ p.urutan }}">
+          <button type="submit" class="tbl halus kecil">Hapus</button>
+        </form>
+      {% endif %}
+    </div>
+  {% endfor %}
+</div>
+
+<form method="post" action="{{ PREFIX }}/partai/{{ trx.id }}/selesai"
+      onsubmit="return confirm('Tutup tiket ini? Total {{ '%g'|format(trx.timbang1_kg or 0) }} kg dari {{ trx.penimbangan|length }} kali timbang.')">
+  <button type="submit" class="tbl blok" data-sibuk="Menutup…">
+    Selesai — total {{ '%g'|format(trx.timbang1_kg or 0) }} kg
+  </button>
+</form>
+
+<p class="bantu" style="margin-top:14px">
+  Tiket ini tetap satu kode. Selama belum ditutup, ia muncul di daftar tiket
+  terbuka dan bisa dilanjutkan kapan saja.
+</p>
+
+{% endblock %}

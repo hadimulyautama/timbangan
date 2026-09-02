@@ -49,6 +49,21 @@
         </div>
       </a>
 
+      {# Partai kecil berdiri sendiri, bukan pilihan tersembunyi di dalam
+         formulir barang masuk. Alurnya memang berbeda sejak awal — tanpa
+         kendaraan, ditimbang berulang, ditutup belakangan — dan petugas
+         sudah tahu mana yang datang sebelum menyentuh layar. #}
+      <a href="{{ PREFIX }}/pilih/{{ MASUK }}?partai=1" class="pilihan">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2f6e7a"
+             stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 7h6v6H4z"/><path d="M14 11h6v6h-6z"/>
+          <path d="M7 13v4"/><path d="M4 17h6"/></svg>
+        <div class="pilihan__isi">
+          <div class="pilihan__nama">Barang masuk — partai kecil</div>
+          <div class="pilihan__ket">Ditimbang satu per satu, tetap satu kode</div>
+        </div>
+      </a>
+
       <a href="{{ PREFIX }}/pilih/{{ KELUAR }}" class="pilihan">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2f6e7a"
              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">

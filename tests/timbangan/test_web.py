@@ -249,7 +249,9 @@ async def test_tutup_paksa_tiket_lewat_halaman(klien):
     r = await klien.post(f"{PREFIX}/tiket/{trx_id}/tutup",
                          data={"alasan": "Mutu ditolak, truk kembali"})
     assert "ditutup beserta alasannya" in r.text
-    assert "Tidak ada truk yang sedang menunggu" in \
+    # Kalimatnya bukan lagi soal truk: partai kecil datang tanpa kendaraan,
+    # dan daftar ini menampung keduanya.
+    assert "Tidak ada tiket yang sedang terbuka" in \
         (await klien.get(f"{PREFIX}/tiket")).text
 
 

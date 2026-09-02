@@ -74,6 +74,15 @@ TRX_VOID = "VOID"                  # tidak pernah dihapus permanen
 
 CARA_DUA_KALI = "DUA_KALI"
 CARA_SEKALI = "SEKALI"             # jasa timbang, tanpa timbang kosong
+#: Partai kecil: petani/pedagang membawa sedikit, ditimbang satu per satu —
+#: tetapi tetap SATU siklus dan SATU kode timbang. Nettonya jumlah seluruh
+#: penimbangan; tak ada timbang kosong, tak ada tara karung.
+CARA_PARTAI = "PARTAI"
+CARA_LABEL = {
+    CARA_DUA_KALI: "Dua kali (bermuatan & kosong)",
+    CARA_SEKALI: "Sekali (jasa timbang)",
+    CARA_PARTAI: "Partai kecil (timbang satu per satu)",
+}
 
 # ── Pemeriksaan (SOP butir 6) ─────────────────────────────────────────────
 PEMERIKSAAN_DIBUKA = "DIBUKA"
@@ -401,6 +410,10 @@ class TimbanganTransaksi(Base, TimestampMixin):
     foto: Mapped[list["TimbanganFoto"]] = relationship(
         back_populates="transaksi", lazy="selectin", cascade="all, delete-orphan"
     )
+    penimbangan: Mapped[list["TimbanganPenimbangan"]] = relationship(
+        back_populates="transaksi", lazy="selectin",
+        cascade="all, delete-orphan", order_by="TimbanganPenimbangan.urutan",
+    )
 
     @property
     def aktif(self) -> bool:
@@ -409,6 +422,15 @@ class TimbanganTransaksi(Base, TimestampMixin):
     @property
     def selesai(self) -> bool:
         return self.status_tiket in (TIKET_SELESAI, TIKET_DITUTUP_PAKSA)
+
+    @property
+    def partai(self) -> bool:
+        """Transaksi partai kecil — nettonya jumlah beberapa penimbangan."""
+        return self.cara_timbang == CARA_PARTAI
+
+    @property
+    def total_penimbangan_kg(self) -> float:
+        return sum(float(p.berat_kg or 0) for p in self.penimbangan)
 
     @property
     def petugas_bukti_id(self) -> int | None:
@@ -449,6 +471,42 @@ class TimbanganMuatan(Base):
     @property
     def tara_kg(self) -> float:
         return self.jumlah_karung * self.tara_per_karung_kg
+
+
+class TimbanganPenimbangan(Base):
+    """Satu kali naik timbangan pada transaksi PARTAI KECIL.
+
+    Ada karena petani dan pedagang kecil menjual sedikit-sedikit: barangnya
+    ditimbang satu per satu, tetapi seluruhnya tetap satu siklus dan satu kode
+    timbang — satu nota, satu pihak, satu jenis.
+
+    Angkanya NETTO apa adanya, tanpa tara dan tanpa pembulatan: bila alat
+    membaca 2 kg, yang tersimpan 2 kg. Kelipatan 10 kg yang berlaku di jembatan
+    truk tidak berlaku di sini karena alatnya memang berbeda.
+
+    `TimbanganTransaksi.timbang1_kg` menyimpan JUMLAH seluruh baris ini, supaya
+    seluruh laporan, bukti cetak, dan jembatan ke modul produksi tetap membaca
+    satu angka seperti transaksi lain — tidak ada yang perlu tahu bentuk khusus
+    ini kecuali layar yang mencatatnya.
+    """
+
+    __tablename__ = "timbangan_penimbangan"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    transaksi_id: Mapped[int] = mapped_column(
+        ForeignKey("timbangan_transaksi.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    urutan: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    berat_kg: Mapped[float] = mapped_column(KG, nullable=False)
+    waktu: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    waktu_sistem: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    petugas_id: Mapped[int | None] = mapped_column(ForeignKey("timbangan_akun.id"))
+    catatan: Mapped[str | None] = mapped_column(String(120))
+
+    transaksi: Mapped["TimbanganTransaksi"] = relationship(back_populates="penimbangan")
 
 
 class TimbanganPemeriksaan(Base, TimestampMixin):

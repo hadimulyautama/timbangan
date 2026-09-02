@@ -19,6 +19,7 @@ from sqlalchemy import func, select
 
 from app.timbangan import logic, service
 from app.timbangan.models import (
+    CARA_PARTAI,
     CARA_SEKALI,
     PEMERIKSAAN_DIBUKA,
     PEMERIKSAAN_SELESAI,
@@ -531,3 +532,126 @@ async def test_koreksi_menolak_mengosongkan_nama_pihak(
             perubahan={"pihak_nama": "  "},
         )
     assert trx.pihak_nama == "Gudang 1 → Gudang 2"
+
+
+# ─────────────────── Partai kecil (satu kode, banyak timbang) ───────────────────
+#
+# Petani dan pedagang menjual sedikit-sedikit, barangnya ditimbang satu per
+# satu, dan kedatangannya bisa bertahap. Yang dijaga di sini: kodenya tetap
+# satu, angkanya tidak pernah dibulatkan, dan tiketnya boleh menunggu.
+
+def partai(kode: str, berat: float, pihak: str = "Pak Warno") -> InputTimbang:
+    """Partai kecil: tanpa nopol, tanpa sopir, tanpa tara karung."""
+    return InputTimbang(
+        kode=kode, arah=logic.MASUK, jenis_kode="GABAH_BASAH",
+        berat_kg=berat, cara_timbang=CARA_PARTAI,
+        pihak_nama=pihak, perangkat_kode="P1",
+    )
+
+
+async def test_partai_dibuka_tanpa_nopol_dan_sopir(db, petugas):
+    """Yang datang membawa beberapa karung adalah orangnya sendiri."""
+    trx = await service.simpan_timbang_pertama(
+        db, akun=petugas, data=partai("TRX-20260902-P1-001", 12.5)
+    )
+    assert trx.status_tiket == TIKET_TERBUKA
+    assert trx.partai
+    assert trx.nomor_polisi is None and trx.nama_sopir is None
+    assert [float(p.berat_kg) for p in trx.penimbangan] == [12.5]
+    assert float(trx.timbang1_kg) == 12.5
+
+
+async def test_partai_menjumlah_apa_adanya_tanpa_pembulatan(db, petugas):
+    """2 kg ya 2 kg — kelipatan 10 kg milik jembatan truk, bukan alat ini."""
+    await service.simpan_timbang_pertama(
+        db, akun=petugas, data=partai("TRX-20260902-P1-002", 12.5)
+    )
+    for w in (2, 7.25, 40):
+        trx = await service.tambah_penimbangan(
+            db, akun=petugas, kode="TRX-20260902-P1-002", berat_kg=w
+        )
+    assert float(trx.timbang1_kg) == 61.75
+    assert trx.status_tiket == TIKET_TERBUKA, "tiket harus tetap menunggu"
+
+
+async def test_partai_menolak_angka_di_atas_kapasitas_timbangan_kecil(db, petugas):
+    """Salah ketik 1500 untuk 15 kg tertahan di sini, bukan di laporan bulan depan."""
+    await service.simpan_timbang_pertama(
+        db, akun=petugas, data=partai("TRX-20260902-P1-003", 12.5)
+    )
+    with pytest.raises(service.LayananError, match="timbangan kecil"):
+        await service.tambah_penimbangan(
+            db, akun=petugas, kode="TRX-20260902-P1-003", berat_kg=1_500
+        )
+
+
+async def test_partai_hapus_baris_menomori_ulang_dan_menghitung_ulang(db, petugas):
+    await service.simpan_timbang_pertama(
+        db, akun=petugas, data=partai("TRX-20260902-P1-004", 12.5)
+    )
+    for w in (2, 7.25):
+        await service.tambah_penimbangan(
+            db, akun=petugas, kode="TRX-20260902-P1-004", berat_kg=w
+        )
+    trx = await service.hapus_penimbangan(
+        db, akun=petugas, kode="TRX-20260902-P1-004", urutan=2
+    )
+    assert [p.urutan for p in trx.penimbangan] == [1, 2]
+    assert [float(p.berat_kg) for p in trx.penimbangan] == [12.5, 7.25]
+    assert float(trx.timbang1_kg) == 19.75
+
+
+async def test_partai_baris_terakhir_tak_bisa_dihapus(db, petugas):
+    """Menghapusnya menyisakan tiket tanpa angka sama sekali — batalkan saja."""
+    await service.simpan_timbang_pertama(
+        db, akun=petugas, data=partai("TRX-20260902-P1-005", 12.5)
+    )
+    with pytest.raises(service.LayananError, match="batalkan"):
+        await service.hapus_penimbangan(
+            db, akun=petugas, kode="TRX-20260902-P1-005", urutan=1
+        )
+
+
+async def test_partai_selesai_menjadikan_jumlah_sebagai_netto(db, petugas):
+    await service.simpan_timbang_pertama(
+        db, akun=petugas, data=partai("TRX-20260902-P1-006", 18)
+    )
+    for w in (23.5, 9):
+        await service.tambah_penimbangan(
+            db, akun=petugas, kode="TRX-20260902-P1-006", berat_kg=w
+        )
+    trx = await service.selesaikan_partai(
+        db, akun=petugas, kode="TRX-20260902-P1-006"
+    )
+    assert trx.status_tiket == TIKET_SELESAI
+    assert trx.timbang2_kg is None, "tak ada timbang kosong pada partai kecil"
+    assert float(trx.netto_timbangan_kg) == 50.5
+    assert float(trx.berat_barang_kg) == 50.5
+    assert float(trx.total_tara_kg) == 0
+
+
+async def test_partai_yang_sudah_ditutup_tak_bisa_ditambah(db, petugas):
+    await service.simpan_timbang_pertama(
+        db, akun=petugas, data=partai("TRX-20260902-P1-007", 18)
+    )
+    await service.selesaikan_partai(db, akun=petugas, kode="TRX-20260902-P1-007")
+    with pytest.raises(service.LayananError, match="sudah ditutup"):
+        await service.tambah_penimbangan(
+            db, akun=petugas, kode="TRX-20260902-P1-007", berat_kg=5
+        )
+
+
+async def test_partai_boleh_menunggu_lintas_hari(db, petugas):
+    """Kedatangan bertahap: tiket menua tanpa kehilangan angkanya."""
+    await service.simpan_timbang_pertama(
+        db, akun=petugas, data=partai("TRX-20260902-P1-008", 18)
+    )
+    trx = await service.ambil_kode(db, "TRX-20260902-P1-008")
+    trx.timbang1_waktu = trx.timbang1_waktu - timedelta(days=2)
+    await db.commit()
+
+    trx = await service.tambah_penimbangan(
+        db, akun=petugas, kode="TRX-20260902-P1-008", berat_kg=6
+    )
+    assert float(trx.timbang1_kg) == 24
+    assert trx.status_tiket == TIKET_TERBUKA

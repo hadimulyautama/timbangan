@@ -46,6 +46,10 @@ class TimbanganSettings:
     )
     # Kelipatan pembacaan tera alat — dipakai untuk peringatan angka janggal.
     kelipatan_tera_kg: float = _f("TIMBANGAN_KELIPATAN_TERA_KG", logic.KELIPATAN_TERA_KG)
+    # Kapasitas timbangan kecil untuk partai kecil (bukan jembatan truk).
+    kapasitas_timbangan_kecil_kg: float = _f(
+        "TIMBANGAN_KAPASITAS_KECIL_KG", logic.KAPASITAS_TIMBANGAN_KECIL_KG
+    )
 
     # ── Batas operasional ──
     # Batas ukuran satu foto bukti (byte). Foto disimpan di DB agar tidak hilang
@@ -74,3 +78,4 @@ tsettings = TimbanganSettings()
 # Kapasitas alat diterapkan ke lapisan logic agar SATU sumber kebenaran.
 logic.KAPASITAS_JEMBATAN_KG = tsettings.kapasitas_jembatan_kg
 logic.KELIPATAN_TERA_KG = tsettings.kelipatan_tera_kg
+logic.KAPASITAS_TIMBANGAN_KECIL_KG = tsettings.kapasitas_timbangan_kecil_kg
