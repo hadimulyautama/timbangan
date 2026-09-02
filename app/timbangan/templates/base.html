@@ -23,6 +23,66 @@
         href="{{ PREFIX }}/static/ikon.svg?v={{ VERSI }}">
   <meta name="apple-mobile-web-app-title" content="Pos Timbang">
 
+  {# Aplikasi ini hanya punya satu rupa: terang. Tanpa baris ini, peramban di
+     perangkat bermode gelap mengecat kanvas awalnya HITAM sebelum halaman
+     tergambar — kilatan gelap yang membuat orang mengira aplikasinya hang. #}
+  <meta name="color-scheme" content="light">
+
+  {# Layar pembuka iOS.
+     Android mengambil warna & ikonnya dari manifest; iOS TIDAK — ia hanya mau
+     gambar jadi, satu berkas per ukuran layar, dicocokkan lewat media query.
+     Tanpa ini, aplikasi yang dibuka dari layar depan menampilkan layar kosong
+     lebih dulu (hitam pada perangkat bermode gelap), baru layar pembuka kita.
+     Dibuat ulang oleh `scripts/buat_gambar_pembuka.py` bila ikon/warna berubah. #}
+  <link rel="apple-touch-startup-image"
+        media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"
+        href="{{ PREFIX }}/static/pembuka/640x1136.png?v={{ VERSI }}">
+  <link rel="apple-touch-startup-image"
+        media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"
+        href="{{ PREFIX }}/static/pembuka/750x1334.png?v={{ VERSI }}">
+  <link rel="apple-touch-startup-image"
+        media="(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+        href="{{ PREFIX }}/static/pembuka/1242x2208.png?v={{ VERSI }}">
+  <link rel="apple-touch-startup-image"
+        media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+        href="{{ PREFIX }}/static/pembuka/1125x2436.png?v={{ VERSI }}">
+  <link rel="apple-touch-startup-image"
+        media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"
+        href="{{ PREFIX }}/static/pembuka/828x1792.png?v={{ VERSI }}">
+  <link rel="apple-touch-startup-image"
+        media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+        href="{{ PREFIX }}/static/pembuka/1242x2688.png?v={{ VERSI }}">
+  <link rel="apple-touch-startup-image"
+        media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+        href="{{ PREFIX }}/static/pembuka/1170x2532.png?v={{ VERSI }}">
+  <link rel="apple-touch-startup-image"
+        media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+        href="{{ PREFIX }}/static/pembuka/1284x2778.png?v={{ VERSI }}">
+  <link rel="apple-touch-startup-image"
+        media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+        href="{{ PREFIX }}/static/pembuka/1179x2556.png?v={{ VERSI }}">
+  <link rel="apple-touch-startup-image"
+        media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+        href="{{ PREFIX }}/static/pembuka/1290x2796.png?v={{ VERSI }}">
+  <link rel="apple-touch-startup-image"
+        media="(device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+        href="{{ PREFIX }}/static/pembuka/1206x2622.png?v={{ VERSI }}">
+  <link rel="apple-touch-startup-image"
+        media="(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+        href="{{ PREFIX }}/static/pembuka/1320x2868.png?v={{ VERSI }}">
+  <link rel="apple-touch-startup-image"
+        media="(device-width: 744px) and (device-height: 1133px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"
+        href="{{ PREFIX }}/static/pembuka/1488x2266.png?v={{ VERSI }}">
+  <link rel="apple-touch-startup-image"
+        media="(device-width: 820px) and (device-height: 1180px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"
+        href="{{ PREFIX }}/static/pembuka/1640x2360.png?v={{ VERSI }}">
+  <link rel="apple-touch-startup-image"
+        media="(device-width: 834px) and (device-height: 1194px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"
+        href="{{ PREFIX }}/static/pembuka/1668x2388.png?v={{ VERSI }}">
+  <link rel="apple-touch-startup-image"
+        media="(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"
+        href="{{ PREFIX }}/static/pembuka/2048x2732.png?v={{ VERSI }}">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap">

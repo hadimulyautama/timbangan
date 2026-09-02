@@ -4,6 +4,10 @@
    sasaran sentuh besar, angka besar, kontras tinggi. */
 
 :root {
+  /* Satu rupa saja: terang. Tanpa ini, kanvas awal di perangkat bermode
+     gelap dicat hitam sebelum halaman tergambar. */
+  color-scheme: light;
+
   --tinta:      #1a1712;
   --tinta-2:    #3a352c;
   --tinta-3:    #5a5449;
