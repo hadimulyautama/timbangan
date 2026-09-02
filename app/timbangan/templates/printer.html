@@ -33,10 +33,12 @@
     <div class="baris" style="align-items:flex-start;gap:10px">
       <span><b>1. Terima sertifikat printer</b><br>
         <span class="bantu">
-          Printer memakai sertifikat buatannya sendiri, jadi browser
-          mencurigainya. Buka alamat printer sekali di tab lain, lalu pilih
-          <i>Lanjutkan</i> pada peringatan yang muncul. Setelah itu tab boleh
-          ditutup.
+          Sertifikat bawaan printer ini menyebut nama dan alamat yang
+          <b>bukan miliknya</b> (pabrik memasang sertifikat yang sama di
+          banyak unit), jadi setiap browser menolaknya. Buka alamat printer
+          sekali di tab lain, pilih <i>Lanjutkan</i> pada peringatan, lalu
+          tutup tabnya. <b>Wajib diulang di tiap perangkat</b> — menyimpan
+          alamat printer saja tidak cukup.
         </span>
       </span>
     </div>
@@ -54,6 +56,18 @@
           ulangi saja, pertanyaannya muncul lagi.
         </span>
       </span>
+    </div>
+  </div>
+
+  <div class="grup">
+    <div class="lbl">Periksa sambungan</div>
+    <button type="button" class="tbl halus blok" data-periksa-printer>
+      Periksa perangkat ini</button>
+    <div class="kartu" data-laporan-printer hidden style="margin-top:8px"></div>
+    <div class="bantu">
+      Tidak mengeluarkan kertas. Memisahkan tiga sebab kegagalan yang dari
+      layar terasa sama: sertifikat belum diterima, izin jaringan belum
+      diklik, atau perangkat tidak satu jaringan dengan printer.
     </div>
   </div>
 

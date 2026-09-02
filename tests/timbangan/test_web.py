@@ -3330,6 +3330,24 @@ async def test_halaman_penyiapan_printer_menyebut_kedua_izin(klien):
     assert "jaringan lokal" in r.text.lower()
 
 
+async def test_penyiapan_printer_menyediakan_pemeriksa_sambungan(klien):
+    """Tiga sebab kegagalan terasa sama dari layar — tombol ditekan, tidak ada
+    yang keluar. Tanpa cara memisahkannya, orang menyimpulkan aplikasinya
+    rusak, dan sertifikat yang belum diterima tidak pernah ketahuan."""
+    await login(klien)
+    r = await klien.get(f"{PREFIX}/printer")
+    assert "data-periksa-printer" in r.text
+    assert "data-laporan-printer" in r.text
+
+
+async def test_penyiapan_printer_menegaskan_sertifikat_per_perangkat(klien):
+    """Menyimpan alamat printer tidak menerima sertifikatnya. Keduanya pernah
+    dikira satu langkah, dan Android tetap tidak bisa mencetak."""
+    await login(klien)
+    r = await klien.get(f"{PREFIX}/printer")
+    assert "tiap perangkat" in r.text
+
+
 async def test_penyiapan_printer_tertutup_bagi_yang_belum_masuk(klien):
     r = await klien.get(f"{PREFIX}/printer")
     assert "Kata sandi" in r.text

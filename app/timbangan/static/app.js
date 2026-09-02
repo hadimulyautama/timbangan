@@ -635,4 +635,156 @@
   });
 
 
+  // ── Pemeriksa sambungan printer ────────────────────────────────────
+  //
+  // Kegagalan menghubungi printer punya tiga sebab yang TERASA SAMA dari
+  // layar — tombol ditekan, tidak ada yang keluar:
+  //   · sertifikat printer belum diterima di perangkat ini;
+  //   · izin akses jaringan lokal belum diklik;
+  //   · perangkat memang tidak satu jaringan dengan printer.
+  // Tanpa cara membedakannya, orang menebak, dan tebakan pertama biasanya
+  // "aplikasinya rusak". Pemeriksa ini memisahkan ketiganya dengan mencoba
+  // hal yang lebih kecil lebih dulu.
+
+  function _tunggu(janji, ms) {
+    var lewat = false;
+    return Promise.race([
+      janji.then(function (n) { return { ok: true, nilai: n }; },
+                 function (e) { return { ok: false, galat: e }; }),
+      new Promise(function (res) {
+        setTimeout(function () { lewat = true; res({ ok: false, lambat: true }); }, ms);
+      })
+    ]).then(function (h) { h.lambat = h.lambat || lewat; return h; });
+  }
+
+  function periksaPrinter() {
+    var alamat = alamatPrinter();
+    var hasil = [];
+
+    function catat(judul, nada, kata) {
+      hasil.push({ judul: judul, nada: nada, kata: kata });
+    }
+
+    if (!alamat) {
+      catat('Alamat printer', 'err', 'Belum disetel di perangkat ini.');
+      return Promise.resolve(hasil);
+    }
+    catat('Alamat printer', 'ok', alamat);
+
+    if (!/^https:/i.test(alamat)) {
+      catat('Awalan alamat', 'err',
+            'Harus https://. Halaman ini HTTPS, dan browser menolak ' +
+            'menghubungi alamat http:// dari halaman HTTPS.');
+      return Promise.resolve(hasil);
+    }
+
+    var izin = Promise.resolve('tidak dikenal');
+    try {
+      izin = navigator.permissions
+        .query({ name: 'local-network-access' })
+        .then(function (p) { return p.state; })
+        .catch(function () { return 'tidak dikenal'; });
+    } catch (e) { /* browser lama — biarkan 'tidak dikenal' */ }
+
+    return izin.then(function (keadaan) {
+      catat('Izin jaringan lokal',
+            keadaan === 'granted' ? 'ok' : (keadaan === 'denied' ? 'err' : 'netral'),
+            keadaan === 'granted' ? 'Sudah diberikan.'
+              : keadaan === 'denied' ? 'DITOLAK. Buka setelan situs di browser, ' +
+                  'izinkan akses jaringan lokal, lalu muat ulang halaman ini.'
+              : keadaan === 'prompt' ? 'Belum ditanyakan — akan muncul saat mencetak.'
+              : 'Browser ini tidak melaporkannya.');
+
+      // Uji terkecil: sekadar menyentuh printer, tanpa menuntut jawaban yang
+      // bisa dibaca (`no-cors`). Yang diuji di sini hanya TLS dan izin —
+      // bukan CORS, bukan ePOS. Memisahkannya membuat sebabnya kelihatan.
+      return _tunggu(fetch(alamat + '/', { mode: 'no-cors', cache: 'no-store' }), 9000);
+    }).then(function (h) {
+      if (h.lambat) {
+        catat('Sertifikat printer', 'err',
+              'Tidak ada jawaban dalam 9 detik. Biasanya pertanyaan izin ' +
+              'jaringan lokal belum dijawab.');
+        return null;
+      }
+      if (!h.ok) {
+        catat('Sertifikat printer', 'err',
+              'Ditolak browser ini. Buka alamat printer di tab baru, pilih ' +
+              'Lanjutkan pada peringatan, lalu kembali ke sini. Bila ' +
+              'peringatannya tidak muncul sama sekali, perangkat ini tidak ' +
+              'satu jaringan dengan printer.');
+        return null;
+      }
+      catat('Sertifikat printer', 'ok', 'Diterima di perangkat ini.');
+
+      // Perintah cetak KOSONG: printer menjawab, kertas tidak keluar.
+      var devid = document.body.dataset.printerDevid || 'local_printer';
+      return _tunggu(fetch(
+        alamat + '/cgi-bin/epos/service.cgi?devid=' + encodeURIComponent(devid) +
+        '&timeout=5000',
+        { method: 'POST', headers: { 'Content-Type': 'text/xml; charset=utf-8' },
+          body: '<?xml version="1.0" encoding="utf-8"?><s:Envelope xmlns:s=' +
+                '"http://schemas.xmlsoap.org/soap/envelope/"><s:Body>' +
+                '<epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/' +
+                'epos-print"></epos-print></s:Body></s:Envelope>' }), 12000);
+    }).then(function (h) {
+      if (h === null) { return hasil; }
+      if (h.lambat || !h.ok) {
+        catat('Layanan cetak', 'err',
+              'Printer terjangkau, tetapi layanan ePOS-Print tidak menjawab. ' +
+              'Periksa di panel printer: TM-i Settings > ePOS-Print harus Enable.');
+        return hasil;
+      }
+      return h.nilai.text().then(function (t) {
+        catat('Layanan cetak', /success="true"/.test(t) ? 'ok' : 'err',
+              /success="true"/.test(t)
+                ? 'Menjawab berhasil. Perangkat ini siap mencetak.'
+                : 'Menjawab, tetapi menolak perintah: ' + t.slice(0, 120));
+        return hasil;
+      });
+    }).catch(function (e) {
+      catat('Pemeriksaan', 'err', 'Terhenti: ' + (e && e.message));
+      return hasil;
+    });
+  }
+
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest) { return; }
+    var tombol = e.target.closest('[data-periksa-printer]');
+    if (!tombol) { return; }
+    e.preventDefault();
+    if (tombol.dataset.sibuk === '1') { return; }
+    var kotak = document.querySelector('[data-laporan-printer]');
+    if (!kotak) { return; }
+    var semula = tombol.textContent;
+    tombol.dataset.sibuk = '1';
+    tombol.textContent = 'Memeriksa…';
+    kotak.hidden = false;
+    kotak.textContent = 'Memeriksa…';
+
+    periksaPrinter().then(function (hasil) {
+      tombol.dataset.sibuk = '';
+      tombol.textContent = semula;
+      kotak.textContent = '';
+      hasil.forEach(function (b) {
+        var baris = document.createElement('div');
+        baris.className = 'baris';
+        baris.style.alignItems = 'flex-start';
+        var kiri = document.createElement('span');
+        var tanda = document.createElement('b');
+        tanda.textContent = b.nada === 'ok' ? '✓ ' : (b.nada === 'err' ? '✕ ' : '· ');
+        tanda.style.color = b.nada === 'ok' ? 'var(--aman)'
+          : (b.nada === 'err' ? 'var(--bahaya)' : 'var(--tinta-2)');
+        kiri.appendChild(tanda);
+        kiri.appendChild(document.createTextNode(b.judul + ' — '));
+        var ket = document.createElement('span');
+        ket.className = 'bantu';
+        ket.textContent = b.kata;
+        kiri.appendChild(ket);
+        baris.appendChild(kiri);
+        kotak.appendChild(baris);
+      });
+    });
+  });
+
+
 })();
