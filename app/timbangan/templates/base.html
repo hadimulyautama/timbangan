@@ -36,10 +36,11 @@
    dibuka oleh skrip kecil di bawah: kalau JavaScript mati, ia tidak pernah
    muncul, sehingga tak mungkin ada layar yang menutupi aplikasi selamanya. #}
 <div class="pembuka" id="pembuka" hidden aria-hidden="true">
-  <img src="{{ PREFIX }}/static/ikon.svg" width="84" height="84" alt="">
+  <img class="pembuka__lambang" src="{{ PREFIX }}/static/ikon.svg"
+       width="132" height="132" alt="">
   <div class="pembuka__nama">Pos Timbang</div>
   <div class="pembuka__sub">{{ PERUSAHAAN }}</div>
-  <div class="pembuka__bar"><span></span></div>
+  <div class="pembuka__tunggu">Menyiapkan…</div>
 </div>
 <script>
 (function () {

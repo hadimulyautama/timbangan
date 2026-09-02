@@ -446,16 +446,20 @@ body.luring .luring { display: flex; }
  * dipasang ke layar depan; iOS tidak. Ini menyamakan keduanya — dan menutup
  * jeda putih pertama yang membuat orang mengira aplikasinya belum jalan.
  *
+ * Latarnya SENGAJA berwarna, bukan sewarna kertas aplikasi: layar pembuka
+ * yang sewarna isi aplikasi tidak terasa seperti pembukaan apa pun, hanya
+ * seperti halaman yang belum selesai memuat.
+ *
  * Hanya sekali per sesi peramban (lihat base.html): menampilkannya di tiap
  * pindah halaman akan mengubah aplikasi cepat menjadi aplikasi yang terasa
  * lambat.
  */
 .pembuka {
   position: fixed; inset: 0; z-index: 100;
-  background: var(--kertas);
+  background: var(--aksi-muda);
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 14px; padding: 24px;
-  opacity: 1; transition: opacity .28s ease;
+  gap: 20px; padding: 32px;
+  opacity: 1; transition: opacity .3s ease;
 }
 /* WAJIB: `display:flex` di atas mengalahkan atribut `hidden` (yang bekerja
    lewat `display:none` bawaan peramban). Tanpa baris ini, layar pembuka tetap
@@ -464,21 +468,32 @@ body.luring .luring { display: flex; }
    selamanya. Ditemukan saat menjalankannya, bukan saat membacanya. */
 .pembuka[hidden] { display: none; }
 .pembuka--pergi { opacity: 0; pointer-events: none; }
+
+.pembuka__lambang {
+  width: 132px; height: 132px;
+  border-radius: 28px;          /* mengikuti rx ikon: 108/512 ≈ 21% */
+  box-shadow: 0 14px 34px rgba(47, 110, 122, .22);
+  display: block;
+}
 .pembuka__nama {
-  font-family: var(--judul); font-size: 22px; font-weight: 700; color: var(--tinta);
+  font-family: var(--judul); font-size: 28px; font-weight: 700;
+  letter-spacing: -.01em; color: var(--tinta); margin-top: 4px;
 }
-.pembuka__sub { font-size: 13px; color: var(--tinta-4); margin-top: -8px; }
-.pembuka__bar {
-  width: 132px; height: 3px; border-radius: 999px;
-  background: var(--garis); overflow: hidden; margin-top: 6px;
+.pembuka__sub {
+  font-size: 14px; color: var(--tinta-3); margin-top: -14px;
 }
-.pembuka__bar span {
-  display: block; width: 40%; height: 100%; border-radius: 999px;
-  background: var(--aksi); animation: geser 1.1s ease-in-out infinite;
+/* Status ditaruh di kaki, bukan menempel di bawah nama: menumpuk empat baris
+   di tengah membuat komposisinya sesak, dan mata memang mencari kabar
+   "sedang apa" di pinggir, bukan di pusat perhatian. */
+.pembuka__tunggu {
+  position: absolute; left: 0; right: 0; bottom: 58px;
+  text-align: center; font-size: 13px; letter-spacing: .02em;
+  color: var(--tinta-4);
+  animation: berkedip 1.5s ease-in-out infinite;
 }
-@keyframes geser {
-  0%   { transform: translateX(-100%); }
-  100% { transform: translateX(350%); }
+@keyframes berkedip {
+  0%, 100% { opacity: .4; }
+  50%      { opacity: 1; }
 }
 
 /* ── Tombol yang sedang bekerja ────────────────────────────────────────
@@ -495,7 +510,7 @@ body.luring .luring { display: flex; }
 @keyframes putar { to { transform: rotate(360deg); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .pembuka__bar span, .tbl--sibuk::before { animation: none; }
-  .pembuka__bar span { width: 100%; }
+  .pembuka__tunggu, .tbl--sibuk::before { animation: none; }
+  .pembuka__tunggu { opacity: .75; }
 }
 
