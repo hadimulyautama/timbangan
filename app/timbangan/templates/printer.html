@@ -59,6 +59,30 @@
     </div>
   </div>
 
+  {# Ini akan terlihat oleh setiap orang yang memakai aplikasi, jadi harus
+     dijelaskan DI SINI dan bukan hanya diketahui yang memasang. Cap yang
+     tidak dijelaskan akan dilaporkan sebagai kerusakan — atau lebih buruk,
+     dikira kebocoran data. Keputusan menerimanya diambil 2 September 2026
+     setelah tiga jalur ditimbang. #}
+  <div class="kartu">
+    <div class="kartu__judul">Mengapa browser menulis “Tidak aman”</div>
+    <div class="bantu" style="line-height:1.6">
+      Setelah perangkat ini dipakai mencetak, browser memberi cap
+      <b>“Tidak aman” / “Not Secure”</b> pada alamat aplikasi. Itu wajar dan
+      sudah diperhitungkan.
+      <br><br>
+      Sebabnya sertifikat bawaan printer, bukan aplikasi ini. Sertifikat itu
+      dipasang pabrik dengan nama dan alamat milik unit lain, jadi browser
+      tidak bisa memastikannya — dan begitu Anda menyetujuinya, cap itu
+      melekat pada halaman yang memakainya.
+      <br><br>
+      Yang <b>tidak</b> berubah: sambungan ke server aplikasi tetap
+      terenkripsi dan tetap terverifikasi seperti biasa; catatan timbang,
+      kata sandi, dan foto bukti tidak melewati printer. Yang dikirim ke
+      printer hanya isi struk, dan hanya di dalam jaringan pos.
+    </div>
+  </div>
+
   <div class="grup">
     <div class="lbl">Periksa sambungan</div>
     <button type="button" class="tbl halus blok" data-periksa-printer>

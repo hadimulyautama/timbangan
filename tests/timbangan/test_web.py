@@ -3348,6 +3348,20 @@ async def test_penyiapan_printer_menegaskan_sertifikat_per_perangkat(klien):
     assert "tiap perangkat" in r.text
 
 
+async def test_penyiapan_printer_menjelaskan_cap_tidak_aman(klien):
+    """Cap "Tidak aman" terlihat setiap orang yang memakai aplikasi.
+
+    Yang tidak dijelaskan akan dilaporkan sebagai kerusakan — atau lebih
+    buruk, dikira kebocoran data. Penjelasannya harus ada di dalam aplikasi,
+    bukan hanya diketahui orang yang memasangnya.
+    """
+    await login(klien)
+    r = await klien.get(f"{PREFIX}/printer")
+    assert "Tidak aman" in r.text
+    assert "terenkripsi" in r.text
+    assert "tidak melewati printer" in r.text
+
+
 async def test_penyiapan_printer_tertutup_bagi_yang_belum_masuk(klien):
     r = await klien.get(f"{PREFIX}/printer")
     assert "Kata sandi" in r.text
