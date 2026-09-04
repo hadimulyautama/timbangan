@@ -1,7 +1,10 @@
 {% extends "base.html" %}
 
 {% set nama_arah = {'MASUK': 'Barang masuk', 'KELUAR': 'Pengiriman',
-                    'BEBAS': 'Jasa timbang'} %}
+                    'BEBAS': 'Jasa timbang',
+                    'TRANSFER': 'Transfer internal',
+                    'RETUR_MASUK': 'Retur dari pelanggan',
+                    'RETUR_KELUAR': 'Retur ke supplier'} %}
 {% set nama_halaman = 'Barang masuk partai kecil' if partai
                       else nama_arah.get(arah, arah) %}
 
@@ -16,6 +19,15 @@
       <div class="bantu">
         Jasa timbang untuk barang pihak lain. Tara diisi manual dan tidak ada
         kontrol terhadap dokumen apa pun — sistem hanya mencatat beratnya.
+      </div>
+    </div>
+  {% elif arah in (RETUR_MASUK, RETUR_KELUAR) %}
+    <div class="kartu">
+      <div class="bantu">
+        Barang apa yang kembali ditulis di catatan. Tara diisi manual — karung
+        retur sering sudah tidak utuh, jadi angkanya harus yang benar-benar
+        terlihat, bukan tara baku komoditasnya. Pembandingnya surat jalan
+        retur.
       </div>
     </div>
   {% endif %}

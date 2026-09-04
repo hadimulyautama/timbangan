@@ -63,6 +63,8 @@ ARAH_LABEL = {
     logic.KELUAR: "pengiriman",
     logic.BEBAS: "jasa timbang",
     logic.TRANSFER: "transfer internal",
+    logic.RETUR_MASUK: "retur dari pelanggan",
+    logic.RETUR_KELUAR: "retur ke supplier",
 }
 
 
@@ -120,6 +122,8 @@ templates.env.globals.update({
     "KELUAR": logic.KELUAR,
     "BEBAS": logic.BEBAS,
     "TRANSFER": logic.TRANSFER,
+    "RETUR_MASUK": logic.RETUR_MASUK,
+    "RETUR_KELUAR": logic.RETUR_KELUAR,
     "TIKET_TERBUKA": TIKET_TERBUKA,
     "TIKET_SELESAI": TIKET_SELESAI,
     "TIKET_DITUTUP_PAKSA": TIKET_DITUTUP_PAKSA,

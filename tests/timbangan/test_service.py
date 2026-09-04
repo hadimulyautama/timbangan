@@ -679,3 +679,145 @@ async def test_partai_menolak_kiriman_tanpa_satu_pun_berat(db, petugas):
         await service.tambah_penimbangan(
             db, akun=petugas, kode="TRX-20260902-P1-010", berat=[]
         )
+
+
+# ─────────────────── Retur ───────────────────
+#
+# Retur bukan barang masuk atau barang keluar dengan tanda minus. Yang
+# membuatnya berdiri sendiri adalah lawan transaksinya yang menyilang: barang
+# yang dikembalikan pelanggan datang MASUK, dan barang yang kita tolak
+# berangkat KELUAR ke supplier. Salah menaruhnya berarti mencari nama
+# pelanggan di daftar supplier.
+
+
+async def _pelanggan(db, nama: str = "Toko Beras Handoko"):
+    from app.models import Pelanggan
+
+    p = Pelanggan(nama_pelanggan=nama)
+    db.add(p)
+    await db.flush()
+    return p
+
+
+def _retur(kode: str, *, arah: str, jenis: str, pihak_id: int,
+           berat: float) -> InputTimbang:
+    return InputTimbang(
+        kode=kode, arah=arah, jenis_kode=jenis, berat_kg=berat,
+        supplier_id=pihak_id, nomor_polisi="AD 9 ZZ", nama_sopir="Slamet",
+        muatan=[InputMuatan(
+            jenis_kode=jenis, jumlah_karung=0, tara_per_karung_kg=0,
+            berat_acuan_kg=3_000, nomor_acuan="SJ-RETUR-1",
+        )],
+        perangkat_kode="P1",
+    )
+
+
+async def test_retur_dari_pelanggan_tersimpan_ke_kolom_pelanggan(db, petugas):
+    """Barangnya datang, tetapi yang mengembalikan bukan supplier.
+
+    `simpan_timbang_pertama` menaruh id lawan transaksi menurut ARAH, jadi
+    inilah pagar yang memastikan retur tidak jatuh ke kolom yang salah dan
+    hilang dari rekap per pelanggan.
+    """
+    p = await _pelanggan(db)
+    trx = await service.simpan_timbang_pertama(
+        db, akun=petugas,
+        data=_retur("RTP-20260904-P1-001", arah=logic.RETUR_MASUK,
+                    jenis="RETUR_PELANGGAN", pihak_id=p.id, berat=9_000),
+    )
+    assert trx.pelanggan_id == p.id
+    assert trx.supplier_id is None
+    assert await service.nama_pihak(db, trx) == "Toko Beras Handoko"
+
+
+async def test_retur_ke_supplier_tersimpan_ke_kolom_supplier(db, petugas,
+                                                             supplier):
+    trx = await service.simpan_timbang_pertama(
+        db, akun=petugas,
+        data=_retur("RTS-20260904-P1-001", arah=logic.RETUR_KELUAR,
+                    jenis="RETUR_SUPPLIER", pihak_id=supplier.id, berat=6_000),
+    )
+    assert trx.supplier_id == supplier.id
+    assert trx.pelanggan_id is None
+
+
+async def test_retur_dari_pelanggan_datang_bermuatan(db, petugas):
+    """Truk retur pelanggan tiba penuh dan pulang kosong — seperti pembelian."""
+    p = await _pelanggan(db)
+    await service.simpan_timbang_pertama(
+        db, akun=petugas,
+        data=_retur("RTP-20260904-P1-002", arah=logic.RETUR_MASUK,
+                    jenis="RETUR_PELANGGAN", pihak_id=p.id, berat=9_000),
+    )
+    trx = await service.simpan_timbang_kedua(
+        db, akun=petugas, kode="RTP-20260904-P1-002", berat_kg=6_000
+    )
+    assert float(trx.berat_bermuatan_kg) == 9_000
+    assert float(trx.berat_kosong_kg) == 6_000
+    assert float(trx.berat_barang_kg) == 3_000
+
+
+async def test_retur_ke_supplier_berangkat_bermuatan(db, petugas, supplier):
+    """Kebalikannya: truk datang kosong, dimuat, lalu ditimbang lagi.
+
+    Angka yang sama persis dengan uji di atas, hanya urutannya terbalik —
+    kalau `_bermuatan_dan_kosong` salah memilah, netto akan keluar negatif.
+    """
+    await service.simpan_timbang_pertama(
+        db, akun=petugas,
+        data=_retur("RTS-20260904-P1-002", arah=logic.RETUR_KELUAR,
+                    jenis="RETUR_SUPPLIER", pihak_id=supplier.id, berat=6_000),
+    )
+    trx = await service.simpan_timbang_kedua(
+        db, akun=petugas, kode="RTS-20260904-P1-002", berat_kg=9_000
+    )
+    assert float(trx.berat_bermuatan_kg) == 9_000
+    assert float(trx.berat_kosong_kg) == 6_000
+    assert float(trx.berat_barang_kg) == 3_000
+
+
+async def test_retur_wajib_menyebut_nomor_polisi(db, petugas, supplier):
+    """Retur justru peristiwa yang paling mungkin berujung sengketa."""
+    data = _retur("RTS-20260904-P1-003", arah=logic.RETUR_KELUAR,
+                  jenis="RETUR_SUPPLIER", pihak_id=supplier.id, berat=6_000)
+    data.nomor_polisi = "   "
+    with pytest.raises(service.LayananError, match="Nomor polisi"):
+        await service.simpan_timbang_pertama(db, akun=petugas, data=data)
+
+
+# ─────────────────── Awalan nomor tiket ───────────────────
+
+
+@pytest.mark.parametrize("arah,awalan", [
+    (logic.MASUK, "MSK"),
+    (logic.KELUAR, "KLR"),
+    (logic.BEBAS, "BBS"),
+    (logic.TRANSFER, "TRF"),
+    (logic.RETUR_MASUK, "RTP"),
+    (logic.RETUR_KELUAR, "RTS"),
+])
+async def test_awalan_nomor_mengikuti_arah_barang(db, petugas, arah, awalan):
+    """Selembar bukti di tangan harus memberitahu peristiwanya sendiri, tanpa
+    perlu membuka sistem."""
+    kode = await service.kode_baru(db, petugas, arah)
+    assert kode.startswith(f"{awalan}-")
+    assert kode.endswith("-P1-001")
+
+
+async def test_setiap_awalan_punya_urutannya_sendiri(db, petugas, supplier):
+    """MSK-…-001 dan KLR-…-001 boleh ada pada hari yang sama.
+
+    Menomori berurut lintas arah justru membuat urutan barang masuk terlihat
+    bolong-bolong — seolah ada tiket yang hilang.
+    """
+    masuk = await service.kode_baru(db, petugas, logic.MASUK)
+    await service.simpan_timbang_pertama(
+        db, akun=petugas, data=masuk_gabah(masuk, supplier.id, 13_600)
+    )
+    assert await service.kode_baru(db, petugas, logic.MASUK) != masuk
+    assert (await service.kode_baru(db, petugas, logic.KELUAR)).endswith("-001")
+
+
+async def test_arah_tak_dikenal_tetap_memberi_nomor(db, petugas):
+    """Lebih baik memakai awalan lama daripada melahirkan tiket tanpa awalan."""
+    assert (await service.kode_baru(db, petugas, "ENTAH")).startswith("TRX-")

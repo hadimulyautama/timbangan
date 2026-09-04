@@ -52,6 +52,34 @@ BEBAS = "BEBAS"
 # selesai dibongkar — tetapi tidak ada pihak lawan, jadi tidak ada dokumen
 # yang dibandingkan dan tidak ada status kontrol yang diberikan.
 TRANSFER = "TRANSFER"
+# Barang yang pernah berpindah tangan, lalu kembali. Bukan sekadar "masuk" atau
+# "keluar" dengan tanda minus: yang membedakannya adalah SIAPA lawan
+# transaksinya. Barang yang dikembalikan pelanggan bergerak masuk, tetapi
+# lawannya pelanggan — bukan supplier; barang yang kita tolak dan kirim balik
+# bergerak keluar, tetapi lawannya supplier — bukan pelanggan.
+#
+# Justru itulah alasan retur harus jadi arah tersendiri dan tidak boleh
+# dititipkan pada MASUK/KELUAR: `PIHAK_ARAH` memilih tabel lawan transaksi
+# dari arah, jadi retur yang dititipkan akan memaksa petugas mencari nama
+# pelanggan di daftar supplier.
+RETUR_MASUK = "RETUR_MASUK"      # dikembalikan pelanggan → barang datang
+RETUR_KELUAR = "RETUR_KELUAR"    # dikembalikan ke supplier → barang berangkat
+
+#: Arah yang urutan timbangnya terbalik: armada datang KOSONG lalu dimuat,
+#: sehingga timbang KEDUA-lah yang bermuatan.
+ARAH_BERANGKAT_BERMUATAN = (KELUAR, RETUR_KELUAR)
+
+
+def timbang_pertama_bermuatan(arah: str) -> bool:
+    """Apakah angka timbang PERTAMA adalah yang bermuatan.
+
+    Satu sumber untuk pertanyaan yang muncul di tiga tempat: memilah bruto
+    dan tara truk saat menyimpan, dan memberi label baris pada bukti cetak
+    ("setelah bongkar" vs "sebelum muat"). Dua salinan aturan ini pernah
+    berbeda — bukti transfer internal tercetak seolah truknya berangkat
+    bermuatan padahal ia datang bermuatan.
+    """
+    return arah not in ARAH_BERANGKAT_BERMUATAN
 
 # Dari mana tara per karung berasal
 TARA_TETAP = "TETAP"          # angka pasti per komoditas (gabah 0,25)
@@ -103,6 +131,8 @@ PIHAK_LABEL = {
     KELUAR: "Pelanggan",
     BEBAS: "Pemilik barang",
     TRANSFER: "Asal → tujuan",
+    RETUR_MASUK: "Pelanggan",
+    RETUR_KELUAR: "Supplier",
 }
 
 #: Status yang mewajibkan lembar pemeriksaan SOP dibuka.
@@ -125,7 +155,7 @@ class AturanJenis:
 
     kode: str
     nama: str
-    arah: str                      # MASUK / KELUAR / BEBAS
+    arah: str                      # MASUK / KELUAR / BEBAS / TRANSFER / RETUR_*
     acuan: str                     # ACUAN_*
     sumber_tara: str               # TARA_*
     tara_tetap_kg: float = 0.0     # dipakai bila sumber_tara = TETAP
@@ -250,6 +280,42 @@ JENIS_AWAL: tuple[AturanJenis, ...] = (
         kode="TRANSFER", nama="Transfer Internal", arah=TRANSFER,
         acuan=ACUAN_TIDAK_ADA, sumber_tara=TARA_MANUAL,
         ambang_jenis=AMBANG_TIDAK_ADA,
+        rahasia=False, cetak_bukti=True,
+    ),
+    # ── Retur ────────────────────────────────────────────────────────────
+    #
+    # Satu baris per arah, tidak dirinci per komoditas — mengikuti pola
+    # Transfer Internal. Barang apa yang kembali ditulis di catatan.
+    #
+    # Merinci per komoditas TIDAK butuh perubahan kode: cukup menambah baris
+    # di master jenis dengan arah RETUR_MASUK / RETUR_KELUAR. Yang membuatnya
+    # belum dilakukan sekarang hanyalah jumlahnya — sepuluh baris master baru
+    # untuk peristiwa yang jarang, dan tiap komoditas baru kelak harus
+    # didaftarkan dua kali lagi.
+    #
+    # TARA MANUAL: barang retur kembali dalam karung asalnya, tetapi bisa juga
+    # sudah pecah atau tercampur. Menetapkan tara per komoditas di sini akan
+    # menghitung tara yang tidak ada barangnya. Operator mengetik apa yang ia
+    # lihat.
+    #
+    # AMBANG PER TON, bukan per karung: retur tidak selalu utuh berkarung, dan
+    # ambang per karung pada muatan curah (jumlah karung 0) berarti ambang nol
+    # — setiap selisih sekecil apa pun akan ditandai. Angka 2 kg/ton dan
+    # arahnya yang simetris adalah usulan penyusun, belum keputusan Direksi:
+    # pada retur, kurang maupun lebih dari surat jalan retur sama-sama
+    # janggal, karena barangnya sudah pernah ditimbang di sini.
+    AturanJenis(
+        kode="RETUR_PELANGGAN", nama="Retur dari Pelanggan", arah=RETUR_MASUK,
+        acuan=ACUAN_SURAT_JALAN, sumber_tara=TARA_MANUAL,
+        ambang_jenis=AMBANG_PER_TON, ambang_nilai=2.0,
+        ambang_arah=ARAH_SIMETRIS,
+        rahasia=False, cetak_bukti=True,
+    ),
+    AturanJenis(
+        kode="RETUR_SUPPLIER", nama="Retur ke Supplier", arah=RETUR_KELUAR,
+        acuan=ACUAN_SURAT_JALAN, sumber_tara=TARA_MANUAL,
+        ambang_jenis=AMBANG_PER_TON, ambang_nilai=2.0,
+        ambang_arah=ARAH_SIMETRIS,
         rahasia=False, cetak_bukti=True,
     ),
 )

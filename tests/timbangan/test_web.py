@@ -83,7 +83,11 @@ async def login(klien: AsyncClient, siapa: str = "budi") -> None:
 
 
 def kode_dari(html: str) -> str:
-    cocok = re.search(r'name="kode" value="(TRX-[^"]+)"', html)
+    # Awalannya mengikuti arah barang (MSK/KLR/BBS/TRF/RTP/RTS), jadi pola di
+    # sini sengaja tidak menyebut satu awalan pun — menuliskannya akan membuat
+    # uji ini gagal setiap kali arah baru ditambahkan, padahal yang diuji
+    # adalah adanya nomor di formulir.
+    cocok = re.search(r'name="kode" value="([A-Z]{3}-[^"]+)"', html)
     assert cocok, "nomor transaksi tidak ada di formulir"
     return cocok.group(1)
 
@@ -170,7 +174,7 @@ async def test_alur_lengkap_masuk_sampai_hasil(klien):
 
     form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
     kode = kode_dari(form)
-    assert kode.startswith("TRX-") and "-P1-" in kode
+    assert kode.startswith("MSK-") and "-P1-" in kode
 
     r = await klien.post(f"{PREFIX}/timbang/GABAH_BASAH", data={
         "kode": kode, "berat_kg": "13.600", "cara_timbang": "DUA_KALI",
@@ -3373,3 +3377,88 @@ async def test_cetak_uji_bisa_diminta_tanpa_transaksi(klien):
     r = await klien.get(f"{PREFIX}/printer/uji")
     assert r.status_code == 200
     assert 'cut type="feed"' in r.text
+
+
+# ─────────────── Retur di layar ───────────────
+
+async def test_beranda_menawarkan_kedua_retur(klien):
+    """Petugas sudah tahu barang balik sebelum menyentuh layar; menyembunyikan
+    retur sebagai centang di dalam barang masuk hanya membuatnya salah pilih."""
+    await login(klien)
+    beranda = (await klien.get(f"{PREFIX}/")).text
+    assert "Retur dari pelanggan" in beranda
+    assert "Retur ke supplier" in beranda
+
+
+async def test_retur_pelanggan_menawarkan_pelanggan_bukan_supplier(klien):
+    """Inti dari retur sebagai arah tersendiri: barangnya datang, tetapi
+    daftar yang dibuka adalah daftar pelanggan."""
+    await _tambah_pelanggan("Toko Beras Handoko")
+    await login(klien)
+    form = (await klien.get(f"{PREFIX}/timbang/RETUR_PELANGGAN")).text
+    assert "Toko Beras Handoko" in form
+    assert "H. Anton" not in form
+
+
+async def test_retur_supplier_menawarkan_supplier_bukan_pelanggan(klien):
+    await _tambah_pelanggan("Toko Beras Handoko")
+    await login(klien)
+    form = (await klien.get(f"{PREFIX}/timbang/RETUR_SUPPLIER")).text
+    assert "H. Anton" in form
+    assert "Toko Beras Handoko" not in form
+
+
+async def test_alur_retur_pelanggan_sampai_hasil(klien):
+    """Datang bermuatan, pulang kosong — dan nomornya berawalan RTP."""
+    pid = await _tambah_pelanggan("Toko Beras Handoko")
+    await login(klien)
+
+    form = (await klien.get(f"{PREFIX}/timbang/RETUR_PELANGGAN")).text
+    kode = kode_dari(form)
+    assert kode.startswith("RTP-")
+
+    r = await klien.post(f"{PREFIX}/timbang/RETUR_PELANGGAN", data={
+        "kode": kode, "berat_kg": "9000", "cara_timbang": "DUA_KALI",
+        "supplier_id": str(pid), "pihak_nama": "", "nomor_polisi": "AD 9 ZZ",
+        "nama_sopir": "Slamet", "nomor_acuan": "SJ-RETUR-1",
+        "jumlah_karung": "0", "tara_per_karung_kg": "0",
+        "berat_acuan_kg": "3000", "tara_lain_kg": "0", "waktu": "",
+        "catatan": "Beras kemasan 25 kg, karung sobek",
+    })
+    assert r.status_code == 200
+
+    tiket = await klien.get(f"{PREFIX}/tiket")
+    trx_id = int(re.search(r"/tiket/(\d+)", tiket.text).group(1))
+    r = await klien.post(f"{PREFIX}/tiket/{trx_id}", data={
+        "berat_kg": "6000", "jumlah_karung": "", "tara_per_karung_kg": "",
+        "berat_acuan_kg": "", "nomor_acuan": "", "waktu": "", "catatan": "",
+    })
+    assert r.status_code == 200
+    assert "3.000 kg" in r.text        # berat barang
+    assert "retur dari pelanggan" in r.text.lower()
+
+
+async def test_alur_retur_supplier_berangkat_bermuatan(klien):
+    """Urutan timbangnya terbalik; kalau salah dipilah nettonya jadi negatif."""
+    await login(klien)
+    form = (await klien.get(f"{PREFIX}/timbang/RETUR_SUPPLIER")).text
+    kode = kode_dari(form)
+    assert kode.startswith("RTS-")
+
+    await klien.post(f"{PREFIX}/timbang/RETUR_SUPPLIER", data={
+        "kode": kode, "berat_kg": "6000", "cara_timbang": "DUA_KALI",
+        "supplier_id": "1", "pihak_nama": "", "nomor_polisi": "AD 9 ZZ",
+        "nama_sopir": "Slamet", "nomor_acuan": "SJ-RETUR-2",
+        "jumlah_karung": "0", "tara_per_karung_kg": "0",
+        "berat_acuan_kg": "3000", "tara_lain_kg": "0", "waktu": "",
+        "catatan": "Gabah basah ditolak QC",
+    })
+    tiket = await klien.get(f"{PREFIX}/tiket")
+    trx_id = int(re.search(r"/tiket/(\d+)", tiket.text).group(1))
+    r = await klien.post(f"{PREFIX}/tiket/{trx_id}", data={
+        "berat_kg": "9000", "jumlah_karung": "", "tara_per_karung_kg": "",
+        "berat_acuan_kg": "", "nomor_acuan": "", "waktu": "", "catatan": "",
+    })
+    assert r.status_code == 200
+    assert "3.000 kg" in r.text
+    assert "retur ke supplier" in r.text.lower()

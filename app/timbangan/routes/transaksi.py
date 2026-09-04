@@ -363,7 +363,7 @@ async def _isi_bukti(db, transaksi_id, akun):
         perusahaan=tsettings.perusahaan_nama,
         alamat=tsettings.perusahaan_alamat,
         telepon=tsettings.perusahaan_telepon,
-        arah_masuk=b.trx.arah == logic.MASUK,
+        arah_masuk=logic.timbang_pertama_bermuatan(b.trx.arah),
     )
 
 

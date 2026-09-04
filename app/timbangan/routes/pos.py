@@ -131,7 +131,10 @@ async def pilih_jenis(
     dan reject tidak pernah dibeli, jadi tidak pernah muncul di sisi masuk.
     """
     arah = arah.upper()
-    if arah not in (logic.MASUK, logic.KELUAR, logic.BEBAS, logic.TRANSFER):
+    if arah not in (
+        logic.MASUK, logic.KELUAR, logic.BEBAS, logic.TRANSFER,
+        logic.RETUR_MASUK, logic.RETUR_KELUAR,
+    ):
         return redirect("/", err="Arah barang tidak dikenal.")
 
     jenis = await service.daftar_jenis(db, arah=arah)
@@ -167,7 +170,7 @@ async def form_timbang_pertama(
     return render(
         request, "timbang1.html",
         aturan=aturan,
-        kode=await service.kode_baru(db, akun),
+        kode=await service.kode_baru(db, akun, aturan.arah),
         pihak_sering=sering,
         pihak_lainnya=lainnya,
         kolom_nama=service.nama_kolom_pihak(aturan.arah),
@@ -276,7 +279,7 @@ async def form_partai_baru(
     return render(
         request, "partai.html",
         b=None, aturan=aturan,
-        kode=await service.kode_baru(db, akun),
+        kode=await service.kode_baru(db, akun, aturan.arah),
         pihak_sering=sering, pihak_lainnya=lainnya,
         kolom_nama=service.nama_kolom_pihak(aturan.arah),
         kembali=f"{PREFIX}/pilih/{aturan.arah}?partai=1",

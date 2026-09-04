@@ -118,8 +118,8 @@ class TimbanganJenis(Base, TimestampMixin):
     nama: Mapped[str] = mapped_column(String(80), nullable=False)
     urutan: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
 
-    # MASUK / KELUAR / BEBAS
-    arah: Mapped[str] = mapped_column(String(10), nullable=False)
+    # MASUK / KELUAR / BEBAS / TRANSFER / RETUR_MASUK / RETUR_KELUAR
+    arah: Mapped[str] = mapped_column(String(16), nullable=False)
     # ACUAN_NOTA / ACUAN_SURAT_JALAN / ACUAN_TIDAK_ADA
     acuan: Mapped[str] = mapped_column(String(24), nullable=False)
     # TARA_TETAP / TARA_SAMPLING / TARA_MANUAL
@@ -184,7 +184,7 @@ class TimbanganAkun(Base, TimestampMixin):
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
 
     # Kode perangkat yang dipegang orang ini — dipakai membentuk nomor
-    # transaksi di perangkat (TRX-20260823-P1-007) agar tidak bentrok.
+    # transaksi di perangkat (MSK-20260904-P1-007) agar tidak bentrok.
     perangkat_kode: Mapped[str | None] = mapped_column(String(8))
     terakhir_login: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -296,15 +296,17 @@ class TimbanganTransaksi(Base, TimestampMixin):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    # Dibentuk di perangkat: TRX-YYYYMMDD-<perangkat>-<urutan>
+    # Dibentuk di perangkat: <awalan>-YYYYMMDD-<perangkat>-<urutan>, dengan
+    # awalan menurut arah barang — lihat `service.AWALAN_KODE`. Tiket yang
+    # dibuat sebelum 4 September 2026 berawalan TRX- dan dibiarkan apa adanya.
     kode: Mapped[str] = mapped_column(
         String(32), unique=True, nullable=False, index=True
     )
     # Mengikuti tanggal timbang KEDUA (transaksi bisa melewati tengah malam).
     tanggal: Mapped[date] = mapped_column(Date, nullable=False, index=True)
 
-    # MASUK / KELUAR / BEBAS
-    arah: Mapped[str] = mapped_column(String(10), nullable=False, index=True)
+    # MASUK / KELUAR / BEBAS / TRANSFER / RETUR_MASUK / RETUR_KELUAR
+    arah: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
     jenis_kode: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
     cara_timbang: Mapped[str] = mapped_column(
         String(12), nullable=False, default=CARA_DUA_KALI

@@ -247,9 +247,15 @@ async def profil_supplier(
 #: keduanya di kedua arah membuat petugas bisa mencatat penjualan atas nama
 #: pemasok karung — dan salah pilih semacam itu baru ketahuan berbulan-bulan
 #: kemudian, saat rekonsiliasi tidak ketemu.
+#: Retur menyilang dengan sengaja: barang yang dikembalikan PELANGGAN datang
+#: masuk, dan barang yang dikembalikan KE SUPPLIER berangkat keluar. Yang
+#: menentukan tabel lawan transaksi adalah dengan siapa urusannya, bukan ke
+#: mana barangnya bergerak.
 PIHAK_ARAH: dict[str, tuple] = {
     logic.MASUK: (Supplier, "supplier_id", "nama_supplier"),
     logic.KELUAR: (Pelanggan, "pelanggan_id", "nama_pelanggan"),
+    logic.RETUR_MASUK: (Pelanggan, "pelanggan_id", "nama_pelanggan"),
+    logic.RETUR_KELUAR: (Supplier, "supplier_id", "nama_supplier"),
 }
 
 
@@ -531,11 +537,12 @@ def _bermuatan_dan_kosong(
 ) -> tuple[float | None, float | None]:
     """Mana dari kedua angka yang bermuatan, menurut arah barang.
 
-    Masuk: truk datang penuh, pulang kosong. Transfer internal sama —
-    armada datang bermuatan dan ditimbang ulang setelah dibongkar. Hanya
-    keluar yang kebalikannya.
+    Masuk: truk datang penuh, pulang kosong. Transfer internal dan retur dari
+    pelanggan sama — armada datang bermuatan dan ditimbang ulang setelah
+    dibongkar. Yang terbalik hanya yang berangkat bermuatan: pengiriman dan
+    retur ke supplier.
     """
-    if arah == logic.KELUAR:
+    if not logic.timbang_pertama_bermuatan(arah):
         return t2, t1
     return t1, t2
 
@@ -589,16 +596,48 @@ async def _pasang_muatan(
     await db.flush()
 
 
-async def kode_baru(db: AsyncSession, akun: TimbanganAkun) -> str:
-    """Bentuk nomor transaksi: TRX-<tanggal>-<perangkat>-<urutan>.
+#: Awalan nomor tiket menurut arah barang.
+#:
+#: Sampai 4 September 2026 seluruh tiket berawalan TRX-, sehingga selembar
+#: bukti di tangan tidak memberitahu apa pun tentang peristiwanya — orang
+#: harus membuka sistem hanya untuk tahu apakah yang dipegangnya pembelian,
+#: pengiriman, atau retur. Awalan per arah mengembalikan keterangan itu ke
+#: kertasnya sendiri.
+#:
+#: RTP/RTS memakai lawan transaksinya (retur Pelanggan / retur Supplier),
+#: bukan arah geraknya, karena "retur masuk" dan "retur keluar" terbaca mirip
+#: pada kertas termal yang tercetak pucat.
+#:
+#: Tiket lama TIDAK diubah. Nomor yang sudah tercetak di bukti NCR dan sudah
+#: dirujuk nota tidak boleh berpindah hanya karena penomorannya diperbaiki.
+AWALAN_KODE: dict[str, str] = {
+    logic.MASUK: "MSK",
+    logic.KELUAR: "KLR",
+    logic.BEBAS: "BBS",
+    logic.TRANSFER: "TRF",
+    logic.RETUR_MASUK: "RTP",
+    logic.RETUR_KELUAR: "RTS",
+}
+#: Dipakai bila arahnya tidak dikenal — mempertahankan awalan lama daripada
+#: membuat tiket tanpa awalan sama sekali.
+AWALAN_BAWAAN = "TRX"
+
+
+async def kode_baru(db: AsyncSession, akun: TimbanganAkun, arah: str) -> str:
+    """Bentuk nomor transaksi: <awalan>-<tanggal>-<perangkat>-<urutan>.
 
     Perangkat ikut masuk ke nomor supaya dua pos yang sedang tanpa jaringan
     tidak bisa membuat nomor yang sama. Urutannya dihitung per perangkat per
     hari — bukan berurut global — justru agar tidak butuh server untuk menomori.
+
+    Urutan juga berjalan sendiri-sendiri per awalan, jadi MSK-…-001 dan
+    KLR-…-001 bisa ada pada hari yang sama. Itu bukan tabrakan: keduanya
+    nomor yang berbeda, dan menomori berurut lintas arah justru akan membuat
+    urutan barang masuk terlihat bolong-bolong.
     """
     perangkat = (akun.perangkat_kode or "P0")[:8].upper()
     hari = sekarang().date()
-    awalan = f"TRX-{hari:%Y%m%d}-{perangkat}-"
+    awalan = f"{AWALAN_KODE.get(arah, AWALAN_BAWAAN)}-{hari:%Y%m%d}-{perangkat}-"
 
     terpakai = set((await db.execute(
         select(TimbanganTransaksi.kode).where(
@@ -708,8 +747,11 @@ async def daftar_aksi_audit(db: AsyncSession) -> list[str]:
 #: Arah yang WAJIB menyebut nomor polisi. Keputusan Direksi 31 Agustus 2026.
 #: Barang masuk dan barang keluar selalu melibatkan pihak luar, sehingga
 #: catatannya harus bisa menunjuk kendaraan tertentu bila kelak ada sengketa.
-#: Jasa timbang dan transfer internal dibiarkan boleh kosong.
-ARAH_WAJIB_NOPOL = (logic.MASUK, logic.KELUAR)
+#: Jasa timbang dan transfer internal dibiarkan boleh kosong. Retur ikut
+#: wajib: ia justru peristiwa yang paling mungkin berujung sengketa.
+ARAH_WAJIB_NOPOL = (
+    logic.MASUK, logic.KELUAR, logic.RETUR_MASUK, logic.RETUR_KELUAR,
+)
 
 
 def _wajib_pihak(arah: str, *, punya_id: bool, pihak_nama: str | None) -> None:
@@ -761,7 +803,8 @@ def _wajib_nopol(
         return
     if arah in ARAH_WAJIB_NOPOL and not (nomor_polisi or "").strip():
         raise LayananError(
-            "Nomor polisi wajib diisi untuk barang masuk dan barang keluar."
+            "Nomor polisi wajib diisi untuk barang masuk, barang keluar, "
+            "dan retur."
         )
 
 

@@ -87,6 +87,30 @@
         </div>
       </a>
 
+      {# Retur berdiri terpisah dari barang masuk dan pengiriman, bukan
+         disembunyikan sebagai centang di dalam keduanya. Petugas sudah tahu
+         sebelum menyentuh layar bahwa yang datang adalah barang balik, dan
+         daftar lawan transaksinya memang bukan daftar yang sama. #}
+      <a href="{{ PREFIX }}/pilih/{{ RETUR_MASUK }}" class="pilihan">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2f6e7a"
+             stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 14l-4-4 4-4"/><path d="M5 10h9a5 5 0 0 1 0 10h-2"/></svg>
+        <div class="pilihan__isi">
+          <div class="pilihan__nama">Retur dari pelanggan</div>
+          <div class="pilihan__ket">Barang kiriman kita dikembalikan</div>
+        </div>
+      </a>
+
+      <a href="{{ PREFIX }}/pilih/{{ RETUR_KELUAR }}" class="pilihan">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2f6e7a"
+             stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15 14l4-4-4-4"/><path d="M19 10h-9a5 5 0 0 0 0 10h2"/></svg>
+        <div class="pilihan__isi">
+          <div class="pilihan__nama">Retur ke supplier</div>
+          <div class="pilihan__ket">Barang yang kita tolak, dikirim balik</div>
+        </div>
+      </a>
+
       <a href="{{ PREFIX }}/pilih/{{ BEBAS }}" class="pilihan">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2f6e7a"
              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
