@@ -81,14 +81,25 @@ async def daftar(
         status_tiket=q.get("tiket") or None,
         cari=q.get("cari") or None,
     )
-    # Bawaan 30 hari terakhir, supaya halaman tidak pernah kosong hanya karena
-    # petugas lupa mengisi rentang tanggal.
+    # Bawaan DUA HARI terakhir — hari ini dan kemarin.
+    #
+    # Sebelumnya 30 hari, dengan alasan halaman tidak boleh kosong hanya karena
+    # petugas lupa mengisi rentang tanggal. Alasan itu tetap terpenuhi oleh dua
+    # hari, dan 30 hari membawa ongkos yang tidak sebanding: yang dibuka
+    # sehari-hari adalah timbangan yang baru saja terjadi, sementara halaman
+    # harus menghitung dan mengirim sebulan penuh untuk itu.
+    #
+    # Rentang yang lebih panjang tidak hilang, hanya tidak lagi jadi bawaan —
+    # isian tanggal di atas daftar ada justru untuk itu, dan setiap tautan
+    # halaman berikutnya serta tombol ekspor membawa rentang yang sedang
+    # dipilih.
+    BAWAAN_HARI = 1        # hari ini + 1 hari ke belakang = dua hari
     try:
         f.dari = date.fromisoformat(q["dari"]) if q.get("dari") else \
-            hari_ini() - timedelta(days=30)
+            hari_ini() - timedelta(days=BAWAAN_HARI)
         f.sampai = date.fromisoformat(q["sampai"]) if q.get("sampai") else hari_ini()
     except ValueError:
-        f.dari, f.sampai = hari_ini() - timedelta(days=30), hari_ini()
+        f.dari, f.sampai = hari_ini() - timedelta(days=BAWAAN_HARI), hari_ini()
 
     halaman = max(1, int(q.get("hal", 1) or 1))
     per_halaman = 50

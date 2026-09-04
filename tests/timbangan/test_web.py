@@ -3462,3 +3462,30 @@ async def test_alur_retur_supplier_berangkat_bermuatan(klien):
     assert r.status_code == 200
     assert "3.000 kg" in r.text
     assert "retur ke supplier" in r.text.lower()
+
+
+async def test_catatan_bawaannya_dua_hari_terakhir(klien):
+    """Yang dibuka sehari-hari adalah timbangan yang baru saja terjadi.
+
+    Rentangnya harus tampak di isian tanggal, bukan tersembunyi di dalam
+    kueri — Admin yang ingin melihat lebih jauh ke belakang perlu tahu dari
+    mana batasnya sekarang.
+    """
+    from datetime import timedelta
+
+    from app.timbangan.db import hari_ini
+
+    await login(klien, "wahid")
+    halaman = (await klien.get(f"{PREFIX}/transaksi")).text
+    assert f'name="dari" value="{hari_ini() - timedelta(days=1)}"' in halaman
+    assert f'name="sampai" value="{hari_ini()}"' in halaman
+
+
+async def test_catatan_tetap_menerima_rentang_yang_diminta(klien):
+    """Bawaan yang lebih pendek tidak boleh berarti riwayat lama tidak
+    terjangkau — hanya tidak lagi dimuat tanpa diminta."""
+    await login(klien, "wahid")
+    halaman = (await klien.get(
+        f"{PREFIX}/transaksi?dari=2026-08-01&sampai=2026-08-31")).text
+    assert 'name="dari" value="2026-08-01"' in halaman
+    assert 'name="sampai" value="2026-08-31"' in halaman
