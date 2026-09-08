@@ -3383,11 +3383,17 @@ async def test_cetak_uji_bisa_diminta_tanpa_transaksi(klien):
 
 async def test_beranda_menawarkan_kedua_retur(klien):
     """Petugas sudah tahu barang balik sebelum menyentuh layar; menyembunyikan
-    retur sebagai centang di dalam barang masuk hanya membuatnya salah pilih."""
+    retur sebagai centang di dalam barang masuk hanya membuatnya salah pilih.
+
+    Sejak 8 September 2026 keduanya duduk di SATU kartu retur yang membentang
+    — lihat `test_retur_satu_kartu_dua_arah`. Yang diuji di sini tetap sama:
+    keduanya harus terjangkau dari beranda, dan namanya harus terbaca.
+    Sebutannya kini datang dari master jenis, bukan dari teks di templat.
+    """
     await login(klien)
     beranda = (await klien.get(f"{PREFIX}/")).text
-    assert "Retur dari pelanggan" in beranda
-    assert "Retur ke supplier" in beranda
+    assert "Retur dari Pelanggan" in beranda
+    assert "Retur ke Supplier" in beranda
 
 
 async def test_retur_pelanggan_menawarkan_pelanggan_bukan_supplier(klien):
@@ -3489,3 +3495,50 @@ async def test_catatan_tetap_menerima_rentang_yang_diminta(klien):
         f"{PREFIX}/transaksi?dari=2026-08-01&sampai=2026-08-31")).text
     assert 'name="dari" value="2026-08-01"' in halaman
     assert 'name="sampai" value="2026-08-31"' in halaman
+
+
+async def test_beranda_membentangkan_komoditas_tanpa_halaman_baru(klien):
+    """Memilih komoditas tidak boleh menuntut satu perjalanan bolak-balik.
+
+    Di pos timbang halaman tambahan dibayar dengan berdiri menunggu di samping
+    truk, jadi daftarnya harus sudah ada di beranda — bukan di balik tautan.
+    """
+    await login(klien)
+    beranda = (await klien.get(f"{PREFIX}/")).text
+
+    # Komoditas barang masuk tertaut langsung ke formulirnya.
+    for kode in ("GABAH_BASAH", "GABAH_KERING", "BERAS_PK"):
+        assert f'href="{PREFIX}/timbang/{kode}"' in beranda, kode
+    # Dan pengiriman juga, dari beranda yang sama.
+    assert f'href="{PREFIX}/timbang/BEKATUL"' in beranda
+    # Partai kecil memakai alurnya sendiri, bukan formulir biasa.
+    assert f'href="{PREFIX}/partai/GABAH_BASAH/baru"' in beranda
+
+
+async def test_kartu_satu_komoditas_tidak_membentang(klien):
+    """Membentangkan daftar berisi satu baris hanya menambah satu ketukan
+    tanpa memberi pilihan apa pun — jadi bentuknya ditentukan datanya."""
+    await login(klien)
+    beranda = (await klien.get(f"{PREFIX}/")).text
+
+    # Transfer internal & jasa timbang masing-masing satu komoditas → langsung.
+    assert f'href="{PREFIX}/timbang/TRANSFER"' in beranda
+    assert f'href="{PREFIX}/timbang/BEBAS"' in beranda
+    # Barang masuk punya banyak → dibentangkan.
+    assert "<details" in beranda
+
+
+async def test_retur_satu_kartu_dua_arah(klien):
+    """Bagi petugas retur adalah SATU peristiwa — barang balik.
+
+    Ke mana barangnya bergerak baru urusan berikutnya, jadi arahnya dipilih di
+    dalam kartu, bukan sebelum membukanya.
+    """
+    await login(klien)
+    beranda = (await klien.get(f"{PREFIX}/")).text
+
+    # Kedua arah retur terjangkau dari beranda yang sama.
+    assert f'href="{PREFIX}/timbang/RETUR_PELANGGAN"' in beranda
+    assert f'href="{PREFIX}/timbang/RETUR_SUPPLIER"' in beranda
+    # Tetapi hanya ada SATU kartu retur, bukan dua.
+    assert beranda.count(">Retur<") == 1

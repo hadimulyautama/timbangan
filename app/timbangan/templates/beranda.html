@@ -1,6 +1,75 @@
 {% extends "base.html" %}
 {% from "macros.html" import baris_transaksi, judul_truk, lencana %}
 
+{#
+  Kartu "mulai penimbangan" MEMBENTANG di tempat, tidak mengirim petugas ke
+  halaman pemilihan komoditas tersendiri. Satu halaman lebih sedikit berarti
+  satu perjalanan bolak-balik lebih sedikit pada tiap penimbangan — dan yang
+  membayarnya adalah orang yang berdiri di samping truk.
+
+  Berapa komoditas yang ada MENENTUKAN bentuk kartunya, bukan daftar yang
+  ditulis di sini: satu komoditas berarti tautan langsung (membentangkan
+  daftar berisi satu baris hanya menambah satu ketukan tanpa memberi pilihan),
+  dua atau lebih berarti membentang. Jadi menambah komoditas retur lewat master
+  mengubah kartunya sendiri, tanpa menyentuh berkas ini.
+#}
+{% macro kartu(arah, nama, ket, pola='/timbang/', partai=false) %}
+  {# `arah` selalu DAFTAR arah, bukan satu arah. Retur memerlukannya: bagi
+     petugas ia satu peristiwa — barang balik — dan ke mana barangnya bergerak
+     baru urusan berikutnya. Memaksanya jadi dua kartu di beranda menyuruh
+     orang memilih arah sebelum ia memilih perkara. #}
+  {% set daftar = [] %}
+  {% for a in arah %}{% set _ = daftar.extend(per_arah.get(a, [])) %}{% endfor %}
+  {% if daftar|length == 1 %}
+    <a href="{{ PREFIX }}{{ pola }}{{ daftar[0].kode }}{{ '/baru' if partai }}"
+       class="pilihan">
+      {{ caller() }}
+      <div class="pilihan__isi">
+        <div class="pilihan__nama">{{ nama }}</div>
+        <div class="pilihan__ket">{{ ket }}</div>
+      </div>
+    </a>
+  {% elif daftar %}
+    {# `name` membuat kartu-kartu ini saling menutup — membuka yang satu
+       menutup yang lain. Peramban yang belum mengenalnya membiarkan semuanya
+       terbuka, dan itu tetap benar, hanya lebih panjang. #}
+    <details class="grup" name="mulai">
+      <summary class="pilihan">
+        {{ caller() }}
+        <div class="pilihan__isi">
+          <div class="pilihan__nama">{{ nama }}</div>
+          <div class="pilihan__ket">{{ ket }}</div>
+        </div>
+        <svg class="grup__panah" width="18" height="18" viewBox="0 0 24 24"
+             fill="none" stroke="#8a8478" stroke-width="2.5"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M6 9l6 6 6-6"/></svg>
+      </summary>
+      <div class="grup__isi">
+        {% for j in daftar %}
+          {% set aturan = peta.get(j.kode) %}
+          <a href="{{ PREFIX }}{{ pola }}{{ j.kode }}{{ '/baru' if partai }}"
+             class="anak">
+            <div class="pilihan__isi">
+              <div class="anak__nama">{{ j.nama }}</div>
+              {# Pada partai kecil tara dan ambang nota tidak dipakai sama
+                 sekali, jadi ringkasannya tidak ditampilkan — keterangan yang
+                 tidak berlaku lebih buruk daripada tidak ada keterangan. #}
+              {% if aturan and not partai %}
+                <div class="pilihan__ket">{{ ringkas_aturan(aturan) }}</div>
+              {% endif %}
+            </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                 stroke="#8a8478" stroke-width="2.5" stroke-linecap="round"
+                 stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 18l6-6-6-6"/></svg>
+          </a>
+        {% endfor %}
+      </div>
+    </details>
+  {% endif %}
+{% endmacro %}
+
 {% block judul %}Pos Timbang{% endblock %}
 {% block bar_judul %}Pos Timbang{% endblock %}
 {% block bar_sub %}{{ akun.nama }} · {{ akun.perangkat_kode or 'perangkat belum diberi kode' }}{% endblock %}
@@ -39,88 +108,55 @@
     <div class="lbl" style="margin-bottom:8px">Mulai penimbangan</div>
     <div style="display:flex;flex-direction:column;gap:8px">
 
-      <a href="{{ PREFIX }}/pilih/{{ MASUK }}" class="pilihan">
+      {% call kartu([MASUK], 'Barang masuk', 'Gabah, beras, beras PK, broken') %}
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2f6e7a"
              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 5v14"/><path d="M19 12l-7 7-7-7"/></svg>
-        <div class="pilihan__isi">
-          <div class="pilihan__nama">Barang masuk</div>
-          <div class="pilihan__ket">Gabah, beras, beras PK, broken</div>
-        </div>
-      </a>
+      {% endcall %}
 
       {# Partai kecil berdiri sendiri, bukan pilihan tersembunyi di dalam
          formulir barang masuk. Alurnya memang berbeda sejak awal — tanpa
          kendaraan, ditimbang berulang, ditutup belakangan — dan petugas
          sudah tahu mana yang datang sebelum menyentuh layar. #}
-      <a href="{{ PREFIX }}/pilih/{{ MASUK }}?partai=1" class="pilihan">
+      {% call kartu([MASUK], 'Barang masuk — partai kecil',
+                    'Ditimbang satu per satu, tetap satu kode',
+                    pola='/partai/', partai=true) %}
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2f6e7a"
              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <path d="M4 7h6v6H4z"/><path d="M14 11h6v6h-6z"/>
           <path d="M7 13v4"/><path d="M4 17h6"/></svg>
-        <div class="pilihan__isi">
-          <div class="pilihan__nama">Barang masuk — partai kecil</div>
-          <div class="pilihan__ket">Ditimbang satu per satu, tetap satu kode</div>
-        </div>
-      </a>
+      {% endcall %}
 
-      <a href="{{ PREFIX }}/pilih/{{ KELUAR }}" class="pilihan">
+      {% call kartu([KELUAR], 'Pengiriman', 'Beras, menir, broken, bekatul, reject') %}
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2f6e7a"
              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>
-        <div class="pilihan__isi">
-          <div class="pilihan__nama">Pengiriman</div>
-          <div class="pilihan__ket">Beras, menir, broken, bekatul, reject</div>
-        </div>
-      </a>
+      {% endcall %}
 
-      {# Satu jenis saja, jadi langsung ke formulirnya — layar pemilihan
-         komoditas dengan satu kartu hanya menambah satu ketukan. #}
-      <a href="{{ PREFIX }}/timbang/TRANSFER" class="pilihan">
+      {% call kartu([TRANSFER], 'Transfer internal', 'Pindah barang antar unit sendiri') %}
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2f6e7a"
              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <path d="M4 8h13"/><path d="M14 5l3 3-3 3"/>
           <path d="M20 16H7"/><path d="M10 13l-3 3 3 3"/></svg>
-        <div class="pilihan__isi">
-          <div class="pilihan__nama">Transfer internal</div>
-          <div class="pilihan__ket">Pindah barang antar unit sendiri</div>
-        </div>
-      </a>
+      {% endcall %}
 
-      {# Retur berdiri terpisah dari barang masuk dan pengiriman, bukan
-         disembunyikan sebagai centang di dalam keduanya. Petugas sudah tahu
-         sebelum menyentuh layar bahwa yang datang adalah barang balik, dan
-         daftar lawan transaksinya memang bukan daftar yang sama. #}
-      <a href="{{ PREFIX }}/pilih/{{ RETUR_MASUK }}" class="pilihan">
+      {# Satu kartu untuk kedua arah retur. Nama komoditasnya sendiri yang
+         membedakan di dalam — "Retur dari Pelanggan" dan "Retur ke Supplier"
+         — jadi tidak ada keterangan arah yang perlu ditulis dua kali di sini
+         dan berisiko berbeda dari masternya suatu hari. #}
+      {% call kartu([RETUR_MASUK, RETUR_KELUAR], 'Retur',
+                    'Dari pelanggan, atau ke supplier') %}
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2f6e7a"
              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <path d="M9 14l-4-4 4-4"/><path d="M5 10h9a5 5 0 0 1 0 10h-2"/></svg>
-        <div class="pilihan__isi">
-          <div class="pilihan__nama">Retur dari pelanggan</div>
-          <div class="pilihan__ket">Barang kiriman kita dikembalikan</div>
-        </div>
-      </a>
+      {% endcall %}
 
-      <a href="{{ PREFIX }}/pilih/{{ RETUR_KELUAR }}" class="pilihan">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2f6e7a"
-             stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M15 14l4-4-4-4"/><path d="M19 10h-9a5 5 0 0 0 0 10h2"/></svg>
-        <div class="pilihan__isi">
-          <div class="pilihan__nama">Retur ke supplier</div>
-          <div class="pilihan__ket">Barang yang kita tolak, dikirim balik</div>
-        </div>
-      </a>
-
-      <a href="{{ PREFIX }}/pilih/{{ BEBAS }}" class="pilihan">
+      {% call kartu([BEBAS], 'Jasa timbang', 'Menimbang barang pihak lain') %}
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2f6e7a"
              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 3v18"/><path d="M5 7h14"/><path d="M5 7l-3 7h6z"/>
           <path d="M19 7l-3 7h6z"/></svg>
-        <div class="pilihan__isi">
-          <div class="pilihan__nama">Jasa timbang</div>
-          <div class="pilihan__ket">Menimbang barang pihak lain</div>
-        </div>
-      </a>
+      {% endcall %}
 
     </div>
   </div>

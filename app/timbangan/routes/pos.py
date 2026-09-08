@@ -110,11 +110,27 @@ async def beranda(
         ),
         batas=8,
     )
+    # Komoditas ikut dibawa ke beranda supaya kartunya bisa MEMBENTANG di
+    # tempat, bukan mengirim petugas ke halaman pemilihan tersendiri.
+    #
+    # Satu halaman lebih sedikit berarti satu perjalanan bolak-balik lebih
+    # sedikit pada tiap penimbangan — dan di pos timbang, tiap perjalanan itu
+    # dibayar dengan berdiri menunggu di samping truk.
+    #
+    # Dikelompokkan di sini, bukan dengan satu kueri per arah, karena seluruh
+    # daftarnya hanya belasan baris: satu kueri lalu dipilah di memori lebih
+    # murah daripada enam kueri.
+    per_arah: dict[str, list] = {}
+    for j in await service.daftar_jenis(db):
+        per_arah.setdefault(j.arah, []).append(j)
+
     return render(
         request, "beranda.html",
         terbuka=terbuka,
         hari_ini_daftar=hari,
         menganggur={b.trx.id for b in await service.tiket_menganggur(db)},
+        per_arah=per_arah,
+        peta=await service.peta_aturan(db),
     )
 
 
