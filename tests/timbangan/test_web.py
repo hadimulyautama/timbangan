@@ -3542,3 +3542,17 @@ async def test_retur_satu_kartu_dua_arah(klien):
     assert f'href="{PREFIX}/timbang/RETUR_SUPPLIER"' in beranda
     # Tetapi hanya ada SATU kartu retur, bukan dua.
     assert beranda.count(">Retur<") == 1
+
+
+async def test_kartu_beranda_tidak_saling_menutup(klien):
+    """Kartu yang membentang TIDAK boleh menutup kartu lain.
+
+    Atribut `name` pada <details> membuat akordeon eksklusif, dan itu terasa
+    seperti halaman ter-refresh: isi di atas titik sentuh lenyap, halaman
+    menyusut, peramban menggulir sendiri untuk mengganti. Terukur 326 px
+    gulir liar pada satu ketukan. Kerapian itu tidak sepadan.
+    """
+    await login(klien)
+    beranda = (await klien.get(f"{PREFIX}/")).text
+    assert "<details" in beranda
+    assert 'name="mulai"' not in beranda

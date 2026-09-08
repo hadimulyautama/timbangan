@@ -30,10 +30,17 @@
       </div>
     </a>
   {% elif daftar %}
-    {# `name` membuat kartu-kartu ini saling menutup — membuka yang satu
-       menutup yang lain. Peramban yang belum mengenalnya membiarkan semuanya
-       terbuka, dan itu tetap benar, hanya lebih panjang. #}
-    <details class="grup" name="mulai">
+    {# SENGAJA TANPA `name`.
+       `name` membuat kartu saling menutup, dan itu terasa seperti halaman
+       ter-refresh: membuka Retur menutup Barang masuk di atasnya, isi di
+       atas titik sentuh lenyap, halaman menyusut, lalu peramban menggulir
+       sendiri untuk mengganti. Terukur: gulir 326 px tanpa diminta dan
+       halaman menyusut 195 px hanya karena satu ketukan — paling parah pada
+       kartu terbawah, karena paling banyak yang bergeser di atasnya.
+       Tanpa `name`: nol piksel gulir liar, halaman hanya bertambah panjang
+       di bawah kartu yang dibuka. Kerapian satu-kartu-terbuka tidak sepadan
+       dengan layar yang mengalir di bawah jari petugas. #}
+    <details class="grup">
       <summary class="pilihan">
         {{ caller() }}
         <div class="pilihan__isi">
