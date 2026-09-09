@@ -3612,3 +3612,33 @@ async def test_sopir_terisi_dari_plat_tetapi_asalnya_disebut(klien):
     # halaman tanpa JavaScript tidak pernah menyimpan sopir yang tidak diketik.
     penggal = berikutnya.split('name="nama_sopir"')[1][:200]
     assert 'value=""' in penggal
+
+
+async def test_kolom_pihak_ditandai_untuk_dilebur_jadi_satu(klien):
+    """Dulu ada DUA kolom untuk satu pertanyaan: daftar pihak terdaftar, dan
+    kolom "bila belum terdaftar" — plus satu paragraf yang harus dibaca sambil
+    truk menunggu. Peleburannya dikerjakan di peramban; yang diuji di sini
+    penandanya, dan bahwa keduanya tetap ada sehingga halaman tanpa JavaScript
+    masih bisa dipakai.
+    """
+    await login(klien)
+    form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
+    assert 'data-gabung="f-pihak_nama"' in form
+    assert 'name="supplier_id"' in form
+    assert 'name="pihak_nama"' in form
+    assert "kolom di bawah" not in form
+
+
+async def test_koreksi_tidak_ikut_dilebur(klien):
+    """Layar koreksi tidak punya kolom teks bebas untuk dilebur. Menandainya
+    akan menyembunyikan kolom yang tidak ada, lalu membuang pilihan pihaknya.
+    """
+    await login(klien)
+    trx = await _selesaikan(klien, "GABAH_BASAH")
+    koreksi = (await klien.get(f"{PREFIX}/transaksi/{trx}/koreksi")).text
+    assert 'name="supplier_id"' in koreksi
+    # Tidak di mana pun pada halaman ini — termasuk pencarian komoditas, yang
+    # kebetulan memakai `data-cari` yang sama tetapi bukan kolom pihak.
+    assert "data-gabung" not in koreksi
+    # Pencariannya sendiri tetap hidup; yang tidak boleh hanya peleburannya.
+    assert "data-cari=" in koreksi

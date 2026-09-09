@@ -57,7 +57,11 @@
   {% else %}
     <div class="grup">
       <div class="lbl">{{ PIHAK_LABEL.get(aturan.arah, 'Pihak') }}</div>
-      <select class="fld" name="supplier_id"
+      {# `data-gabung` menyatukan daftar ini dengan kolom teks bebas di
+         bawahnya menjadi SATU kolom: cocok dengan daftar → pihak terdaftar,
+         tidak cocok → nama bebas. Tanpa JavaScript keduanya tetap tampil
+         dan tetap bekerja seperti semula. #}
+      <select class="fld" name="supplier_id" data-gabung="f-pihak_nama"
               data-cari="Ketik nama {{ PIHAK_LABEL.get(aturan.arah, 'pihak')|lower }}…">
         <option value="">— pilih —</option>
         {# Yang sering datang ditaruh di atas: petugas memilih sambil truk
@@ -76,8 +80,8 @@
         </optgroup>
       </select>
       <div class="bantu">
-        Wajib diisi — pilih dari daftar, atau ketik namanya pada kolom di
-        bawah bila belum terdaftar.
+        Wajib diisi — pilih dari daftar, atau ketik langsung bila belum
+        terdaftar.
       </div>
     </div>
     {# Ditulis langsung, tidak lewat macro `isian`: macro menandai isian tak

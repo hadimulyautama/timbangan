@@ -258,7 +258,17 @@
         kelompok: induk.tagName === 'OPTGROUP' ? induk.label : ''
       });
     });
-    if (opsi.length < 12) { return; }   // masih nyaman sebagai dropdown biasa
+    // Kolom teks bebas yang hendak DILEBUR ke dalam kotak ini, bila ada.
+    // Dulu keduanya berdiri sendiri: satu daftar pihak terdaftar, satu kolom
+    // "bila belum terdaftar" — dua kolom untuk satu pertanyaan, plus satu
+    // paragraf penjelasan yang harus dibaca petugas sambil truk menunggu.
+    var gabung = pilih.dataset.gabung
+      ? document.getElementById(pilih.dataset.gabung) : null;
+
+    // Daftar pendek masih nyaman sebagai dropdown biasa — KECUALI bila ia
+    // harus melebur, karena hasilnya tetap dua kolom dan justru itu yang
+    // sedang dihilangkan.
+    if (opsi.length < 12 && !gabung) { return; }
 
     var bungkus = document.createElement('div');
     bungkus.className = 'cari';
@@ -292,9 +302,15 @@
     // nama sementara yang terkirim id lama — persis jenis kekeliruan yang
     // paling berbahaya di sini, karena tidak terlihat oleh siapa pun.
     function selaraskan() {
-      if (!pilih.value) { return; }
-      var ada = opsi.filter(function (o) { return o.nilai === pilih.value; })[0];
-      if (!ada || kotak.value.trim() !== ada.label) { pilih.value = ''; }
+      if (pilih.value) {
+        var ada = opsi.filter(function (o) { return o.nilai === pilih.value; })[0];
+        if (!ada || kotak.value.trim() !== ada.label) { pilih.value = ''; }
+      }
+      // Tulisan yang tidak cocok dengan siapa pun di daftar BUKAN kesalahan:
+      // ia nama pihak yang belum terdaftar, dan dikirim apa adanya. Yang
+      // menolak isian kosong tetap `_wajib_pihak` di layanan, karena "salah
+      // satu dari dua" tidak bisa dinyatakan HTML.
+      if (gabung) { gabung.value = pilih.value ? '' : kotak.value.trim(); }
     }
 
     function cocok(o, kata) {
@@ -330,6 +346,7 @@
         b.addEventListener('click', function () {
           pilih.value = o.nilai;
           kotak.value = o.label;
+          if (gabung) { gabung.value = ''; }
           hasil.innerHTML = '';
         });
         hasil.appendChild(b);
@@ -363,6 +380,16 @@
     document.addEventListener('click', function (e) {
       if (!bungkus.contains(e.target)) { hasil.innerHTML = ''; }
     });
+
+    if (gabung) {
+      // Kolom teksnya tidak dihapus dari DOM — ia tetap yang dikirim ke
+      // server, hanya tidak lagi punya rupa sendiri.
+      var grupTeks = gabung.closest ? gabung.closest('.grup') : null;
+      if (grupTeks) { grupTeks.style.display = 'none'; }
+      // Nilai yang sudah ada (mis. formulir kembali setelah galat) naik ke
+      // kotak, supaya yang diketik petugas tidak lenyap.
+      if (gabung.value.trim() && !pilih.value) { kotak.value = gabung.value; }
+    }
 
     tampilkanTerpilih();
   }

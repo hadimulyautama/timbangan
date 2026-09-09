@@ -78,7 +78,10 @@
 
     <div class="grup">
       <div class="lbl">{{ PIHAK_LABEL.get(aturan.arah, 'Pihak') }}</div>
-      <select class="fld" name="supplier_id"
+      {# Satu kolom untuk daftar dan nama baru sekaligus — lihat `data-gabung`
+         di app.js. Petani dan pedagang kecil justru sering belum terdaftar,
+         jadi mengetik nama baru di sini jalur biasa, bukan pengecualian. #}
+      <select class="fld" name="supplier_id" data-gabung="f-pihak_nama"
               data-cari="Ketik nama {{ PIHAK_LABEL.get(aturan.arah, 'pihak')|lower }}…">
         <option value="">— pilih —</option>
         {% if pihak_sering %}
@@ -104,7 +107,7 @@
         <span style="text-transform:none;letter-spacing:0;font-weight:500">
           (bila belum terdaftar)</span>
       </div>
-      <input class="fld teks" name="pihak_nama" type="text">
+      <input class="fld teks" name="pihak_nama" id="f-pihak_nama" type="text">
       <div class="bantu">Isi ini bila tidak memilih dari daftar di atas.</div>
     </div>
   {% endif %}
