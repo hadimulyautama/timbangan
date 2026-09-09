@@ -15,25 +15,31 @@
   var PREFIX = '/timbangan';
   var GUDANG = 'timbangan-antrean';   // localStorage: kiriman menunggu jaringan
 
-  // ── Usul sopir dari nomor polisi ──────────────────────────────────
+  // ── Sopir menyusul nomor polisi ───────────────────────────────────
   //
   // Platnya sudah dikenal sistem pada 69% penimbangan, tetapi sopirnya tetap
-  // diketik ulang. Yang ditawarkan di sini hanya USUL: sopir adalah satu-
-  // satunya saksi yang hadir saat angka dibaca, jadi namanya tidak boleh
-  // masuk tanpa disadari. Petugas harus menekannya.
+  // diketik ulang. Begitu platnya dikenali, namanya diisikan — TANPA tombol,
+  // karena tara per karung pun sudah terisi sendiri dari sampling dan itu
+  // angka yang langsung memengaruhi hasil. Yang menjaga bukan menahan isian,
+  // melainkan menyebut asalnya di bawah kolom.
   //
-  // Daftarnya diambil dari <datalist> yang sudah ada di halaman — bukan
-  // salinan kedua yang bisa berbeda suatu hari — sehingga ini tetap bekerja
-  // tanpa jaringan.
-  function pasangUsulSopir() {
+  // Aturan yang dipegang: sekali petugas mengetik sendiri, sistem berhenti
+  // ikut campur selamanya di formulir ini. Sopir bisa berganti, dan yang
+  // tahu itu orang yang sedang berdiri di jembatan — bukan riwayat.
+  //
+  // Daftarnya diambil dari <datalist> yang sudah ada di halaman, bukan
+  // salinan kedua yang bisa berbeda suatu hari, sehingga tetap bekerja tanpa
+  // jaringan.
+  function pasangSopirMenyusul() {
     var nopol = document.querySelector('[data-nopol]');
     var sopir = document.querySelector('[data-sopir-isian]');
-    var usul = document.getElementById('usul-sopir');
+    var asal = document.getElementById('asal-sopir');
     var daftar = document.getElementById('nopol-dikenal');
-    if (!nopol || !sopir || !usul || !daftar) { return; }
+    if (!nopol || !sopir || !asal || !daftar) { return; }
 
-    var nama = usul.querySelector('[data-usul-nama]');
-    var tombol = document.getElementById('pakai-sopir');
+    // Nilai yang sudah ada saat halaman dibuka dianggap milik petugas.
+    var disentuh = sopir.value.trim() !== '';
+    var dariSistem = false;
 
     function cariSopir(nilai) {
       var cari = (nilai || '').trim().toUpperCase();
@@ -48,31 +54,38 @@
     }
 
     function tinjau() {
+      if (disentuh) { return; }
       var usulan = cariSopir(nopol.value);
-      // Tidak menawarkan apa pun bila petugas sudah mengetik sendiri, dan
-      // tidak menawarkan nama yang sama dengan yang sudah tertulis.
-      if (!usulan || sopir.value.trim()) { usul.hidden = true; return; }
-      nama.textContent = usulan;
-      usul.hidden = false;
+      if (usulan) {
+        sopir.value = usulan;
+        dariSistem = true;
+        asal.hidden = false;
+      } else if (dariSistem) {
+        // Platnya diganti ke yang tak dikenal: nama titipan tadi ikut pergi,
+        // supaya tidak tertinggal sebagai saksi truk yang salah.
+        sopir.value = '';
+        dariSistem = false;
+        asal.hidden = true;
+      }
     }
 
     nopol.addEventListener('input', tinjau);
     nopol.addEventListener('change', tinjau);
+    // Mengisi lewat skrip tidak memicu 'input', jadi peristiwa ini pasti
+    // datang dari orang.
     sopir.addEventListener('input', function () {
-      if (sopir.value.trim()) { usul.hidden = true; }
+      disentuh = true;
+      dariSistem = false;
+      asal.hidden = true;
     });
-    tombol.addEventListener('click', function () {
-      sopir.value = nama.textContent;
-      usul.hidden = true;
-      sopir.focus();
-    });
+
     tinjau();
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', pasangUsulSopir);
+    document.addEventListener('DOMContentLoaded', pasangSopirMenyusul);
   } else {
-    pasangUsulSopir();
+    pasangSopirMenyusul();
   }
 
   // ── Antrean kiriman ────────────────────────────────────────────────
@@ -257,33 +270,31 @@
     kotak.placeholder = pilih.dataset.cari || 'Ketik untuk mencari…';
     var hasil = document.createElement('div');
     hasil.className = 'cari__hasil';
-    var terpilih = document.createElement('div');
-    terpilih.className = 'cari__terpilih';
 
     bungkus.appendChild(kotak);
     bungkus.appendChild(hasil);
     pilih.parentNode.insertBefore(bungkus, pilih);
-    pilih.parentNode.insertBefore(terpilih, pilih.nextSibling);
     pilih.style.display = 'none';
 
+    // Nama yang dipilih DUDUK DI KOLOMNYA SENDIRI.
+    //
+    // Dulu kotak ketik justru dikosongkan setelah memilih, lalu namanya
+    // muncul di baris terpisah "Terpilih: …". Nama yang baru saja diketik
+    // lenyap dari tempat mengetiknya dan pindah ke tempat lain — dua elemen
+    // untuk satu fakta.
     function tampilkanTerpilih() {
-      var v = pilih.value;
-      if (!v) { terpilih.textContent = ''; return; }
-      var ada = opsi.filter(function (o) { return o.nilai === v; })[0];
-      terpilih.innerHTML = '';
-      var teks = document.createElement('span');
-      teks.textContent = 'Terpilih: ' + (ada ? ada.label : v);
-      var hapus = document.createElement('button');
-      hapus.type = 'button';
-      hapus.textContent = 'Ganti';
-      hapus.addEventListener('click', function () {
-        pilih.value = '';
-        kotak.value = '';
-        tampilkanTerpilih();
-        kotak.focus();
-      });
-      terpilih.appendChild(teks);
-      terpilih.appendChild(hapus);
+      var ada = opsi.filter(function (o) { return o.nilai === pilih.value; })[0];
+      if (ada) { kotak.value = ada.label; }
+    }
+
+    // PENTING: begitu tulisan di kotak tidak lagi sama persis dengan nama yang
+    // terpilih, pilihannya dibatalkan. Tanpa ini layar bisa menampilkan satu
+    // nama sementara yang terkirim id lama — persis jenis kekeliruan yang
+    // paling berbahaya di sini, karena tidak terlihat oleh siapa pun.
+    function selaraskan() {
+      if (!pilih.value) { return; }
+      var ada = opsi.filter(function (o) { return o.nilai === pilih.value; })[0];
+      if (!ada || kotak.value.trim() !== ada.label) { pilih.value = ''; }
     }
 
     function cocok(o, kata) {
@@ -318,9 +329,8 @@
         b.textContent = o.label;
         b.addEventListener('click', function () {
           pilih.value = o.nilai;
-          kotak.value = '';
+          kotak.value = o.label;
           hasil.innerHTML = '';
-          tampilkanTerpilih();
         });
         hasil.appendChild(b);
       });
@@ -332,7 +342,13 @@
       }
     }
 
-    kotak.addEventListener('input', gambar);
+    kotak.addEventListener('input', function () {
+      selaraskan();
+      gambar();
+    });
+    // Menyentuh kolom yang sudah berisi nama berarti hendak menggantinya:
+    // tampilkan lagi daftarnya tanpa memaksa menghapus dulu.
+    kotak.addEventListener('focus', gambar);
     kotak.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') {
         // Jangan mengirim formulir hanya karena petugas menekan Enter di

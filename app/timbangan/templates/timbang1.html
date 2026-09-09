@@ -121,15 +121,17 @@
     {# Wajib: sopir satu-satunya orang yang hadir di jembatan saat angkanya
        dibaca. Tanpa namanya, sengketa muatan tidak punya saksi. Pada partai
        kecil syarat itu dipenuhi pihaknya sendiri, yang memang berdiri di situ. #}
+  {# Terisi sendiri begitu platnya dikenali, dan berhenti ikut campur begitu
+     petugas mengetik. Semula ini sebuah tombol "Pakai" yang harus ditekan,
+     dengan alasan sopir adalah saksi sehingga namanya jangan menyelinap
+     masuk. Alasan itu tidak konsisten dengan aplikasi ini sendiri: tara per
+     karung sudah terisi otomatis dari sampling tanpa tombol, dan itu angka
+     yang langsung memengaruhi hasil timbang. Yang penting bukan menahan
+     isian, melainkan menyebut ASALNYA — itulah guna keterangan di bawah. #}
   {{ isian('nama_sopir', 'Nama sopir', '', '', 'text', '', true, true,
            'data-sopir-isian') }}
-  {# Usul sopir muncul di sini bila platnya dikenali. Sengaja sebuah TOMBOL
-     yang harus ditekan, bukan isian yang terisi sendiri: sopir satu-satunya
-     saksi yang hadir saat angka dibaca, dan nama yang salah masuk tanpa
-     disadari menghapus nilai itu. #}
-  <div class="usul" id="usul-sopir" hidden>
-    <span class="usul__teks">Terakhir: <strong data-usul-nama></strong></span>
-    <button type="button" class="usul__tbl" id="pakai-sopir">Pakai</button>
+  <div class="bantu bantu--asal" id="asal-sopir" hidden>
+    Terisi dari kedatangan terakhir truk ini — ubah bila sopirnya berganti.
   </div>
 
   {# ── Dokumen & muatan ── #}

@@ -3581,9 +3581,15 @@ async def test_nopol_yang_pernah_datang_ditawarkan_sebagai_saran(klien):
     assert 'data-sopir="Slamet"' in berikutnya
 
 
-async def test_sopir_diusulkan_bukan_diisikan_sendiri(klien):
-    """Sopir adalah satu-satunya saksi yang hadir saat angka dibaca. Nama yang
-    salah masuk tanpa disadari menghapus nilai itu, jadi ia harus ditekan."""
+async def test_sopir_terisi_dari_plat_tetapi_asalnya_disebut(klien):
+    """Sopir menyusul platnya tanpa tombol — tara per karung pun sudah terisi
+    sendiri dari sampling, dan itu angka yang langsung memengaruhi hasil.
+
+    Yang menjaga bukan menahan isian, melainkan MENYEBUT ASALNYA: petugas
+    harus tahu apa yang sedang ia setujui, dan bisa menimpanya bila sopirnya
+    berganti. Pengisiannya sendiri dikerjakan di peramban; yang diuji di sini
+    bahan yang dikirim ke sana.
+    """
     await login(klien)
     form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
     await klien.post(f"{PREFIX}/timbang/GABAH_BASAH", data={
@@ -3596,10 +3602,13 @@ async def test_sopir_diusulkan_bukan_diisikan_sendiri(klien):
     })
 
     berikutnya = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
-    # Usulnya ada, tetapi TERSEMBUNYI dan menunggu ditekan…
-    assert 'id="usul-sopir"' in berikutnya
-    assert "hidden" in berikutnya.split('id="usul-sopir"')[1][:40]
-    # …dan kolom sopir tetap kosong, tidak terisi diam-diam.
+    # Bahan pengisinya ada, beserta keterangan asal yang menunggu ditampilkan.
+    assert 'data-sopir="Warno"' in berikutnya
+    assert 'id="asal-sopir"' in berikutnya
+    # Tombol "Pakai" sudah tidak ada — ia satu ketukan yang tidak perlu pada
+    # fitur yang justru bertujuan mengurangi ketukan.
+    assert 'id="pakai-sopir"' not in berikutnya
+    # Yang dikirim server tetap kosong: isian terjadi di peramban, sehingga
+    # halaman tanpa JavaScript tidak pernah menyimpan sopir yang tidak diketik.
     penggal = berikutnya.split('name="nama_sopir"')[1][:200]
     assert 'value=""' in penggal
-    assert "Warno" not in penggal

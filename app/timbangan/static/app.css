@@ -271,15 +271,6 @@ select.fld { appearance: none; font-family: var(--teks); font-size: 16px;
   text-transform: uppercase; color: var(--tinta-4); background: var(--kertas-2);
 }
 .cari__kosong { padding: 13px 14px; font-size: 14px; color: var(--tinta-4); }
-.cari__terpilih {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 10px; margin-top: 6px; font-size: 13px; color: var(--tinta-3);
-}
-.cari__terpilih button {
-  background: none; border: 0; cursor: pointer; padding: 4px 6px;
-  color: var(--aksi); font-family: var(--teks); font-size: 13px;
-  font-weight: 700;
-}
 
 /* Baris penyaring. Satu kolom di ponsel sempit, dua kolom begitu muat —
    bukan dua kolom yang dipaksakan lalu meluber. minmax(0,1fr), bukan 1fr,
@@ -303,6 +294,11 @@ select.fld { appearance: none; font-family: var(--teks); font-size: 16px;
 }
 .bantu { font-size: 12px; color: var(--tinta-4); line-height: 1.45; }
 .bantu.peringatan { color: var(--hati); font-weight: 600; }
+/* Keterangan asal untuk kolom yang diisikan sistem. Bukan hiasan: yang
+   menjaga isian otomatis bukan menahannya, melainkan menyebut dari mana
+   angkanya datang supaya petugas tahu apa yang sedang ia setujui. */
+.bantu.bantu--asal { color: var(--aksi); font-weight: 600; margin-top: -8px;
+  margin-bottom: 14px; }
 
 /* ── Tombol ──────────────────────────────────────────────── */
 
@@ -363,29 +359,6 @@ select.fld { appearance: none; font-family: var(--teks); font-size: 16px;
 .pilihan__pihak::before { content: "·"; color: var(--tinta-4); margin: 0 5px;
   font-weight: 400; }
 .pilihan__ket { font-size: 12px; color: var(--tinta-4); margin-top: 2px; }
-
-/* ── Usul sopir dari nomor polisi ────────────────────────────
-   Sengaja bukan isian yang terisi sendiri: sopir satu-satunya saksi yang
-   hadir saat angka dibaca, jadi namanya harus ditekan, bukan menyelinap. */
-.usul {
-  display: flex; align-items: center; gap: 10px;
-  margin: -6px 0 14px; padding: 9px 12px;
-  background: var(--aksi-muda); border: 1px solid var(--aksi);
-  border-radius: 10px;
-}
-.usul__teks { flex-grow: 1; font-size: 14px; color: var(--tinta-2);
-  min-width: 0; overflow-wrap: anywhere; }
-.usul__teks strong { color: var(--tinta); font-weight: 700; }
-/* Tinggi minimum 44 px: sasaran sentuh di pos timbang ditekan dengan jari
-   yang sering basah atau bersarung, sambil truk menunggu. Tombol 34 px
-   (padding saja, tanpa lantai tinggi) meleset terlalu sering. */
-.usul__tbl {
-  flex-shrink: 0; border: 0; border-radius: 8px; cursor: pointer;
-  background: var(--aksi); color: #fff;
-  font-family: var(--judul); font-size: 14px; font-weight: 700;
-  padding: 8px 18px; min-height: 44px;
-}
-.usul__tbl:hover { background: var(--aksi-gelap); }
 
 /* ── Kartu yang membentang di tempat ─────────────────────────
    Memilih komoditas dulu memakai halaman tersendiri. Di pos timbang halaman
