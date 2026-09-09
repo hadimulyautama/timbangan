@@ -364,6 +364,29 @@ select.fld { appearance: none; font-family: var(--teks); font-size: 16px;
   font-weight: 400; }
 .pilihan__ket { font-size: 12px; color: var(--tinta-4); margin-top: 2px; }
 
+/* ── Usul sopir dari nomor polisi ────────────────────────────
+   Sengaja bukan isian yang terisi sendiri: sopir satu-satunya saksi yang
+   hadir saat angka dibaca, jadi namanya harus ditekan, bukan menyelinap. */
+.usul {
+  display: flex; align-items: center; gap: 10px;
+  margin: -6px 0 14px; padding: 9px 12px;
+  background: var(--aksi-muda); border: 1px solid var(--aksi);
+  border-radius: 10px;
+}
+.usul__teks { flex-grow: 1; font-size: 14px; color: var(--tinta-2);
+  min-width: 0; overflow-wrap: anywhere; }
+.usul__teks strong { color: var(--tinta); font-weight: 700; }
+/* Tinggi minimum 44 px: sasaran sentuh di pos timbang ditekan dengan jari
+   yang sering basah atau bersarung, sambil truk menunggu. Tombol 34 px
+   (padding saja, tanpa lantai tinggi) meleset terlalu sering. */
+.usul__tbl {
+  flex-shrink: 0; border: 0; border-radius: 8px; cursor: pointer;
+  background: var(--aksi); color: #fff;
+  font-family: var(--judul); font-size: 14px; font-weight: 700;
+  padding: 8px 18px; min-height: 44px;
+}
+.usul__tbl:hover { background: var(--aksi-gelap); }
+
 /* ── Kartu yang membentang di tempat ─────────────────────────
    Memilih komoditas dulu memakai halaman tersendiri. Di pos timbang halaman
    itu dibayar dengan berdiri menunggu di samping truk, jadi daftarnya

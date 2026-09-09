@@ -15,6 +15,66 @@
   var PREFIX = '/timbangan';
   var GUDANG = 'timbangan-antrean';   // localStorage: kiriman menunggu jaringan
 
+  // ── Usul sopir dari nomor polisi ──────────────────────────────────
+  //
+  // Platnya sudah dikenal sistem pada 69% penimbangan, tetapi sopirnya tetap
+  // diketik ulang. Yang ditawarkan di sini hanya USUL: sopir adalah satu-
+  // satunya saksi yang hadir saat angka dibaca, jadi namanya tidak boleh
+  // masuk tanpa disadari. Petugas harus menekannya.
+  //
+  // Daftarnya diambil dari <datalist> yang sudah ada di halaman — bukan
+  // salinan kedua yang bisa berbeda suatu hari — sehingga ini tetap bekerja
+  // tanpa jaringan.
+  function pasangUsulSopir() {
+    var nopol = document.querySelector('[data-nopol]');
+    var sopir = document.querySelector('[data-sopir-isian]');
+    var usul = document.getElementById('usul-sopir');
+    var daftar = document.getElementById('nopol-dikenal');
+    if (!nopol || !sopir || !usul || !daftar) { return; }
+
+    var nama = usul.querySelector('[data-usul-nama]');
+    var tombol = document.getElementById('pakai-sopir');
+
+    function cariSopir(nilai) {
+      var cari = (nilai || '').trim().toUpperCase();
+      if (!cari) { return ''; }
+      var opsi = daftar.options;
+      for (var i = 0; i < opsi.length; i++) {
+        if ((opsi[i].value || '').toUpperCase() === cari) {
+          return opsi[i].dataset.sopir || '';
+        }
+      }
+      return '';
+    }
+
+    function tinjau() {
+      var usulan = cariSopir(nopol.value);
+      // Tidak menawarkan apa pun bila petugas sudah mengetik sendiri, dan
+      // tidak menawarkan nama yang sama dengan yang sudah tertulis.
+      if (!usulan || sopir.value.trim()) { usul.hidden = true; return; }
+      nama.textContent = usulan;
+      usul.hidden = false;
+    }
+
+    nopol.addEventListener('input', tinjau);
+    nopol.addEventListener('change', tinjau);
+    sopir.addEventListener('input', function () {
+      if (sopir.value.trim()) { usul.hidden = true; }
+    });
+    tombol.addEventListener('click', function () {
+      sopir.value = nama.textContent;
+      usul.hidden = true;
+      sopir.focus();
+    });
+    tinjau();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', pasangUsulSopir);
+  } else {
+    pasangUsulSopir();
+  }
+
   // ── Antrean kiriman ────────────────────────────────────────────────
 
   function bacaAntrean() {

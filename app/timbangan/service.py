@@ -314,6 +314,72 @@ async def pihak_pilihan(
             [s for s in semua if s.id not in terpakai])
 
 
+@dataclass(frozen=True)
+class KendaraanDikenal:
+    """Satu plat yang pernah lewat jembatan, beserta sopir terakhirnya."""
+
+    nomor_polisi: str
+    sopir_terakhir: str | None
+    terakhir: date | None
+
+
+async def kendaraan_dikenal(
+    db: AsyncSession, *, hari: int = 180, batas: int = 200
+) -> list[KendaraanDikenal]:
+    """Plat yang pernah datang, terbaru lebih dulu.
+
+    Tabel `timbangan_kendaraan` sudah mencatat setiap plat sejak awal, lalu
+    tidak pernah dibaca kembali — sementara 69% penimbangan (38 dari 55, diukur
+    8 September 2026) memakai plat yang sistemnya sudah hafal. Petugas
+    mengetiknya ulang sambil truk menunggu.
+
+    Yang dikembalikan SARAN, bukan isian. Nomor polisi adalah jangkar tiket
+    ini bila kelak ada sengketa; tebakan yang masuk diam-diam lebih berbahaya
+    daripada mengetik.
+
+    Sopir diambil dari penimbangan TERAKHIR plat itu, bukan dari yang paling
+    sering. Sebutannya di layar pun "terakhir", karena memang itu yang
+    diketahui — sopir bisa berganti, dan pada satu dari empat plat berulang ia
+    memang berganti.
+    """
+    batas_hari = sekarang().date() - timedelta(days=hari)
+
+    # Dua langkah, bukan window function: SQLite di pengujian dan Postgres di
+    # produksi tidak selalu sepakat soal DISTINCT ON, dan daftarnya pendek.
+    terakhir = (await db.execute(
+        select(
+            TimbanganTransaksi.nomor_polisi,
+            func.max(TimbanganTransaksi.id).label("id_akhir"),
+        ).where(
+            TimbanganTransaksi.nomor_polisi.is_not(None),
+            TimbanganTransaksi.nomor_polisi != "",
+            TimbanganTransaksi.tanggal >= batas_hari,
+            TimbanganTransaksi.status_transaksi == TRX_AKTIF,
+        ).group_by(TimbanganTransaksi.nomor_polisi)
+        .order_by(func.max(TimbanganTransaksi.id).desc())
+        .limit(batas)
+    )).all()
+    if not terakhir:
+        return []
+
+    baris = {
+        t.id: t for t in (await db.execute(
+            select(TimbanganTransaksi).where(
+                TimbanganTransaksi.id.in_([r.id_akhir for r in terakhir])
+            )
+        )).scalars()
+    }
+    hasil = []
+    for r in terakhir:
+        t = baris.get(r.id_akhir)
+        hasil.append(KendaraanDikenal(
+            nomor_polisi=r.nomor_polisi,
+            sopir_terakhir=(t.nama_sopir or None) if t else None,
+            terakhir=t.tanggal if t else None,
+        ))
+    return hasil
+
+
 async def supplier_pilihan(
     db: AsyncSession, *, hari: int = 120
 ) -> tuple[list[Supplier], list[Supplier]]:

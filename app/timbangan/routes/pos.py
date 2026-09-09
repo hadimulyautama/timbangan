@@ -190,6 +190,10 @@ async def form_timbang_pertama(
         pihak_sering=sering,
         pihak_lainnya=lainnya,
         kolom_nama=service.nama_kolom_pihak(aturan.arah),
+        # Saran nomor polisi + sopir terakhirnya. Ikut ke halaman supaya tetap
+        # bekerja tanpa jaringan — pos timbang sering kehilangan sinyal, dan
+        # saran yang butuh jaringan justru menghilang persis saat dibutuhkan.
+        kendaraan=await service.kendaraan_dikenal(db),
         tara=tara,
         asal_tara=asal,
         sekarang=sekarang(),

@@ -102,13 +102,35 @@
      luar, jadi catatannya harus bisa menunjuk kendaraan tertentu bila kelak
      ada sengketa. Jasa timbang, transfer internal, dan partai kecil boleh
      kosong — partai kecil sering datang tanpa kendaraan bernomor sama sekali. #}
+  {# Plat yang pernah datang ditawarkan sebagai SARAN, tidak pernah diisikan
+     sendiri: nomor polisi adalah jangkar tiket ini bila kelak ada sengketa.
+     Sopir terakhir dititipkan pada `data-sopir` di opsi yang sama supaya tidak
+     ada salinan kedua daftar yang bisa berbeda suatu hari. #}
   {{ isian('nomor_polisi', 'Nomor polisi', '', '', 'text',
            'Contoh: AD 1234 XY', masuk or (not bebas and not transfer), true,
-           'autocapitalize="characters" autocomplete="off"') }}
+           'autocapitalize="characters" autocomplete="off"
+            list="nopol-dikenal" data-nopol') }}
+  {% if kendaraan %}
+    <datalist id="nopol-dikenal">
+      {% for k in kendaraan %}
+        <option value="{{ k.nomor_polisi }}"
+                {% if k.sopir_terakhir %}data-sopir="{{ k.sopir_terakhir }}"{% endif %}>
+      {% endfor %}
+    </datalist>
+  {% endif %}
     {# Wajib: sopir satu-satunya orang yang hadir di jembatan saat angkanya
        dibaca. Tanpa namanya, sengketa muatan tidak punya saksi. Pada partai
        kecil syarat itu dipenuhi pihaknya sendiri, yang memang berdiri di situ. #}
-  {{ isian('nama_sopir', 'Nama sopir', '', '', 'text', '', true, true) }}
+  {{ isian('nama_sopir', 'Nama sopir', '', '', 'text', '', true, true,
+           'data-sopir-isian') }}
+  {# Usul sopir muncul di sini bila platnya dikenali. Sengaja sebuah TOMBOL
+     yang harus ditekan, bukan isian yang terisi sendiri: sopir satu-satunya
+     saksi yang hadir saat angka dibaca, dan nama yang salah masuk tanpa
+     disadari menghapus nilai itu. #}
+  <div class="usul" id="usul-sopir" hidden>
+    <span class="usul__teks">Terakhir: <strong data-usul-nama></strong></span>
+    <button type="button" class="usul__tbl" id="pakai-sopir">Pakai</button>
+  </div>
 
   {# ── Dokumen & muatan ── #}
   {% if transfer %}

@@ -3556,3 +3556,50 @@ async def test_kartu_beranda_tidak_saling_menutup(klien):
     beranda = (await klien.get(f"{PREFIX}/")).text
     assert "<details" in beranda
     assert 'name="mulai"' not in beranda
+
+
+async def test_nopol_yang_pernah_datang_ditawarkan_sebagai_saran(klien):
+    """Tabel kendaraan sudah mencatat tiap plat sejak awal, lalu tak pernah
+    dibaca kembali — sementara 69% penimbangan memakai plat yang sudah dikenal.
+    """
+    await login(klien)
+    # Satu truk lewat, lengkap dengan sopirnya.
+    form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
+    await klien.post(f"{PREFIX}/timbang/GABAH_BASAH", data={
+        "kode": kode_dari(form), "berat_kg": "13600",
+        "cara_timbang": "DUA_KALI", "supplier_id": "1", "pihak_nama": "",
+        "nomor_polisi": "AD 9911 ZZ", "nama_sopir": "Slamet",
+        "jumlah_karung": "120", "tara_per_karung_kg": "0,25",
+        "berat_acuan_kg": "10000", "nomor_acuan": "N-9", "tara_lain_kg": "0",
+        "waktu": "", "catatan": "",
+    })
+
+    # Kedatangan berikutnya sudah menawarkan platnya, beserta sopir terakhir.
+    berikutnya = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
+    assert 'id="nopol-dikenal"' in berikutnya
+    assert 'value="AD 9911 ZZ"' in berikutnya
+    assert 'data-sopir="Slamet"' in berikutnya
+
+
+async def test_sopir_diusulkan_bukan_diisikan_sendiri(klien):
+    """Sopir adalah satu-satunya saksi yang hadir saat angka dibaca. Nama yang
+    salah masuk tanpa disadari menghapus nilai itu, jadi ia harus ditekan."""
+    await login(klien)
+    form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
+    await klien.post(f"{PREFIX}/timbang/GABAH_BASAH", data={
+        "kode": kode_dari(form), "berat_kg": "13600",
+        "cara_timbang": "DUA_KALI", "supplier_id": "1", "pihak_nama": "",
+        "nomor_polisi": "AD 7722 YY", "nama_sopir": "Warno",
+        "jumlah_karung": "120", "tara_per_karung_kg": "0,25",
+        "berat_acuan_kg": "10000", "nomor_acuan": "N-8", "tara_lain_kg": "0",
+        "waktu": "", "catatan": "",
+    })
+
+    berikutnya = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
+    # Usulnya ada, tetapi TERSEMBUNYI dan menunggu ditekan…
+    assert 'id="usul-sopir"' in berikutnya
+    assert "hidden" in berikutnya.split('id="usul-sopir"')[1][:40]
+    # …dan kolom sopir tetap kosong, tidak terisi diam-diam.
+    penggal = berikutnya.split('name="nama_sopir"')[1][:200]
+    assert 'value=""' in penggal
+    assert "Warno" not in penggal
