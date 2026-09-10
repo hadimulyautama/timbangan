@@ -890,4 +890,115 @@
   });
 
 
+  /* ── Layar yang menyegarkan diri ────────────────────────────────────
+   *
+   * Petugas mencatat penimbangan dari HP-nya, dan di layar orang lain yang
+   * sedang membuka halaman yang sama tak terjadi apa-apa — ia harus
+   * MEMATIKAN aplikasinya dulu baru perubahannya terlihat.
+   *
+   * Sebabnya bukan service worker. Yang disimpannya hanya kerangka aplikasi,
+   * dan tiap navigasi selalu ke jaringan. Sebabnya lebih sederhana: tak ada
+   * satu pun pemicu penyegaran. Halaman digambar sekali lalu diam selamanya,
+   * dan aplikasi terpasang tak pernah dimuat ulang saat dibuka kembali dari
+   * latar belakang — ia melanjutkan halaman yang sama.
+   *
+   * **Bedanya dengan Pos Produksi, dan ini yang menentukan bentuknya.** Di
+   * sana ada pindah.js yang bisa menukar isi halaman tanpa memuat ulang. Di
+   * sini tidak: halaman berpindah secara penuh, jadi menyegarkan berarti
+   * `location.reload()` — dan reload MEMBUANG yang sedang diketik.
+   *
+   * Petugas mengisi borang sambil truk menunggu di jembatan. Satu reload yang
+   * menghapus nomor polisi dan bobot yang baru diketik jauh lebih buruk
+   * daripada angka yang telat semenit. Maka penyegaran otomatis di sini
+   * OPT-IN per halaman, bukan berlaku di mana-mana: hanya halaman yang
+   * menandai dirinya `data-segar-otomatis`, dan itu hanya layar BACA —
+   * beranda, daftar, monitoring, laporan.
+   */
+  (function () {
+    var badan = document.body;
+    if (!badan || !badan.dataset || !badan.dataset.segarOtomatis) { return; }
+
+    var DENYUT = 60000;   // Lebih jarang daripada Pos Produksi: memuat ulang
+                          // seluruh halaman lebih berat daripada menukar isi.
+    var kotor = false;    // ada yang sudah diketik di halaman ini
+    var denyut = null;
+
+    /* Sekali disentuh, halaman ini tak lagi boleh disegarkan sampai orangnya
+       pergi sendiri. Borang saring memang memakai GET — isinya kembali dari
+       alamat — tetapi yang BELUM dikirim tidak ada di alamat mana pun. */
+    document.addEventListener('input', function () { kotor = true; }, true);
+    document.addEventListener('change', function () { kotor = true; }, true);
+
+    function adaAntrean() {
+      /* Antrean luring berisi = sinyal sedang buruk. Reload saat itu bisa
+         mendarat di halaman luring, dan petugas kehilangan layarnya karena
+         kami mencoba menolongnya. */
+      try {
+        var isi = JSON.parse(localStorage.getItem(GUDANG) || '[]');
+        return isi.length > 0;
+      } catch (e) { return true; }   // ragu = jangan ganggu
+    }
+
+    function bolehSegar() {
+      if (document.visibilityState !== 'visible') { return false; }
+      if (kotor) { return false; }
+      var f = document.activeElement;
+      if (f && /^(INPUT|SELECT|TEXTAREA)$/.test(f.tagName)) { return false; }
+      if (adaAntrean()) { return false; }
+      return true;
+    }
+
+    /* Diperiksa dulu, baru dimuat ulang.
+     *
+     * Reload yang tak mengubah apa pun tetap terlihat: layar berkedip,
+     * gulungan kembali ke atas. Berkedip tiap menit tanpa alasan mengajari
+     * orang bahwa aplikasinya rewel. Jadi isinya diambil diam-diam dan
+     * dibandingkan; kalau sama persis, tak terjadi apa-apa. */
+    function periksa() {
+      if (!bolehSegar()) { return; }
+      var sekarang = document.querySelector('.bingkai');
+      if (!sekarang) { return; }
+      var lama = sekarang.innerHTML;
+
+      fetch(location.href, { credentials: 'same-origin', cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.text() : null; })
+        .then(function (teks) {
+          if (!teks) { return; }
+          // Diperiksa LAGI: orangnya bisa mulai mengetik tepat selagi
+          // permintaan ini di jalan.
+          if (!bolehSegar()) { return; }
+          var doc = new DOMParser().parseFromString(teks, 'text/html');
+          var baru = doc.querySelector('.bingkai');
+          if (!baru || baru.innerHTML === lama) { return; }
+          location.reload();
+        })
+        .catch(function () { /* jaringan buruk: diamkan, denyut berikutnya mencoba lagi */ });
+    }
+
+    function mulaiDenyut() {
+      if (denyut) { return; }
+      denyut = setInterval(periksa, DENYUT);
+    }
+
+    function hentikanDenyut() {
+      if (denyut) { clearInterval(denyut); denyut = null; }
+    }
+
+    /* Kembali ke depan — inilah yang menjawab keluhannya. Telepon dikantongi,
+       dikeluarkan lagi, dan yang pertama dilihat orang harus keadaan
+       sekarang, bukan keadaan saat ia mengantonginya. */
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') { periksa(); mulaiDenyut(); }
+      else { hentikanDenyut(); }
+    });
+
+    /* Sebagian peramban mengembalikan halaman dari simpanan maju-mundurnya
+       tanpa memicu visibilitychange sama sekali. */
+    window.addEventListener('pageshow', function (e) {
+      if (e.persisted) { kotor = false; periksa(); }
+    });
+
+    if (document.visibilityState === 'visible') { mulaiDenyut(); }
+  })();
+
 })();

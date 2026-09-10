@@ -88,9 +88,18 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap">
   <link rel="stylesheet" href="{{ PREFIX }}/static/app.css?v={{ VERSI }}">
 </head>
+{# `segar_otomatis` sengaja OPT-IN per halaman, bukan berlaku di mana-mana.
+   Menyegarkan di sini berarti memuat ulang halaman, dan reload MEMBUANG yang
+   sedang diketik. Petugas mengisi borang sambil truk menunggu di jembatan —
+   satu reload yang menghapus nomor polisi dan bobot yang baru diketik jauh
+   lebih buruk daripada angka yang telat semenit.
+
+   Jadi hanya layar BACA yang menyalakannya, dan tiap halaman baru harus
+   memutuskannya sendiri. Bawaannya diam. #}
 <body data-kelipatan="{{ KELIPATAN_TERA }}"
       data-printer="{{ PRINTER_URL }}"
-      data-printer-devid="{{ PRINTER_DEVID }}">
+      data-printer-devid="{{ PRINTER_DEVID }}"
+      {% block segar_otomatis %}{% endblock %}>
 
 {# ── Layar pembuka ──
    Ditulis di sini, bukan di akhir halaman, supaya ia sudah tergambar sebelum
