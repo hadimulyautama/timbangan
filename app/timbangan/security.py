@@ -142,6 +142,7 @@ async def akun_opsional(request: Request) -> TimbanganAkun | None:
     """Akun dari cookie sesi, atau None. Tidak pernah melempar error."""
     from sqlalchemy import select
 
+    from app.models import User as _User
     from app.timbangan.db import sesi_db
 
     akun_id = baca_token(request.cookies.get(NAMA_COOKIE))
@@ -156,6 +157,21 @@ async def akun_opsional(request: Request) -> TimbanganAkun | None:
                 )
             )
         ).scalars().first()
+        # ── Dinonaktifkan di MASTER berarti tak lagi bekerja di sini ──
+        #
+        # Ada tiga bendera nonaktif yang terpisah — `users.status`,
+        # `produksi_akun.status`, dan `timbangan_akun.status` — dan modul ini
+        # hanya pernah melihat yang terakhir. Orang yang dinonaktifkan di
+        # Kelola pengguna produksi karenanya tetap bisa menimbang truk.
+        # Temuan QA X-11.
+        #
+        # Akun tanpa `user_id` tetap diterima: petugas timbang lama memang
+        # belum tertaut ke master, dan menolak mereka berarti menutup pos
+        # timbang atas nama data yang belum dirapikan.
+        if akun is not None and akun.user_id:
+            orang = await db.get(_User, akun.user_id)
+            if orang is not None and (orang.status or "").lower() != "aktif":
+                akun = None
     request.state.akun = akun
     return akun
 
