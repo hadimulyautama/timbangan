@@ -167,6 +167,7 @@ async def form_koreksi(
 
     return render(
         request, "koreksi.html",
+        versi=service.versi_tiket(b.trx),
         b=b, aturan=await service.aturan_untuk(db, b.trx.jenis_kode),
         pihak_pilihan=await service.pihak_pilihan(db, b.trx.arah),
         kolom_nama=service.nama_kolom_pihak(b.trx.arah),
@@ -180,6 +181,7 @@ async def simpan_koreksi(
     transaksi_id: int,
     request: Request,
     alasan: str = Form(...),
+    versi: str = Form(""),
     timbang1_kg: str = Form(""),
     timbang2_kg: str = Form(""),
     nomor_polisi: str = Form(""),
@@ -241,6 +243,9 @@ async def simpan_koreksi(
     try:
         await service.koreksi_transaksi(
             db, akun=akun, trx=b.trx, perubahan=perubahan, muatan=muatan,
+            # Versi yang dilihat borang saat DIBUKA. Yang tak cocok ditolak
+            # sambil menyebut jamnya — bukan menimpa koreksi orang lain.
+            versi=versi.strip() or None,
             alasan=alasan.strip(),
             ip=request.client.host if request.client else None,
         )

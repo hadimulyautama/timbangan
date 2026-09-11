@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+import math
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -58,9 +59,16 @@ def _angka(teks: str | None, bawaan: float = 0.0) -> float:
         if ribuan:
             bersih = bersih.replace(".", "")
     try:
-        return float(bersih)
+        n = float(bersih)
     except ValueError:
         return bawaan
+    # "nan" dan "inf" LOLOS `float()` — itulah lubangnya. NaN lalu membuat
+    # SETIAP perbandingan bernilai salah, jadi kekurangan 10 ton lolos sebagai
+    # NORMAL: batas atas dan batas bawah sama-sama tak terlampaui, karena
+    # perbandingan dengan NaN memang selalu False. Temuan QA T-08.
+    if not math.isfinite(n):
+        return bawaan
+    return n
 
 
 def _waktu_operator(teks: str | None) -> datetime | None:

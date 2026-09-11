@@ -19,6 +19,10 @@
 
   <form method="post" action="{{ PREFIX }}/transaksi/{{ trx.id }}/koreksi"
         style="display:flex;flex-direction:column;gap:14px">
+  {# Versi tiket saat halaman ini DIBUKA. Tanpa ini, formulir yang terbuka
+     sebelum orang lain mengoreksi akan menimpa koreksi itu saat disimpan —
+     diam-diam, dan yang kehilangan tak pernah tahu. Temuan QA T-04. #}
+  <input type="hidden" name="versi" value="{{ versi }}">
 
     {{ berat('timbang1_kg', 'Timbang pertama', trx.timbang1_kg|angka, '', false) }}
     {% if trx.timbang2_kg is not none %}

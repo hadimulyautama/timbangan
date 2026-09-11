@@ -632,7 +632,10 @@ def _terapkan_hasil(trx: TimbanganTransaksi, hasil: logic.Hasil) -> None:
     trx.berat_barang_kg = hasil.berat_barang_kg
     trx.berat_acuan_kg = hasil.berat_acuan_kg
     trx.selisih_kg = hasil.selisih_kg
-    trx.selisih_persen = hasil.selisih_persen
+    # Dijepit ke rentang yang MUAT di kolomnya — lihat `jepit_persen`.
+    # Tanpa ini, nota "8" untuk muatan 10 ton menggagalkan seluruh
+    # penimbangan, dan truknya sudah di jembatan.
+    trx.selisih_persen = jepit_persen(hasil.selisih_persen)
     trx.batas_bawah_kg = hasil.batas_bawah_kg
     trx.batas_atas_kg = hasil.batas_atas_kg
     trx.status_kontrol = hasil.status
@@ -873,9 +876,61 @@ async def ambil_kunci(db: AsyncSession, kunci: str) -> TimbanganTransaksi | None
 
 
 async def ambil_kode(db: AsyncSession, kode: str) -> TimbanganTransaksi | None:
+    """Baca tiket untuk DILIHAT. Yang hendak mengubahnya pakai yang terkunci."""
     return (await db.execute(
         select(TimbanganTransaksi).where(TimbanganTransaksi.kode == kode)
     )).scalars().first()
+
+
+async def ambil_kode_terkunci(db: AsyncSession, kode: str) -> TimbanganTransaksi | None:
+    """Baca tiket untuk DIUBAH — barisnya dikunci sampai transaksi selesai.
+
+    Tak ada satu pun `FOR UPDATE` di seluruh layanan ini sampai 11 September
+    2026, dan akibatnya terbukti: satu baris berisi timbang-1 15.500, bruto
+    15.000, dan netto 10.000 sekaligus — tiga angka yang tak mungkin ada
+    bersamaan. Dua petugas menghitung ulang dari salinan yang berbeda-beda
+    umurnya, lalu masing-masing menulis hasilnya sendiri.
+
+    Kunci menyelesaikan yang BERSAMAAN. Yang berselang — formulir dibuka
+    sebelum orang lain menyimpan — dijaga `pastikan_versi`, karena kunci tak
+    bisa memegang baris selama orang mengetik.
+    """
+    return (await db.execute(
+        select(TimbanganTransaksi).where(TimbanganTransaksi.kode == kode)
+        .with_for_update()
+    )).scalars().first()
+
+
+def versi_tiket(trx: TimbanganTransaksi) -> str:
+    """Penanda versi yang dibawa borang — berubah tiap kali tiketnya berubah.
+
+    Dibentuk dari `updated_at` dan `jumlah_revisi`, bukan kolom versi baru:
+    keduanya sudah ada, sudah dipelihara, dan tabel ini DIBACA PRODUKSI —
+    menambah kolom di sini menuntut kesepakatan dua repo.
+    """
+    cap = trx.updated_at.isoformat() if trx.updated_at else "0"
+    return f"{trx.jumlah_revisi or 0}:{cap}"
+
+
+def pastikan_versi(trx: TimbanganTransaksi, versi: str | None) -> None:
+    """Tolak simpan dari formulir yang sudah basi.
+
+    Tanpa ini, formulir yang dibuka sebelum orang lain mengoreksi akan
+    MENIMPA koreksi itu saat disimpan — diam-diam, dan yang kehilangan tak
+    pernah tahu. Yang ditolak menyebut siapa dan pukul berapa, supaya
+    petugasnya bisa bertanya alih-alih menebak.
+
+    Versi kosong dibiarkan lewat: kiriman dari antrean luring dibuat sebelum
+    penanda ini ada, dan menolaknya berarti menahan pekerjaan yang sah.
+    """
+    if not versi:
+        return
+    if versi != versi_tiket(trx):
+        jam = trx.updated_at.strftime("%H:%M") if trx.updated_at else "?"
+        raise LayananError(
+            f"Tiket ini sudah diubah orang lain pukul {jam} — muat ulang "
+            "halamannya dulu supaya perubahannya tidak tertimpa."
+        )
 
 
 # ═══════════════════════════ Jejak audit ═══════════════════════════
@@ -1056,6 +1111,92 @@ def _pasang_pihak(
         setattr(trx, pihak[1], pihak_id)
 
 
+
+# ══════════════════════ Batas isian (temuan QA T-09) ══════════════════════
+#
+# Salah ketik yang WAJAR jadi galat 500, dan timbang KEDUA hilang saat truk
+# menunggu di jembatan: nomor acuan 51 karakter, plat 24 huruf, jumlah karung
+# tiga miliar. Semuanya menembus lapisan aplikasi tanpa keluhan lalu ditolak
+# Postgres — dan penolakan Postgres berupa galat 500, bukan kalimat yang bisa
+# dibaca petugas.
+#
+# Suite uji berjalan di SQLite, yang tak menegakkan panjang VARCHAR maupun
+# NUMERIC. Jadi tak satu pun tertangkap sampai ia tertangkap di pos timbang.
+#
+# Angkanya diambil dari KOLOMNYA, bukan dikarang: yang dijaga di sini persis
+# batas yang akan ditolak basis data.
+BATAS_NOPOL = 20          # timbangan_transaksi.nomor_polisi String(20)
+BATAS_NOMOR_ACUAN = 50    # timbangan_muatan.nomor_acuan String(50)
+BATAS_NAMA = 100          # nama sopir / pihak
+BATAS_KARUNG = 100_000    # satu truk tak memuat lebih dari ini
+BATAS_PERSEN = 9999.0     # selisih_persen NUMERIC(9,4) → maksimal 99999,9999
+
+
+def _batas_teks(nilai: str | None, nama: str, batas: int) -> str | None:
+    """Tolak isian yang takkan muat di kolomnya, dengan menyebut kolomnya."""
+    if nilai is None:
+        return None
+    teks = str(nilai).strip()
+    if len(teks) > batas:
+        raise LayananError(
+            f"{nama} terlalu panjang ({len(teks)} huruf, maksimal {batas}). "
+            "Periksa lagi — biasanya ada yang tersalin dua kali."
+        )
+    return teks or None
+
+
+def _batas_angka(nilai, nama: str, *, maksimum: float, minimum: float = 0.0):
+    """Tolak angka di luar akal — termasuk NaN dan tak hingga."""
+    if nilai is None:
+        return nilai
+    n = float(nilai)
+    if not math.isfinite(n):
+        raise LayananError(f"{nama} bukan angka yang bisa dipakai.")
+    if n < minimum:
+        raise LayananError(f"{nama} tidak boleh kurang dari {minimum:g}.")
+    if n > maksimum:
+        raise LayananError(
+            f"{nama} di luar akal ({n:,.0f}, maksimal {maksimum:,.0f}). "
+            "Periksa lagi angkanya.".replace(",", ".")
+        )
+    return n
+
+
+def _periksa_isian(data: "InputTimbang") -> None:
+    """Seluruh batas diperiksa SEKALIGUS, sebelum satu baris pun ditulis.
+
+    Diperiksa di lapisan layanan, bukan cuma di borang: borang punya
+    `maxlength`, tetapi kiriman dari antrean luring dan dari skrip tak lewat
+    borang sama sekali.
+    """
+    data.nomor_polisi = _batas_teks(data.nomor_polisi, "Nomor polisi", BATAS_NOPOL)
+    data.nama_sopir = _batas_teks(data.nama_sopir, "Nama sopir", BATAS_NAMA)
+    data.pihak_nama = _batas_teks(data.pihak_nama, "Nama pihak", BATAS_NAMA)
+    _batas_angka(data.berat_kg, "Berat timbang", maksimum=1_000_000)
+    _batas_angka(data.tara_lain_kg, "Tara lain", maksimum=1_000_000)
+    for m in (data.muatan or []):
+        m.nomor_acuan = _batas_teks(m.nomor_acuan, "Nomor acuan", BATAS_NOMOR_ACUAN)
+        _batas_angka(m.jumlah_karung, "Jumlah karung", maksimum=BATAS_KARUNG)
+        _batas_angka(m.tara_per_karung_kg, "Tara per karung", maksimum=1_000)
+        _batas_angka(m.berat_acuan_kg, "Berat acuan", maksimum=1_000_000)
+
+
+def jepit_persen(nilai: float | None) -> float:
+    """Jepit selisih persen ke rentang yang MUAT di kolomnya.
+
+    Nota "8" untuk muatan 10 ton menghasilkan selisih 124.587%, dan kolomnya
+    NUMERIC(9,4). Angka itu menolak disimpan, jadi SELURUH penimbangan gagal —
+    padahal yang salah cuma satu angka yang bisa dikoreksi menit berikutnya.
+    Truknya sudah di jembatan.
+
+    Dijepit, bukan dibuang: selisih 9999% tetap terbaca sebagai "jauh sekali
+    melenceng", dan itulah yang perlu diketahui orang. Angka nota aslinya
+    tetap tersimpan apa adanya, jadi tak ada informasi yang hilang.
+    """
+    if nilai is None or not math.isfinite(float(nilai)):
+        return 0.0
+    return max(-BATAS_PERSEN, min(BATAS_PERSEN, float(nilai)))
+
 async def simpan_timbang_pertama(
     db: AsyncSession, *, akun: TimbanganAkun, data: InputTimbang, ip: str | None = None
 ) -> TimbanganTransaksi:
@@ -1066,6 +1207,7 @@ async def simpan_timbang_pertama(
     """
     if data.berat_kg <= 0:
         raise LayananError("Berat timbang harus lebih dari 0 kg.")
+    _periksa_isian(data)
 
     aturan = await aturan_untuk(db, data.jenis_kode)
     _wajib_nopol(aturan.arah, data.nomor_polisi, cara=data.cara_timbang)
@@ -1421,7 +1563,7 @@ async def simpan_timbang_kedua(
     selisihnya keliru — dan statusnya tersimpan permanen serta terbawa ke
     ekspor.
     """
-    trx = await ambil_kode(db, kode)
+    trx = await ambil_kode_terkunci(db, kode)
     if trx is None:
         raise LayananError(f"Transaksi {kode} tidak ditemukan.")
     if trx.status_transaksi == TRX_VOID:
@@ -1689,6 +1831,7 @@ async def koreksi_transaksi(
     akun: TimbanganAkun,
     trx: TimbanganTransaksi,
     perubahan: dict,
+    versi: str | None = None,
     muatan: list[InputMuatan] | None = None,
     alasan: str | None = None,
     ip: str | None = None,
@@ -1697,6 +1840,16 @@ async def koreksi_transaksi(
 
     Angka lama tidak hilang: ia tertulis di `timbangan_audit`.
     """
+    # ── Barisnya DIKUNCI, lalu dibaca ULANG ──
+    #
+    # `trx` yang diterima fungsi ini dibaca sebelum permintaan ini mulai, dan
+    # koreksi menghitung ulang dari angka di dalamnya. Bila orang lain
+    # menyimpan di antaranya, hitungannya dibangun di atas angka basi — dan
+    # hasilnya satu baris yang memuat tiga angka yang tak mungkin ada
+    # bersamaan. Temuan QA T-04.
+    await db.refresh(trx, with_for_update=True)
+    pastikan_versi(trx, versi)
+
     nilai = await setelan.semua(db)
     boleh, sebab = boleh_mengubah(trx, akun, nilai["jam_kunci_otomatis"])
     if not boleh:

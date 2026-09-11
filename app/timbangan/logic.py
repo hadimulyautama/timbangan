@@ -24,6 +24,8 @@ timbang). Lihat docs/timbangan/RANCANGAN.md.
 """
 from __future__ import annotations
 
+import math
+
 from dataclasses import dataclass, field
 from datetime import date
 from statistics import pstdev
@@ -400,6 +402,19 @@ def hitung(
     Angka timbangan disimpan APA ADANYA. Sistem tidak pernah membulatkan;
     pembulatan tera sudah dikerjakan timbangan resmi sebelum angka diketik.
     """
+    # ── Berat tak hingga ditolak di PINTU ──
+    #
+    # NaN membuat setiap perbandingan bernilai salah, jadi seluruh pemeriksaan
+    # di bawah ini lolos tanpa memeriksa apa pun: kekurangan 10 ton keluar
+    # sebagai NORMAL. Sesudah itu NaN menular ke tiap penjumlahan yang
+    # menyentuhnya — laporan jadi NaN, dan /monitoring menjawab 500 di layar
+    # orang yang tak pernah mengetiknya. Temuan QA T-08.
+    for _nama, _nilai in (("berat bermuatan", berat_bermuatan_kg),
+                          ("berat kosong", berat_kosong_kg),
+                          ("tara lain", tara_lain_kg)):
+        if _nilai is not None and not math.isfinite(float(_nilai)):
+            raise ValidasiError(f"{_nama} bukan angka yang bisa dipakai.")
+
     bermuatan = float(berat_bermuatan_kg)
     kosong = float(berat_kosong_kg) if berat_kosong_kg is not None else 0.0
     baris = list(muatan or [])
