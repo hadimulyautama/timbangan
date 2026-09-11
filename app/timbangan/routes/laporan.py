@@ -102,7 +102,7 @@ async def ekspor(
     ])
     for b in baris:
         t = b.trx
-        tulis.writerow([
+        tulis.writerow([jinakkan_sel(x) for x in [
             t.kode, t.tanggal, t.arah, t.jenis_kode,
             b.supplier_nama or t.pihak_nama or "", t.nomor_polisi or "",
             # Lewat fmt.jam, bukan strftime langsung: Postgres mengembalikan
@@ -113,7 +113,7 @@ async def ekspor(
             t.berat_barang_kg or "", t.berat_acuan_kg, t.selisih_kg,
             t.selisih_persen, t.status_kontrol or "", t.status_tiket,
             t.status_transaksi, t.jumlah_revisi,
-        ])
+        ]])
 
     buf.seek(0)
     nama = f"timbangan-{dari:%Y%m%d}-{sampai:%Y%m%d}.csv"
@@ -121,3 +121,26 @@ async def ekspor(
         iter([buf.getvalue()]), media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{nama}"'},
     )
+
+
+#: Karakter yang membuat Excel dan Google Sheets memperlakukan sebuah sel
+#: sebagai RUMUS, bukan sebagai teks.
+_AWALAN_RUMUS = ("=", "+", "-", "@")
+
+
+def jinakkan_sel(nilai):
+    """Pastikan satu sel CSV terbaca sebagai teks, bukan sebagai rumus.
+
+    Isi kolom di sini diketik petugas: nama sopir, nomor nota, keterangan.
+    Nama sopir `=HYPERLINK("https://…","klik")` dulu ditulis apa adanya, dan
+    dijalankan saat berkasnya dibuka — biasanya oleh bagian keuangan, di
+    komputer yang punya akses ke hal lain. Temuan QA T-25.
+
+    Angka tetap angka. Mengubahnya jadi teks membuat kolom jumlah di Excel
+    berhenti menjumlah, dan kerusakan itu tak terlihat sampai angkanya
+    dipakai.
+    """
+    if nilai is None or isinstance(nilai, (int, float, bool)):
+        return nilai
+    teks = str(nilai)
+    return "'" + teks if teks[:1] in _AWALAN_RUMUS else teks

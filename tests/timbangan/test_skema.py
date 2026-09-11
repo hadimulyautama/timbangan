@@ -36,6 +36,7 @@ MIGRASI = (
     AKAR / "migrations" / "versions" / "0030_timbangan_nomor_atomik.py",
     AKAR / "migrations" / "versions" / "0032_partai_kunci_baris.py",
     AKAR / "migrations" / "versions" / "0033_cetak_revisi.py",
+    AKAR / "migrations" / "versions" / "0034_sesi_versi.py",
 )
 
 # Daftar di atas DITULIS TANGAN, dan karena itu ia basi tiap kali ada migrasi

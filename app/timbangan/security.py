@@ -101,39 +101,86 @@ def _b64d(teks: str) -> bytes:
     return base64.urlsafe_b64decode(teks + "=" * (-len(teks) % 4))
 
 
-def buat_token(akun_id: int, *, hari: int | None = None) -> str:
+#: Batas atas nomor akun yang masuk akal. Id di luar rentang ini dulu sampai
+#: ke basis data apa adanya.
+_MAKS_ID = 2 ** 31 - 1
+
+#: Satu-satunya tempat yang sah dituju sesudah masuk.
+AKAR = "/timbangan/"
+
+
+def buat_token(akun_id: int, *, hari: int | None = None, versi: int = 1) -> str:
     """Token sesi bertanda tangan: <payload>.<signature>.
 
     Sesi berlaku sampai petugas menekan Keluar — tiap orang memakai
     perangkatnya sendiri, jadi membukanya lagi tidak boleh meminta login.
     Batas hari di sini hanya jaring pengaman, bukan pengusir harian.
+
+    `versi` adalah versi sesi akun, dan ia yang membuat Keluar berarti sesuatu
+    di perangkat yang TIDAK sedang dipegang. Tanpanya token berlaku 180 hari
+    tanpa bisa dicabut oleh apa pun: sesudah petugas mengganti sandinya lalu
+    menekan Keluar, cookie lama di perangkat lain tetap dijawab 200.
+    Temuan QA T-19.
     """
     kedaluwarsa = datetime.now(timezone.utc) + timedelta(
         days=hari or tsettings.sesi_hari
     )
     payload = _b64e(json.dumps(
-        {"sub": int(akun_id), "exp": int(kedaluwarsa.timestamp())},
+        {"sub": int(akun_id), "exp": int(kedaluwarsa.timestamp()),
+         "v": int(versi or 1)},
         separators=(",", ":"),
     ).encode())
     tanda = _b64e(hmac.new(_kunci(), payload.encode(), hashlib.sha256).digest())
     return f"{payload}.{tanda}"
 
 
-def baca_token(token: str | None) -> int | None:
-    """Kembalikan akun_id bila token sah & belum kedaluwarsa."""
+def baca_token(token: str | None) -> tuple[int, int] | None:
+    """(akun_id, versi) bila token sah & belum kedaluwarsa; selain itu None.
+
+    Tak pernah melempar: cookie datang dari luar, jadi isinya bisa apa saja —
+    termasuk huruf non-ASCII, yang menjatuhkan `compare_digest` dengan
+    TypeError dan membuat setiap halaman menjawab 500.
+    """
     if not token or "." not in token:
         return None
-    payload, _, tanda = token.partition(".")
-    harapan = _b64e(hmac.new(_kunci(), payload.encode(), hashlib.sha256).digest())
-    if not hmac.compare_digest(tanda, harapan):
-        return None
     try:
+        payload, _, tanda = token.partition(".")
+        harapan = _b64e(hmac.new(_kunci(), payload.encode(), hashlib.sha256).digest())
+        if not hmac.compare_digest(tanda, harapan):
+            return None
         data = json.loads(_b64d(payload))
         if int(data["exp"]) < int(datetime.now(timezone.utc).timestamp()):
             return None
-        return int(data["sub"])
-    except (ValueError, KeyError, TypeError):
+        akun_id = int(data["sub"])
+        if not 0 < akun_id <= _MAKS_ID:
+            return None
+        # Token lama (dibuat sebelum kolom versi ada) dianggap versi 1: deploy
+        # tak boleh memutus semua petugas sekaligus.
+        return akun_id, int(data.get("v", 1) or 1)
+    except (ValueError, KeyError, TypeError, UnicodeError, AttributeError):
         return None
+
+
+def token_masih_berlaku(dibaca: tuple[int, int] | None, *, versi_akun: int) -> bool:
+    """Apakah token yang sudah dibaca masih sepadan dengan versi akunnya."""
+    return dibaca is not None and dibaca[1] >= int(versi_akun or 1)
+
+
+def tujuan_aman(nilai: str | None) -> str:
+    """Alamat tujuan sesudah masuk — hanya di dalam modul ini sendiri.
+
+    Halaman masuk yang mengantar petugas ke situs lain bisa dipakai memanen
+    sandinya: alamat yang diketik benar, tampilannya benar, dan yang terbuka
+    berikutnya bukan milik kita. `//evil.example` bentuk yang paling sering
+    terlewat — peramban membacanya sebagai alamat lengkap tanpa skema.
+    Temuan QA T-20.
+    """
+    v = (nilai or "").strip()
+    if not v.startswith(AKAR):
+        return AKAR
+    if any(c in v for c in ("\r", "\n", "\\", "..")):
+        return AKAR
+    return v
 
 
 # ─────────────────────────── Dependency ───────────────────────────
@@ -145,9 +192,10 @@ async def akun_opsional(request: Request) -> TimbanganAkun | None:
     from app.models import User as _User
     from app.timbangan.db import sesi_db
 
-    akun_id = baca_token(request.cookies.get(NAMA_COOKIE))
-    if akun_id is None:
+    dibaca = baca_token(request.cookies.get(NAMA_COOKIE))
+    if dibaca is None:
         return None
+    akun_id, _versi = dibaca
     async with sesi_db() as db:
         akun = (
             await db.execute(
@@ -157,6 +205,11 @@ async def akun_opsional(request: Request) -> TimbanganAkun | None:
                 )
             )
         ).scalars().first()
+        # Versi sesi: token yang dibuat sebelum petugas keluar, mengganti
+        # sandinya, atau perannya berubah sudah bukan miliknya lagi.
+        if akun is not None and not token_masih_berlaku(
+                dibaca, versi_akun=getattr(akun, "token_version", 1)):
+            akun = None
         # ── Dinonaktifkan di MASTER berarti tak lagi bekerja di sini ──
         #
         # Ada tiga bendera nonaktif yang terpisah — `users.status`,

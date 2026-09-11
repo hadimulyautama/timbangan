@@ -275,14 +275,30 @@ def nama_kolom_pihak(arah: str) -> str:
     return pihak[2] if pihak else "nama"
 
 
+def _saring_hidup(q, model):
+    """Buang baris yang sudah dihapus (soft delete).
+
+    Pemasok yang sudah dihapus tetap ditawarkan di layar timbang, dan tiket
+    yang tertaut padanya tak bisa ditelusuri ke mana pun sesudahnya. Penyaring
+    lamanya merujuk `is_active` — atribut yang tak pernah ada di model ini —
+    jadi `hasattr` selalu False dan penyaringnya tak pernah berjalan sekali
+    pun. Temuan QA T-24.
+    """
+    if hasattr(model, "deleted_at"):
+        q = q.where(model.deleted_at.is_(None))
+    if hasattr(model, "status"):
+        q = q.where(model.status != "nonaktif")
+    return q
+
+
 async def daftar_pihak(db: AsyncSession, arah: str) -> list:
-    """Seluruh calon lawan transaksi untuk arah ini, terurut nama."""
+    """Calon lawan transaksi yang MASIH ADA untuk arah ini, terurut nama."""
     pihak = pihak_untuk(arah)
     if pihak is None:
         return []
     model, _, kolom_nama = pihak
     return list((await db.execute(
-        select(model).order_by(getattr(model, kolom_nama))
+        _saring_hidup(select(model), model).order_by(getattr(model, kolom_nama))
     )).scalars())
 
 
@@ -393,10 +409,11 @@ async def supplier_pilihan(
 async def daftar_supplier(
     db: AsyncSession, *, hanya_aktif: bool = True
 ) -> list[Supplier]:
-    q = select(Supplier).order_by(Supplier.nama_supplier)
-    if hanya_aktif and hasattr(Supplier, "is_active"):
-        q = q.where(Supplier.is_active.is_(True))
-    return list((await db.execute(q)).scalars())
+    """Pemasok yang masih ada. Lihat `_saring_hidup` untuk sebabnya."""
+    q = select(Supplier)
+    if hanya_aktif:
+        q = _saring_hidup(q, Supplier)
+    return list((await db.execute(q.order_by(Supplier.nama_supplier))).scalars())
 
 
 # ═══════════════════════════ Tara standar ═══════════════════════════
@@ -2210,6 +2227,32 @@ async def void_transaksi(
     trx.void_oleh_id = akun.id
     trx.void_pada = sekarang()
 
+    # ── Lembar pemeriksaannya ikut ditutup ──
+    #
+    # Lembar milik tiket yang dibatalkan menumpuk di antrean SELAMANYA:
+    # pekerjaan yang tak mungkin diselesaikan siapa pun, sebab angka yang
+    # hendak ditelusuri sudah tak berlaku. Antrean yang memuat pekerjaan
+    # semacam itu berhenti dibaca orang. Temuan QA T-23.
+    ditutup = (await db.execute(
+        select(TimbanganPemeriksaan).where(
+            TimbanganPemeriksaan.transaksi_id == trx.id,
+            TimbanganPemeriksaan.status != PEMERIKSAAN_SELESAI,
+        )
+    )).scalars().all()
+    for lembar in ditutup:
+        lembar.status = PEMERIKSAAN_SELESAI
+        lembar.kategori_hasil = lembar.kategori_hasil or "TIKET_DIBATALKAN"
+        lembar.catatan_resolusi = (
+            f"Ditutup otomatis karena tiketnya dibatalkan: {trx.void_alasan}"
+        )
+        lembar.ditutup_oleh_id = akun.id
+        lembar.ditutup_pada = sekarang()
+        await catat_audit(
+            db, akun=akun, aksi="PEMERIKSAAN_SELESAI", entitas="pemeriksaan",
+            entitas_id=lembar.id,
+            ringkasan="ditutup otomatis — tiketnya dibatalkan", ip=ip,
+        )
+
     await catat_audit(
         db, akun=akun, aksi="VOID", entitas="transaksi", entitas_id=trx.kode,
         ringkasan=trx.void_alasan, ip=ip,
@@ -2471,6 +2514,14 @@ async def _terapkan_ubah_akun(
         # Sandi tidak pernah masuk audit, baik yang lama maupun yang baru.
         sesudah["sandi"] = "diganti"
         berubah.append("sandi")
+
+    # ── Sesi lama ikut putus ──
+    #
+    # Sandi yang diganti atau peran yang diturunkan tak berarti apa-apa
+    # selama token lama masih diterima — dan token di sini berlaku 180 hari.
+    # Temuan QA T-19.
+    if "sandi" in berubah or "peran" in berubah:
+        orang.token_version = (orang.token_version or 1) + 1
 
     if not berubah:
         return []
@@ -2792,6 +2843,17 @@ async def selesaikan_pemeriksaan(
     """
     if not akun.is_admin:
         raise LayananError("Hanya Admin yang boleh menutup pemeriksaan.")
+    # ── Sekali ditutup, selesai ──
+    #
+    # Penutupan kedua menimpa kategori hasil DAN nama penutupnya, jadi lembar
+    # yang sudah diselesaikan seseorang bisa ditulis ulang oleh orang lain
+    # tanpa satu pun jejak bahwa itu pernah terjadi. Yang benar bukan menutup
+    # ulang melainkan membuka pemeriksaan baru. Temuan QA T-23.
+    if lembar.status == PEMERIKSAAN_SELESAI:
+        raise LayananError(
+            "Lembar pemeriksaan ini sudah ditutup. Bila masih ada yang perlu "
+            "ditelusuri, buka pemeriksaan baru — jangan menimpa yang lama."
+        )
     if not (catatan_resolusi or "").strip():
         raise LayananError("Catatan resolusi wajib diisi.")
     if not kategori_hasil:
@@ -3100,6 +3162,14 @@ class RingkasanDashboard:
     tiket_terbuka: int = 0
     perlu_periksa: int = 0
     pemeriksaan_terbuka: int = 0
+    #: Dipisah per arah sejak 11 September 2026. Satu angka yang menjumlahkan
+    #: gabah MASUK, beras KELUAR, jasa timbang, dan transfer internal tidak
+    #: berarti apa-apa — dan yang membacanya mengira itu jumlah gabah yang
+    #: diterima hari itu. Temuan QA T-26.
+    masuk_kg: float = 0.0
+    keluar_kg: float = 0.0
+    #: Dipertahankan demi pemanggil lama; isinya masuk + keluar saja, TANPA
+    #: jasa timbang dan transfer internal.
     total_barang_kg: float = 0.0
     total_selisih_kg: float = 0.0
 
@@ -3155,12 +3225,28 @@ async def ringkasan_dashboard(
         .where(TimbanganPemeriksaan.status == PEMERIKSAAN_DIBUKA)
     )).scalar_one()
 
+    # Dijumlah PER ARAH. Jasa timbang (BEBAS) dan transfer internal sengaja
+    # tak ikut di mana pun: barangnya tak masuk dan tak keluar, jadi
+    # menjumlahkannya ke salah satu sisi membuat angka itu berbohong.
+    per_arah = dict((await db.execute(_terapkan_filter(
+        select(TimbanganTransaksi.arah,
+               func.coalesce(func.sum(TimbanganTransaksi.berat_barang_kg), 0))
+        .select_from(TimbanganTransaksi), f,
+    ).group_by(TimbanganTransaksi.arah))).all())
+
+    masuk = float(per_arah.get(logic.MASUK, 0) or 0) + \
+        float(per_arah.get(logic.RETUR_MASUK, 0) or 0)
+    keluar = float(per_arah.get(logic.KELUAR, 0) or 0) + \
+        float(per_arah.get(logic.RETUR_KELUAR, 0) or 0)
+
     return RingkasanDashboard(
         jumlah=baris[0],
         tiket_terbuka=terbuka,
         perlu_periksa=perlu,
         pemeriksaan_terbuka=lembar,
-        total_barang_kg=float(baris[1] or 0),
+        masuk_kg=masuk,
+        keluar_kg=keluar,
+        total_barang_kg=masuk + keluar,
         total_selisih_kg=float(baris[2] or 0),
     )
 

@@ -25,9 +25,19 @@
       <div class="petak__nilai">{{ ringkasan.jumlah }}</div>
       <div class="petak__label">Transaksi</div>
     </div>
+    {# Dipisah per arah sejak 11 September 2026.
+       "Total barang" dulu menjumlahkan gabah MASUK, beras KELUAR, jasa
+       timbang, dan transfer internal menjadi satu angka. Angka itu tidak
+       berarti apa-apa, dan yang membacanya mengira itu jumlah gabah yang
+       diterima hari itu. Jasa timbang dan transfer internal tidak muncul di
+       kedua sisi: barangnya tak masuk dan tak keluar. #}
     <div class="petak__sel">
-      <div class="petak__nilai">{{ ringkasan.total_barang_kg|ton }}</div>
-      <div class="petak__label">Total barang</div>
+      <div class="petak__nilai">{{ ringkasan.masuk_kg|ton }}</div>
+      <div class="petak__label">Barang masuk</div>
+    </div>
+    <div class="petak__sel">
+      <div class="petak__nilai">{{ ringkasan.keluar_kg|ton }}</div>
+      <div class="petak__label">Barang keluar</div>
     </div>
     <div class="petak__sel">
       {# Namanya menyebut FAKTA, bukan tugas.

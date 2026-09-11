@@ -179,6 +179,17 @@ class TimbanganAkun(Base, TimestampMixin):
     username: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     nama: Mapped[str] = mapped_column(String(100), nullable=False)
     role: Mapped[str] = mapped_column(String(20), nullable=False, default=ROLE_PETUGAS)
+
+    # ── Versi sesi ──
+    #
+    # Token sesi berlaku 180 hari dan tak tercatat di mana pun, jadi ia tak
+    # bisa dicabut oleh apa pun: sesudah petugas mengganti sandinya lalu
+    # menekan Keluar, cookie lama di perangkat lain tetap diterima. Angka ini
+    # ikut di dalam token; menaikkannya menghentikan semua token lama
+    # seketika. Temuan QA T-19.
+    token_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="aktif")
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))

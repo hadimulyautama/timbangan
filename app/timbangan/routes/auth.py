@@ -15,12 +15,14 @@ from app.timbangan import service
 from app.timbangan.config import tsettings
 from app.timbangan.db import get_db, sekarang
 from app.timbangan.models import TimbanganAkun
+from app.timbangan import gerbang_masuk as gerbang
 from app.timbangan.security import (
     NAMA_COOKIE,
     akun_opsional,
     buat_token,
     butuh_akun,
     cek_sandi,
+    tujuan_aman,
 )
 from app.timbangan.web import BASE_DIR, PREFIX, redirect, render
 
@@ -34,7 +36,7 @@ async def halaman_masuk(request: Request):
         return RedirectResponse(f"{PREFIX}/", status_code=303)
     return render(
         request, "masuk.html",
-        tujuan=request.query_params.get("next", ""),
+        tujuan=tujuan_aman(request.query_params.get("next", "")),
     )
 
 
@@ -46,24 +48,56 @@ async def proses_masuk(
     tujuan: str = Form(""),
     db: AsyncSession = Depends(get_db),
 ):
-    akun = (await db.execute(
-        select(TimbanganAkun).where(
-            TimbanganAkun.username == username.strip().lower()
+    uname = username.strip().lower()
+    tujuan = tujuan_aman(tujuan)
+    ip = request.client.host if request.client else None
+
+    # ── Pembatas percobaan (RANCANGAN §10) ──
+    #
+    # Sampai 11 September 2026 tak ada sama sekali: seluruh daftar sandi bisa
+    # dicoba satu per satu, dan tak ada baris di mana pun yang mencatatnya.
+    sisa = gerbang.boleh_coba(uname, ip or "")
+    if sisa is not None:
+        return render(
+            request, "masuk.html", tujuan=tujuan,
+            pesan_err=(f"Terlalu banyak percobaan. Coba lagi "
+                       f"{int(sisa // 60) + 1} menit lagi, atau hubungi Admin."),
         )
+
+    akun = (await db.execute(
+        select(TimbanganAkun).where(TimbanganAkun.username == uname)
     )).scalars().first()
+
+    async def _tolak(pesan: str):
+        """Catat kegagalannya, lalu tolak.
+
+        Login gagal yang tak pernah diaudit berarti penebakan yang berlangsung
+        berminggu-minggu tak meninggalkan satu baris pun di mana pun.
+        """
+        gerbang.catat_gagal(uname, ip or "")
+        await service.catat_audit(
+            db, akun=akun, aksi="LOGIN_GAGAL", entitas="akun",
+            entitas_id=(akun.id if akun else uname[:40]),
+            ringkasan=pesan, ip=ip,
+        )
+        await db.commit()
+        return render(request, "masuk.html", tujuan=tujuan, pesan_err=pesan)
 
     # Pesan yang sama untuk pengguna tidak dikenal maupun sandi salah — jangan
     # memberi tahu penebak mana dari keduanya yang benar.
     if akun is None or not cek_sandi(sandi, akun.password_hash):
-        return render(
-            request, "masuk.html", tujuan=tujuan,
-            pesan_err="Nama pengguna atau kata sandi salah.",
-        )
+        return await _tolak("Nama pengguna atau kata sandi salah.")
     if akun.status != "aktif":
-        return render(
-            request, "masuk.html", tujuan=tujuan,
-            pesan_err="Akun ini sedang dinonaktifkan. Hubungi Admin.",
-        )
+        return await _tolak("Akun ini sedang dinonaktifkan. Hubungi Admin.")
+    # Dinonaktifkan di MASTER berarti tak lagi bekerja di sini sama sekali.
+    if akun.user_id:
+        from app.models import User as _User
+
+        orang = await db.get(_User, akun.user_id)
+        if orang is not None and (orang.status or "").lower() != "aktif":
+            return await _tolak("Akun ini sedang dinonaktifkan. Hubungi Admin.")
+
+    gerbang.catat_berhasil(uname, ip or "")
 
     # Kode perangkat TIDAK lagi diisi di sini. Dulu layar masuk memintanya,
     # dan siapa pun yang mengetik kode perangkat orang lain diam-diam
@@ -82,7 +116,7 @@ async def proses_masuk(
     aman = request.url.scheme == "https"
     balasan = RedirectResponse(tujuan or f"{PREFIX}/", status_code=303)
     balasan.set_cookie(
-        NAMA_COOKIE, buat_token(akun.id),
+        NAMA_COOKIE, buat_token(akun.id, versi=akun.token_version or 1),
         max_age=tsettings.sesi_hari * 24 * 3600,
         httponly=True, samesite="lax", secure=aman, path=PREFIX,
     )
@@ -95,8 +129,16 @@ async def proses_keluar(
     akun: TimbanganAkun = Depends(butuh_akun),
     db: AsyncSession = Depends(get_db),
 ):
+    # ── Keluar berarti keluar dari SEMUA perangkat ──
+    #
+    # Sebelumnya ia hanya menghapus cookie di perangkat yang menekannya, dan
+    # token berlaku 180 hari. Di pos timbang perangkatnya dipakai bergantian
+    # dan kadang tertinggal di mana saja; "Keluar" yang tak benar-benar
+    # mengeluarkan adalah janji yang tak ditepati. Temuan QA T-19.
+    akun.token_version = (akun.token_version or 1) + 1
     await service.catat_audit(
         db, akun=akun, aksi="LOGOUT", entitas="akun", entitas_id=akun.id,
+        ringkasan="keluar dari semua perangkat",
         ip=request.client.host if request.client else None,
     )
     await db.commit()

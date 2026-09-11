@@ -25,7 +25,9 @@ from app.timbangan.models import (
 )
 from app.timbangan.routes.pos import _angka
 from app.timbangan.security import (
+    NAMA_COOKIE,
     ada_super_aktif,
+    buat_token,
     butuh_admin,
     butuh_akun,
     butuh_super,
@@ -474,16 +476,37 @@ async def ubah_pengguna(
         return redirect(f"/pengguna/{akun_id}", ok="Tidak ada yang diubah.")
 
     pesan = f"{orang.nama}: {', '.join(berubah)} diubah."
+
+    def _segarkan(balasan):
+        """Perbarui cookie bila yang berubah adalah akun PELAKU sendiri.
+
+        Mengganti sandi atau peran menaikkan versi sesi, dan itu memang
+        gunanya — token lama di perangkat lain berhenti berlaku. Tetapi
+        perangkat yang sedang dipakai orangnya juga memegang token lama, jadi
+        tanpa cookie baru ia terlempar ke halaman masuk persis sesudah
+        mengubah akunnya sendiri. Temuan QA T-19; yang dijaga di sini
+        akibatnya, bukan aturannya.
+        """
+        if orang.id != akun.id:
+            return balasan
+        balasan.set_cookie(
+            NAMA_COOKIE, buat_token(akun.id, versi=orang.token_version or 1),
+            max_age=tsettings.sesi_hari * 24 * 3600,
+            httponly=True, samesite="lax",
+            secure=request.url.scheme == "https", path=PREFIX,
+        )
+        return balasan
+
     # Menurunkan peran sendiri langsung mencabut akses ke halaman ini;
     # mengalihkan ke sana hanya akan berakhir dengan layar "akses ditolak"
     # tanpa penjelasan. Antar ke Pengaturan beserta alasannya.
     if orang.id == akun.id and not orang.is_admin:
-        return redirect(
+        return _segarkan(redirect(
             "/pengaturan",
             ok=pesan + " Peran Anda kini bukan Admin, jadi pengelolaan "
                        "pengguna tidak lagi terbuka.",
-        )
-    return await _pulang_kelola(db, akun, pesan)
+        ))
+    return _segarkan(await _pulang_kelola(db, akun, pesan))
 
 
 @router.post("/pengguna/{akun_id}/hapus")
