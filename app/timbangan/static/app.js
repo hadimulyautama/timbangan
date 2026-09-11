@@ -110,9 +110,17 @@
 
   function antrekan(kiriman) {
     var daftar = bacaAntrean();
-    // Dikunci pada kode transaksi: mengantre dua kali tidak menggandakan.
+    /* Dikunci pada KUNCI KIRIMAN, bukan nomor transaksi.
+     *
+     * Nomor dulu dibentuk saat formulir dibuka, jadi dua formulir yang
+     * terbuka bersamaan menghasilkan nomor yang SAMA — dan antrean ini lalu
+     * menganggap dua penimbangan yang berbeda sebagai satu, lalu membuang
+     * salah satunya sebelum sempat terkirim. Temuan QA T-01.
+     *
+     * Kunci dibuat sekali per formulir dan tak pernah berulang, jadi yang
+     * dilebur di sini benar-benar kiriman yang sama. */
     var i = daftar.findIndex(function (k) {
-      return k.kode === kiriman.kode && k.url === kiriman.url;
+      return k.kunci && k.kunci === kiriman.kunci && k.url === kiriman.url;
     });
     if (i >= 0) { daftar[i] = kiriman; } else { daftar.push(kiriman); }
     tulisAntrean(daftar);

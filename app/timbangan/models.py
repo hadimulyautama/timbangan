@@ -302,6 +302,27 @@ class TimbanganTransaksi(Base, TimestampMixin):
     kode: Mapped[str] = mapped_column(
         String(32), unique=True, nullable=False, index=True
     )
+    # ── Kunci kiriman: identitas yang SEBENARNYA dari sebuah penimbangan ──
+    #
+    # Dibuat perangkat saat formulir dibuka, sekali, dan tak pernah berubah
+    # sesudahnya. Nomor tiket TIDAK bisa dipakai untuk ini: sampai 11
+    # September 2026 nomor itu juga dibentuk saat formulir dibuka, dari
+    # "jumlah baris hari ini + 1", sehingga dua petugas yang membuka layar
+    # pada detik yang sama memegang angka yang sama — lalu penyimpanannya
+    # memperlakukan nomor yang sudah ada sebagai kirim ulang dan menulis ulang
+    # seluruh tiket. Truk yang pertama hilang tanpa satu pun pesan.
+    #
+    # Dengan kunci ini, kirim ulang dari antrean luring tetap dikenali
+    # (kunci sama = kiriman yang sama), sementara dua penimbangan yang
+    # berbeda tak mungkin bertabrakan — masing-masing membawa kuncinya
+    # sendiri.
+    #
+    # Boleh kosong: tiket yang dibuat sebelum kolom ini ada tak punya kunci,
+    # dan tak boleh diisi asal karena kunci karangan bisa bertabrakan dengan
+    # kunci sungguhan milik perangkat.
+    kunci_kiriman: Mapped[str | None] = mapped_column(
+        String(36), unique=True, index=True
+    )
     # Mengikuti tanggal timbang KEDUA (transaksi bisa melewati tengah malam).
     tanggal: Mapped[date] = mapped_column(Date, nullable=False, index=True)
 
@@ -652,3 +673,29 @@ class TimbanganAudit(Base):
     nilai_sesudah: Mapped[str | None] = mapped_column(Text)
     perangkat_kode: Mapped[str | None] = mapped_column(String(8))
     ip: Mapped[str | None] = mapped_column(String(45))
+
+
+class TimbanganNomor(Base):
+    """Penghitung nomor tiket — satu baris per awalan, tanggal, dan perangkat.
+
+    Nomor dulu dihitung dengan `SELECT count(*) … + 1` saat formulir dibuka.
+    Dua hal salah sekaligus di situ: ia dihitung terlalu awal (nomor yang
+    belum jadi milik siapa pun), dan ia dihitung dari jumlah BARIS — sehingga
+    tiket yang dibatalkan membuat nomor tertinggi diterbitkan ulang.
+
+    Baris di sini hanya bertambah, tak pernah berkurang. Nomor yang sudah
+    diterbitkan tak akan diterbitkan lagi meski tiketnya kemudian dibatalkan:
+    nomor yang muncul dua kali di buku dan di struk lebih membingungkan
+    daripada nomor yang melompat.
+
+    Diambil dengan satu perintah `INSERT … ON CONFLICT DO UPDATE … RETURNING`,
+    jadi dua penyimpanan yang berbarengan tak mungkin mendapat angka yang
+    sama — bahkan bila keduanya datang dari dua proses yang berbeda.
+    """
+
+    __tablename__ = "timbangan_nomor"
+
+    awalan: Mapped[str] = mapped_column(String(8), primary_key=True)
+    tanggal: Mapped[date] = mapped_column(Date, primary_key=True)
+    perangkat: Mapped[str] = mapped_column(String(8), primary_key=True)
+    n: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

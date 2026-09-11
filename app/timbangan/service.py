@@ -27,7 +27,7 @@ from zoneinfo import ZoneInfo
 
 from app.config import settings
 from app.models import Pelanggan, Supplier
-from app.timbangan import logic, setelan
+from app.timbangan import format as fmt, logic, setelan
 from app.timbangan.config import tsettings
 from app.timbangan.db import berzona, sekarang
 from app.timbangan.models import (
@@ -50,6 +50,7 @@ from app.timbangan.models import (
     TimbanganCetak,
     TimbanganFoto,
     TimbanganJenis,
+    TimbanganNomor,
     TimbanganKendaraan,
     TimbanganMuatan,
     TimbanganPemeriksaan,
@@ -565,13 +566,24 @@ class InputMuatan:
 class InputTimbang:
     """Satu kiriman dari perangkat.
 
-    `kode` dibentuk di perangkat — server tidak menomori. Kiriman ulang dengan
-    kode yang sama memperbarui baris yang sama, bukan membuat baris baru.
+    **Identitasnya `kunci`, bukan `kode`.** Kunci dibuat perangkat saat
+    formulir dibuka, sekali, dan ikut pada tiap kiriman ulang dari antrean
+    luring. Nomor tiketnya sendiri baru diterbitkan server saat menyimpan.
+
+    Dulu sebaliknya: perangkat yang menomori, saat formulir dibuka, dan nomor
+    itu dipakai sebagai identitas. Dua petugas yang membuka layar pada detik
+    yang sama memegang nomor yang sama — lalu yang menyimpan belakangan
+    menulis ulang tiket yang duluan, dan keduanya melihat "tersimpan".
+
+    `kode` masih diterima demi kiriman lama yang tertahan di antrean luring
+    sebelum pembaruan ini. Ia dipakai hanya untuk MENCOCOKKAN, tak pernah
+    untuk menimpa: nomor yang sudah dimiliki tiket lain ditolak.
     """
-    kode: str
-    arah: str
-    jenis_kode: str
-    berat_kg: float
+    kode: str | None = None
+    arah: str = ""
+    jenis_kode: str = ""
+    berat_kg: float = 0.0
+    kunci: str | None = None
     waktu_operator: datetime | None = None
     cara_timbang: str = CARA_DUA_KALI
     supplier_id: int | None = None
@@ -715,6 +727,104 @@ async def kode_baru(db: AsyncSession, akun: TimbanganAkun, arah: str) -> str:
     while f"{awalan}{urut:03d}" in terpakai:
         urut += 1
     return f"{awalan}{urut:03d}"
+
+
+async def alokasi_nomor(db: AsyncSession, akun: TimbanganAkun, arah: str) -> str:
+    """Terbitkan nomor tiket — atomik, saat MENYIMPAN.
+
+    Satu perintah `INSERT … ON CONFLICT DO UPDATE … RETURNING`, jadi dua
+    penyimpanan berbarengan tak mungkin mendapat angka yang sama, bahkan dari
+    dua proses yang berbeda. `kode_baru` yang lama menghitung
+    `count(*) + 1` saat formulir DIBUKA; dua layar yang terbuka bersamaan
+    memegang angka yang sama, dan tiket yang dibatalkan membuat nomor
+    tertinggi diterbitkan ulang.
+
+    Penghitungnya hanya bertambah. Nomor yang sudah diterbitkan tak pernah
+    diterbitkan lagi meski tiketnya kemudian dibatalkan: nomor yang muncul dua
+    kali di buku dan di struk lebih membingungkan daripada nomor yang melompat.
+    """
+    perangkat = (akun.perangkat_kode or "P0")[:8].upper()
+    hari = sekarang().date()
+    awalan_kode = AWALAN_KODE.get(arah, AWALAN_BAWAAN)
+
+    # Dialeknya dibedakan karena hanya itu yang berbeda: keduanya punya
+    # `ON CONFLICT DO UPDATE`, dengan modul insert masing-masing.
+    if db.bind.dialect.name == "postgresql":
+        from sqlalchemy.dialects.postgresql import insert as _insert
+    else:
+        from sqlalchemy.dialects.sqlite import insert as _insert
+
+    perintah = _insert(TimbanganNomor).values(
+        awalan=awalan_kode, tanggal=hari, perangkat=perangkat, n=1
+    )
+    perintah = perintah.on_conflict_do_update(
+        index_elements=["awalan", "tanggal", "perangkat"],
+        set_={"n": TimbanganNomor.n + 1},
+    ).returning(TimbanganNomor.n)
+    urut = (await db.execute(perintah)).scalar_one()
+    return f"{awalan_kode}-{hari:%Y%m%d}-{perangkat}-{urut:03d}"
+
+
+#: Kolom yang menentukan "apakah kiriman ulang ini isinya SAMA".
+#:
+#: Sengaja hanya yang diketik orang. Waktu kirim, petugas, dan cap sistem
+#: memang berubah tiap kiriman ulang — memasukkannya berarti tiap kirim ulang
+#: dianggap berbeda, lalu ditolak, dan antrean luring macet selamanya.
+_ISI_TIMBANG1 = ("arah", "jenis_kode", "cara_timbang", "nomor_polisi",
+                 "nama_sopir", "pihak_nama", "timbang1_kg")
+
+
+def _isi_berbeda(trx: TimbanganTransaksi, data: InputTimbang) -> str | None:
+    """Sebut kolom pertama yang berbeda, atau None bila kiriman ulang sejati."""
+    diminta = {
+        "arah": data.arah,
+        "jenis_kode": data.jenis_kode,
+        "cara_timbang": data.cara_timbang,
+        "nomor_polisi": normalisasi_nopol(data.nomor_polisi),
+        "nama_sopir": data.nama_sopir,
+        "pihak_nama": data.pihak_nama,
+        "timbang1_kg": float(data.berat_kg),
+    }
+    for kolom in _ISI_TIMBANG1:
+        ada = getattr(trx, kolom)
+        minta = diminta[kolom]
+        if kolom == "timbang1_kg":
+            if ada is not None and abs(float(ada) - float(minta)) > 1e-6:
+                return (f"berat timbang ({fmt.kg(ada)} ≠ {fmt.kg(minta)})")
+            continue
+        if (ada or None) != (minta or None):
+            return f"{kolom} ({ada or '-'} ≠ {minta or '-'})"
+    return None
+
+
+async def _oleh_siapa(db: AsyncSession, trx: TimbanganTransaksi) -> str:
+    """" oleh Budi pukul 14:05" — atau kosong bila tak terlacak.
+
+    Petugas kedua yang kirimannya ditolak perlu tahu SIAPA yang sudah
+    menyelesaikannya, supaya ia bisa bertanya alih-alih mengetik ulang angka
+    yang sama berkali-kali. Namanya diambil lewat kueri, bukan lewat relasi:
+    `TimbanganTransaksi` sengaja tak memuat relasi ke petugas, dan menambah
+    satu hanya demi kalimat galat berarti tiap pembacaan tiket ikut menariknya.
+    """
+    pid = trx.timbang2_petugas_id or trx.timbang1_petugas_id
+    nama = None
+    if pid:
+        nama = (await db.execute(
+            select(TimbanganAkun.nama).where(TimbanganAkun.id == pid)
+        )).scalars().first()
+    jam = trx.timbang2_waktu or trx.timbang1_waktu
+    bagian = ""
+    if nama:
+        bagian += f" oleh {nama}"
+    if jam:
+        bagian += f" pukul {jam:%H:%M}"
+    return bagian
+
+
+async def ambil_kunci(db: AsyncSession, kunci: str) -> TimbanganTransaksi | None:
+    return (await db.execute(
+        select(TimbanganTransaksi).where(TimbanganTransaksi.kunci_kiriman == kunci)
+    )).scalars().first()
 
 
 async def ambil_kode(db: AsyncSession, kode: str) -> TimbanganTransaksi | None:
@@ -940,17 +1050,69 @@ async def simpan_timbang_pertama(
     waktu = sekarang()
     kendaraan = await kendaraan_dari_nopol(db, data.nomor_polisi)
 
-    trx = await ambil_kode(db, data.kode)
+    # ── Siapa tiket ini: dicari lewat KUNCI, bukan lewat nomor ──
+    #
+    # Kunci dibuat perangkat saat formulir dibuka dan ikut di tiap kiriman
+    # ulang. Nomor tidak bisa memikul tugas ini: sampai 11 September 2026
+    # nomor pun dibentuk saat formulir dibuka, sehingga dua petugas yang
+    # membuka layar bersamaan memegang angka yang sama.
+    trx = None
+    if data.kunci:
+        trx = await ambil_kunci(db, data.kunci)
+    if trx is None and data.kode:
+        # Kiriman LAMA dari antrean luring, dibuat sebelum kunci ada. Ia
+        # hanya boleh mencocokkan tiket yang memang belum berkunci; nomor yang
+        # sudah dimiliki tiket berkunci lain bukan miliknya.
+        lama_ = await ambil_kode(db, data.kode)
+        if lama_ is not None:
+            if lama_.kunci_kiriman and lama_.kunci_kiriman != data.kunci:
+                raise LayananError(
+                    f"Nomor {data.kode} sudah dipakai tiket lain "
+                    f"({lama_.nomor_polisi or '-'}, "
+                    f"{fmt.kg(lama_.timbang1_kg or 0)}). "
+                    "Simpan ulang tanpa mengisi nomor — server yang "
+                    "menerbitkannya."
+                )
+            trx = lama_
+
     baru = trx is None
     if trx is None:
-        trx = TimbanganTransaksi(kode=data.kode)
+        # Nomornya diterbitkan DI SINI, atomik, bukan saat formulir dibuka.
+        #
+        # Nomor yang DIBAWA kiriman tetap dihormati bila belum dimiliki siapa
+        # pun — itu kiriman luring yang dibuat sebelum pembaruan ini, dan
+        # nomornya sudah tercetak di struk yang dipegang sopir. Yang sudah
+        # dimiliki tiket lain ditolak di atas, bukan diam-diam ditimpa.
+        trx = TimbanganTransaksi(
+            kode=data.kode or await alokasi_nomor(db, akun, data.arah),
+            kunci_kiriman=data.kunci,
+        )
         db.add(trx)
     elif trx.status_transaksi == TRX_VOID:
         raise LayananError("Transaksi ini sudah dibatalkan.")
-    elif trx.selesai:
-        # Kiriman ulang atas transaksi yang sudah tuntas — abaikan, jangan
-        # mundurkan statusnya.
-        return trx
+    else:
+        # ── Kiriman ulang: isi sama lolos, isi berbeda DITOLAK ──
+        #
+        # Dulu tiket yang sudah selesai langsung dikembalikan apa adanya, dan
+        # layar berkata "tersimpan" — padahal angka yang baru diketik dibuang
+        # tanpa satu pun jejak audit. Yang mengetiknya tak punya cara tahu.
+        beda = _isi_berbeda(trx, data)
+        if beda and trx.selesai:
+            raise LayananError(
+                f"Tiket {trx.kode} sudah diselesaikan"
+                f"{await _oleh_siapa(db, trx)}. Yang tersimpan: {beda}. "
+                "Pakai Koreksi bila angkanya memang harus diubah."
+            )
+        if beda and data.kunci and trx.kunci_kiriman == data.kunci:
+            raise LayananError(
+                f"Kiriman ini sepertinya dua penimbangan yang berbeda dengan "
+                f"kunci yang sama — {beda}. Buka formulir baru untuk truk "
+                "yang kedua."
+            )
+        if trx.selesai:
+            # Kiriman ulang sejati atas transaksi yang sudah tuntas — abaikan,
+            # jangan mundurkan statusnya.
+            return trx
 
     trx.arah = data.arah
     trx.jenis_kode = data.jenis_kode
@@ -1222,7 +1384,26 @@ async def simpan_timbang_kedua(
     if trx.status_tiket == TIKET_DITUTUP_PAKSA:
         raise LayananError("Tiket ini sudah ditutup paksa.")
     if trx.status_tiket == TIKET_SELESAI:
-        return trx                      # kiriman ulang — sudah tuntas
+        # ── Kiriman ulang: isi sama lolos, isi BERBEDA ditolak ──
+        #
+        # Dulu baris ini langsung mengembalikan tiketnya, dan layar berkata
+        # "Timbangan selesai dan tersimpan". Angka yang baru diketik dibuang
+        # tanpa satu pun jejak audit, dan yang mengetiknya pulang dengan yakin
+        # pekerjaannya tercatat. Itu keadaan terburuk yang bisa dibuat sebuah
+        # layar: bukan gagal, melainkan berbohong.
+        #
+        # Kiriman ulang sejati tetap harus lolos — antrean luring mengirim
+        # ulang kiriman yang sama saat sinyal kembali, dan menolaknya membuat
+        # antreannya macet selamanya.
+        tersimpan = float(trx.timbang2_kg or 0)
+        if abs(tersimpan - float(berat_kg)) > 1e-6:
+            raise LayananError(
+                f"Tiket {kode} sudah diselesaikan"
+                f"{await _oleh_siapa(db, trx)} dengan timbang kedua "
+                f"{fmt.kg(tersimpan)} — angka {fmt.kg(berat_kg)} tidak "
+                "disimpan. Pakai Koreksi bila angka yang tersimpan keliru."
+            )
+        return trx                      # kiriman ulang sejati — sudah tuntas
     if berat_kg <= 0:
         raise LayananError("Berat timbang harus lebih dari 0 kg.")
 

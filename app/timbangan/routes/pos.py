@@ -9,6 +9,8 @@ from __future__ import annotations
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+from uuid import uuid4
+
 from fastapi import APIRouter, Depends, Form, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -217,7 +219,15 @@ async def form_timbang_pertama(
     return render(
         request, "timbang1.html",
         aturan=aturan,
+        # PERKIRAAN, bukan nomor yang sudah jadi milik layar ini.
+        # Nomor sungguhannya diterbitkan server saat menyimpan —
+        # lihat `service.alokasi_nomor`. Dua layar yang terbuka
+        # bersamaan memegang perkiraan yang SAMA, dan dulu perkiraan
+        # itulah yang dipakai sebagai identitas tiket.
         kode=await service.kode_baru(db, akun, aturan.arah),
+        # Identitas kiriman: dibuat SEKALI di sini, ikut pada tiap
+        # kirim ulang dari antrean luring.
+        kunci=str(uuid4()),
         pihak_sering=sering,
         pihak_lainnya=lainnya,
         kolom_nama=service.nama_kolom_pihak(aturan.arah),
@@ -236,7 +246,7 @@ async def form_timbang_pertama(
 async def simpan_timbang_pertama(
     jenis_kode: str,
     request: Request,
-    kode: str = Form(...),
+    kunci: str = Form(""),
     berat_kg: str = Form(...),
     cara_timbang: str = Form(CARA_DUA_KALI),
     supplier_id: str = Form(""),
@@ -265,7 +275,9 @@ async def simpan_timbang_pertama(
         )]
 
     data = service.InputTimbang(
-        kode=kode.strip(),
+        # `kode` sengaja tak dikirim: server yang menerbitkannya,
+        # atomik, saat menyimpan.
+        kunci=kunci.strip() or None,
         arah=(await service.aturan_untuk(db, jenis_kode)).arah,
         jenis_kode=jenis_kode,
         berat_kg=_angka(berat_kg),
@@ -330,7 +342,15 @@ async def form_partai_baru(
     return render(
         request, "partai.html",
         b=None, aturan=aturan,
+        # PERKIRAAN, bukan nomor yang sudah jadi milik layar ini.
+        # Nomor sungguhannya diterbitkan server saat menyimpan —
+        # lihat `service.alokasi_nomor`. Dua layar yang terbuka
+        # bersamaan memegang perkiraan yang SAMA, dan dulu perkiraan
+        # itulah yang dipakai sebagai identitas tiket.
         kode=await service.kode_baru(db, akun, aturan.arah),
+        # Identitas kiriman: dibuat SEKALI di sini, ikut pada tiap
+        # kirim ulang dari antrean luring.
+        kunci=str(uuid4()),
         pihak_sering=sering, pihak_lainnya=lainnya,
         kolom_nama=service.nama_kolom_pihak(aturan.arah),
         kembali=f"{PREFIX}/pilih/{aturan.arah}?partai=1",
@@ -341,7 +361,7 @@ async def form_partai_baru(
 async def buat_partai(
     jenis_kode: str,
     request: Request,
-    kode: str = Form(...),
+    kunci: str = Form(""),
     supplier_id: str = Form(""),
     pihak_nama: str = Form(""),
     berat_kg: list[str] = Form([]),
@@ -357,7 +377,7 @@ async def buat_partai(
 
     aturan = await service.aturan_untuk(db, jenis_kode)
     data = service.InputTimbang(
-        kode=kode.strip(), arah=aturan.arah, jenis_kode=jenis_kode,
+        kunci=kunci.strip() or None, arah=aturan.arah, jenis_kode=jenis_kode,
         berat_kg=berat[0], cara_timbang=CARA_PARTAI,
         supplier_id=int(supplier_id) if supplier_id.isdigit() else None,
         pihak_nama=pihak_nama.strip() or None,

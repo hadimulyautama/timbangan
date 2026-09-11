@@ -31,7 +31,29 @@ MIGRASI = (
     AKAR / "migrations" / "versions" / "0025_timbangan_cetak_format.py",
     AKAR / "migrations" / "versions" / "0027_pelanggan_transaksi.py",
     AKAR / "migrations" / "versions" / "0028_timbangan_partai.py",
+    # 0029 hanya melebarkan kolom `arah`, jadi tak mengubah daftar kolom —
+    # ia sengaja tak ada di sini.
+    AKAR / "migrations" / "versions" / "0030_timbangan_nomor_atomik.py",
 )
+
+# Daftar di atas DITULIS TANGAN, dan karena itu ia basi tiap kali ada migrasi
+# baru yang menambah kolom. Penjaga di bawah menyebutkannya lebih dulu, supaya
+# yang gagal berbunyi "migrasi 0031 belum didaftarkan" alih-alih "KeyError:
+# 'timbangan_anu'" — kegagalan yang terbacanya seperti model rusak.
+#: Migrasi yang TIDAK mengubah daftar kolom, jadi tak perlu ikut diterapkan
+#: di sini. Disebut satu per satu berikut alasannya — bukan dilewati diam-diam,
+#: karena "tidak mengubah kolom" adalah klaim yang bisa keliru.
+TANPA_KOLOM_BARU = {
+    "0029_timbangan_retur.py": "hanya melebarkan String(10) → String(16)",
+}
+
+
+def _migrasi_belum_terdaftar() -> list[str]:
+    ada = {p.name for p in MIGRASI} | set(TANPA_KOLOM_BARU)
+    semua = sorted(
+        p.name for p in (AKAR / "migrations" / "versions").glob("00*_timbangan*.py")
+    )
+    return [n for n in semua if n not in ada and n > "0028"]
 
 # Kata yang tidak boleh muncul sebagai nama kolom di modul ini.
 KATA_UANG = (
@@ -72,9 +94,13 @@ def kolom_migrasi() -> dict[str, set[str]]:
 
 
 def test_migrasi_membuat_semua_tabel_model(kolom_migrasi):
+    belum = _migrasi_belum_terdaftar()
+    assert not belum, (
+        f"migrasi belum didaftarkan di MIGRASI: {', '.join(belum)} — "
+        "tambahkan, kalau tidak uji ini menjaga skema yang sudah usang")
     assert sorted(kolom_migrasi) == tabel_model()
-    # 14 sejak `timbangan_penimbangan` (partai kecil, migrasi 0028).
-    assert len(kolom_migrasi) == 14
+    # 15 sejak `timbangan_nomor` (penghitung nomor atomik, migrasi 0030).
+    assert len(kolom_migrasi) == 15
 
 
 @pytest.mark.parametrize("nama", tabel_model())

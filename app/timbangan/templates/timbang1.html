@@ -25,11 +25,17 @@
 {% block isi %}
 <form method="post" action="{{ PREFIX }}/timbang/{{ aturan.kode }}"
       style="display:flex;flex-direction:column;gap:14px">
-  <input type="hidden" name="kode" value="{{ kode }}">
+  {# Kunci kiriman, BUKAN nomor tiket. Nomornya diterbitkan server saat
+     menyimpan; yang ditampilkan di bawah cuma perkiraan. #}
+  <input type="hidden" name="kunci" value="{{ kunci }}">
 
   <div class="kartu" style="padding:10px 14px">
     <div class="baris">
       <span>Nomor transaksi</span><b>{{ kode }}</b>
+      {# Disebut apa adanya. Petugas yang menulis nomor ini di buku sebelum
+         menekan simpan akan menulis nomor yang salah bila dua layar terbuka
+         bersamaan — dan itu persis yang pernah terjadi. #}
+      <small class="redup">perkiraan — nomor pastinya muncul setelah disimpan</small>
     </div>
   </div>
 

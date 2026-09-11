@@ -217,14 +217,41 @@ async def test_kiriman_ulang_tidak_memundurkan_transaksi_yang_sudah_selesai(
     assert trx.timbang2_kg == 3_570
 
 
-async def test_timbang_kedua_berulang_diabaikan(db, petugas, supplier):
+async def test_timbang_kedua_berulang_dengan_angka_sama_diterima(db, petugas, supplier):
+    """Kirim ulang dari antrean luring: angka yang sama, hasil yang sama.
+
+    Menolak yang ini akan membuat antrean luring macet selamanya — ia mengirim
+    ulang kiriman yang sama tiap kali sinyal kembali.
+    """
     data = masuk_gabah("TRX-20260830-P1-009", supplier.id, 13_600)
     await service.simpan_timbang_pertama(db, akun=petugas, data=data)
     await service.simpan_timbang_kedua(db, akun=petugas, kode=data.kode, berat_kg=3_570)
     trx = await service.simpan_timbang_kedua(
-        db, akun=petugas, kode=data.kode, berat_kg=9_999
+        db, akun=petugas, kode=data.kode, berat_kg=3_570
     )
     assert trx.timbang2_kg == 3_570
+
+
+async def test_timbang_kedua_dengan_angka_BERBEDA_ditolak(db, petugas, supplier):
+    """Uji ini dulu berbunyi sebaliknya: 9.999 kg dikirim ke tiket yang sudah
+    selesai dan diam-diam dibuang, lalu diperiksa bahwa yang tersimpan tetap
+    3.570. Perilaku itulah temuan QA T-03.
+
+    Layarnya menjawab "Timbangan selesai dan tersimpan", tanpa satu pun jejak
+    audit — jadi yang mengetiknya pulang dengan yakin pekerjaannya tercatat.
+    Itu keadaan terburuk yang bisa dibuat sebuah layar: bukan gagal, melainkan
+    berbohong.
+    """
+    data = masuk_gabah("TRX-20260830-P1-009b", supplier.id, 13_600)
+    await service.simpan_timbang_pertama(db, akun=petugas, data=data)
+    await service.simpan_timbang_kedua(db, akun=petugas, kode=data.kode, berat_kg=3_570)
+    with pytest.raises(service.LayananError) as e:
+        await service.simpan_timbang_kedua(
+            db, akun=petugas, kode=data.kode, berat_kg=9_999
+        )
+    assert "sudah diselesaikan" in str(e.value)
+    trx = await service.ambil_kode(db, data.kode)
+    assert float(trx.timbang2_kg) == 3_570.0
 
 
 # ─────────────────── Pemeriksaan ───────────────────

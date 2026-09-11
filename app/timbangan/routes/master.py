@@ -381,6 +381,33 @@ async def simpan_pengguna(
     if ada is not None:
         return redirect("/pengguna", err=f"Nama pengguna '{bersih}' sudah dipakai.")
 
+    # ── Kode perangkat WAJIB & UNIK untuk akun baru ──
+    #
+    # Ia masuk ke nomor tiket dan tercetak di struk yang dipegang sopir. Akun
+    # tanpa kode memakai "P0", dan semua akun tanpa kode memakai P0 yang sama —
+    # sehingga dua petugas menerima nomor yang sama. Itu temuan QA T-01, dan
+    # admin bawaan justru salah satu yang tak punya kode.
+    #
+    # Akun LAMA yang kosong sengaja tidak diisi otomatis: kodenya sudah
+    # tercetak di struk-struk yang beredar, jadi menetapkannya diam-diam
+    # membuat struk lama menunjuk perangkat yang bukan penerbitnya. Daftarnya
+    # muncul di layar Pengguna supaya pemilik yang memutuskan.
+    kode_perangkat = perangkat_kode.strip().upper() or None
+    if not kode_perangkat:
+        return redirect(
+            "/pengguna",
+            err="Kode perangkat wajib diisi — ia masuk ke nomor tiket dan "
+                "tercetak di struk. Contoh: P1, P2.")
+    kembar = (await db.execute(
+        select(TimbanganAkun.nama).where(
+            TimbanganAkun.perangkat_kode == kode_perangkat)
+    )).scalars().first()
+    if kembar is not None:
+        return redirect(
+            "/pengguna",
+            err=f"Kode perangkat {kode_perangkat} sudah dipakai {kembar}. "
+                "Dua akun berkode sama akan menerbitkan nomor tiket yang sama.")
+
     try:
         sandi_hash = hash_sandi(sandi)
     except ValueError as e:
@@ -389,7 +416,7 @@ async def simpan_pengguna(
     baru = TimbanganAkun(
         username=bersih, nama=nama.strip(), role=role,
         password_hash=sandi_hash,
-        perangkat_kode=(perangkat_kode.strip().upper() or None),
+        perangkat_kode=kode_perangkat,
     )
     db.add(baru)
     await db.flush()

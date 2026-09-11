@@ -83,12 +83,19 @@ async def login(klien: AsyncClient, siapa: str = "budi") -> None:
 
 
 def kode_dari(html: str) -> str:
-    # Awalannya mengikuti arah barang (MSK/KLR/BBS/TRF/RTP/RTS), jadi pola di
-    # sini sengaja tidak menyebut satu awalan pun — menuliskannya akan membuat
-    # uji ini gagal setiap kali arah baru ditambahkan, padahal yang diuji
-    # adalah adanya nomor di formulir.
-    cocok = re.search(r'name="kode" value="([A-Z]{3}-[^"]+)"', html)
-    assert cocok, "nomor transaksi tidak ada di formulir"
+    """Kunci kiriman dari formulir — dulu nomor tiketnya.
+
+    Sejak temuan QA T-01 (11 September 2026) formulir tidak lagi membawa nomor
+    tiket sebagai identitas: nomor itu dibentuk saat layar dibuka, sehingga dua
+    petugas yang membuka bersamaan memegang angka yang sama lalu saling
+    menimpa. Yang dibawa sekarang KUNCI kiriman, dan nomornya diterbitkan
+    server saat menyimpan.
+
+    Namanya dipertahankan supaya pemanggil di berkas ini tak perlu berubah —
+    yang dikembalikan tetap "penanda kiriman ini", hanya wujudnya yang lain.
+    """
+    cocok = re.search(r'name="kunci" value="([0-9a-f-]{36})"', html)
+    assert cocok, "kunci kiriman tidak ada di formulir"
     return cocok.group(1)
 
 
@@ -173,11 +180,10 @@ async def test_alur_lengkap_masuk_sampai_hasil(klien):
     await login(klien)
 
     form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
-    kode = kode_dari(form)
-    assert kode.startswith("MSK-") and "-P1-" in kode
+    kunci = kode_dari(form)
 
     r = await klien.post(f"{PREFIX}/timbang/GABAH_BASAH", data={
-        "kode": kode, "berat_kg": "13.600", "cara_timbang": "DUA_KALI",
+        "kunci": kunci, "berat_kg": "13.600", "cara_timbang": "DUA_KALI",
         "supplier_id": "1", "nomor_polisi": "ad 1234 xy", "nama_sopir": "Slamet",
         "nomor_acuan": "NOTA-01", "jumlah_karung": "120",
         "tara_per_karung_kg": "0,25", "berat_acuan_kg": "10.048",
@@ -186,6 +192,12 @@ async def test_alur_lengkap_masuk_sampai_hasil(klien):
     assert r.status_code == 200
     assert "Menunggu timbang kedua" in r.text
     assert "AD 1234 XY" in r.text
+    # Nomor tiketnya diperiksa DI SINI, pada tiket yang sudah tersimpan —
+    # bukan di formulir. Yang tertera di formulir cuma perkiraan sejak nomor
+    # diterbitkan server saat menyimpan (temuan QA T-01).
+    import re as _re
+    nomor = _re.search(r"MSK-\d{8}-P1-\d{3}", r.text)
+    assert nomor, "nomor tiket tak muncul setelah disimpan"
 
     # Tiket muncul di beranda dan di daftar tiket.
     assert "AD 1234 XY" in (await klien.get(f"{PREFIX}/")).text
@@ -210,7 +222,7 @@ async def test_angka_dengan_koma_maupun_titik_diterima(klien):
                            ("13600,7", "13.601")):
         form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
         r = await klien.post(f"{PREFIX}/timbang/GABAH_BASAH", data={
-            "kode": kode_dari(form), "berat_kg": berat,
+            "kunci": kode_dari(form), "berat_kg": berat,
             "cara_timbang": "DUA_KALI", "supplier_id": "1",
             "nomor_polisi": "AD 1 A", "jumlah_karung": "10",
             "tara_per_karung_kg": "0,25", "berat_acuan_kg": "1000",
@@ -224,7 +236,7 @@ async def test_jasa_timbang_sekali_langsung_ada_hasil(klien):
     await login(klien)
     form = (await klien.get(f"{PREFIX}/timbang/BEBAS")).text
     r = await klien.post(f"{PREFIX}/timbang/BEBAS", data={
-        "kode": kode_dari(form), "berat_kg": "12850",
+        "kunci": kode_dari(form), "berat_kg": "12850",
         "cara_timbang": "SEKALI", "pihak_nama": "CV Sumber Rejeki",
         "nomor_polisi": "AD 9 ZZ", "tara_lain_kg": "0", "supplier_id": "",
         "jumlah_karung": "0", "tara_per_karung_kg": "0", "berat_acuan_kg": "0",
@@ -241,7 +253,7 @@ async def test_tutup_paksa_tiket_lewat_halaman(klien):
     await login(klien)
     form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
     await klien.post(f"{PREFIX}/timbang/GABAH_BASAH", data={
-        "kode": kode_dari(form), "berat_kg": "13600", "cara_timbang": "DUA_KALI",
+        "kunci": kode_dari(form), "berat_kg": "13600", "cara_timbang": "DUA_KALI",
         "supplier_id": "1", "nomor_polisi": "AD 7 QQ", "jumlah_karung": "10",
         "tara_per_karung_kg": "0,25", "berat_acuan_kg": "1000",
         "tara_lain_kg": "0", "waktu": "", "catatan": "", "nomor_acuan": "",
@@ -264,7 +276,7 @@ async def test_tutup_paksa_tiket_lewat_halaman(klien):
 async def _selesaikan(klien, jenis: str, **beda) -> int:
     form = (await klien.get(f"{PREFIX}/timbang/{jenis}")).text
     data = {
-        "kode": kode_dari(form), "berat_kg": "13600", "cara_timbang": "DUA_KALI",
+        "kunci": kode_dari(form), "berat_kg": "13600", "cara_timbang": "DUA_KALI",
         "supplier_id": "1", "nomor_polisi": "AD 5 BB", "jumlah_karung": "120",
         "tara_per_karung_kg": "0,25", "berat_acuan_kg": "10000",
         "tara_lain_kg": "0", "waktu": "", "catatan": "", "nomor_acuan": "N-1",
@@ -433,7 +445,7 @@ async def test_tara_prasetel_bertahan_melintasi_dua_tahap(klien):
     assert 'value="0.250"' in form          # disodorkan server apa adanya
 
     await klien.post(f"{PREFIX}/timbang/GABAH_BASAH", data={
-        "kode": kode_dari(form), "berat_kg": "13.600",
+        "kunci": kode_dari(form), "berat_kg": "13.600",
         "cara_timbang": "DUA_KALI", "supplier_id": "1",
         "nomor_polisi": "AD 1234 XY", "nama_sopir": "Slamet",
         "nomor_acuan": "NOTA-01", "jumlah_karung": "120",
@@ -549,7 +561,7 @@ async def test_admin_menyetel_kapasitas_dan_langsung_berlaku(klien, app_uji):
 
     form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
     r = await klien.post(f"{PREFIX}/timbang/GABAH_BASAH", data={
-        "kode": kode_dari(form), "berat_kg": "13600", "cara_timbang": "DUA_KALI",
+        "kunci": kode_dari(form), "berat_kg": "13600", "cara_timbang": "DUA_KALI",
         "supplier_id": "1", "nomor_polisi": "AD 1 A", "jumlah_karung": "10",
         "tara_per_karung_kg": "0.250", "berat_acuan_kg": "1000",
         "tara_lain_kg": "0", "waktu": "", "catatan": "", "nomor_acuan": "",
@@ -565,7 +577,7 @@ async def test_admin_menyetel_kapasitas_dan_langsung_berlaku(klien, app_uji):
     form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
     assert "12.000 kg" in form              # bantuan di layar ikut berubah
     r = await klien.post(f"{PREFIX}/timbang/GABAH_BASAH", data={
-        "kode": kode_dari(form), "berat_kg": "13600", "cara_timbang": "DUA_KALI",
+        "kunci": kode_dari(form), "berat_kg": "13600", "cara_timbang": "DUA_KALI",
         "supplier_id": "1", "nomor_polisi": "AD 2 B", "jumlah_karung": "10",
         "tara_per_karung_kg": "0.250", "berat_acuan_kg": "1000",
         "tara_lain_kg": "0", "waktu": "", "catatan": "", "nomor_acuan": "",
@@ -803,7 +815,7 @@ async def test_tanda_tiket_terbuka_terlihat_dari_halaman_lain(klien):
     await login(klien)
     form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
     await klien.post(f"{PREFIX}/timbang/GABAH_BASAH", data={
-        "kode": kode_dari(form), "berat_kg": "13600", "cara_timbang": "DUA_KALI",
+        "kunci": kode_dari(form), "berat_kg": "13600", "cara_timbang": "DUA_KALI",
         "supplier_id": "1", "nomor_polisi": "AD 3 CC", "jumlah_karung": "10",
         "tara_per_karung_kg": "0.250", "berat_acuan_kg": "1000",
         "tara_lain_kg": "0", "waktu": "", "catatan": "", "nomor_acuan": "",
@@ -818,7 +830,7 @@ async def test_bukti_pengiriman_tidak_memuat_selisih(klien):
     await login(klien)
     form = (await klien.get(f"{PREFIX}/timbang/BEKATUL")).text
     await klien.post(f"{PREFIX}/timbang/BEKATUL", data={
-        "kode": kode_dari(form), "berat_kg": "6200", "cara_timbang": "DUA_KALI",
+        "kunci": kode_dari(form), "berat_kg": "6200", "cara_timbang": "DUA_KALI",
         "supplier_id": "1", "nomor_polisi": "AD 8 KK", "jumlah_karung": "240",
         "tara_per_karung_kg": "0.05", "berat_acuan_kg": "12000",
         "tara_lain_kg": "0", "waktu": "", "catatan": "", "nomor_acuan": "SJ-9",
@@ -1453,7 +1465,7 @@ async def test_menghapus_menuntut_nama_penggunanya_diketik(klien, app_uji):
     await login(klien, "wahid")
     await klien.post(f"{PREFIX}/pengguna", data={
         "username": "coba", "nama": "Coba", "role": ROLE_PETUGAS,
-        "sandi": "rahasia123", "perangkat_kode": "",
+        "sandi": "rahasia123", "perangkat_kode": "PA",
     })
     orang = await akun_oleh(app_uji, "coba")
 
@@ -1489,7 +1501,7 @@ async def test_jejak_audit_tetap_terbaca_setelah_akunnya_dihapus(klien, app_uji)
     await login(klien, "wahid")
     await klien.post(f"{PREFIX}/pengguna", data={
         "username": "sebentar", "nama": "Sebentar Saja", "role": ROLE_PETUGAS,
-        "sandi": "rahasia123", "perangkat_kode": "",
+        "sandi": "rahasia123", "perangkat_kode": "PB",
     })
     orang = await akun_oleh(app_uji, "sebentar")
     orang_id = orang.id
@@ -1551,7 +1563,7 @@ async def _tiket_terbuka(klien, jenis: str, **beda) -> int:
     """Timbang pertama saja — tiketnya sengaja dibiarkan terbuka."""
     form = (await klien.get(f"{PREFIX}/timbang/{jenis}")).text
     data = {
-        "kode": kode_dari(form), "berat_kg": "13600", "cara_timbang": "DUA_KALI",
+        "kunci": kode_dari(form), "berat_kg": "13600", "cara_timbang": "DUA_KALI",
         "supplier_id": "1", "nomor_polisi": "AD 5 BB", "jumlah_karung": "",
         "tara_per_karung_kg": "0,25", "berat_acuan_kg": "10000",
         "tara_lain_kg": "0", "waktu": "", "catatan": "", "nomor_acuan": "N-1",
@@ -1864,7 +1876,7 @@ async def test_admin_tidak_bisa_membuat_super_admin_baru_lewat_pintu_lain(
     await login(klien, "wahid")
     r = await klien.post(f"{PREFIX}/pengguna", data={
         "username": "pintubelakang", "nama": "Pintu Belakang",
-        "role": ROLE_SUPERADMIN, "sandi": "rahasia123", "perangkat_kode": "",
+        "role": ROLE_SUPERADMIN, "sandi": "rahasia123", "perangkat_kode": "PC",
     })
     assert r.status_code == 403
 
@@ -1880,7 +1892,7 @@ async def test_peran_karangan_ditolak_saat_membuat_akun(klien, app_uji):
     await login(klien, "wahid")
     r = await klien.post(f"{PREFIX}/pengguna", data={
         "username": "aneh", "nama": "Aneh", "role": "DEWA",
-        "sandi": "rahasia123", "perangkat_kode": "",
+        "sandi": "rahasia123", "perangkat_kode": "PD",
     })
     assert "tidak dikenal" in r.text
 
@@ -1961,7 +1973,7 @@ async def test_transfer_internal_timbang_bermuatan_lalu_kosong(klien):
     assert "Asal → tujuan" in form
 
     await klien.post(f"{PREFIX}/timbang/TRANSFER", data={
-        "kode": kode_dari(form), "berat_kg": "13600",
+        "kunci": kode_dari(form), "berat_kg": "13600",
         "cara_timbang": "DUA_KALI", "supplier_id": "",
         "pihak_nama": "Gudang 1 → Gudang 2", "nomor_polisi": "AD 7 CC",
         "nama_sopir": "Slamet", "jumlah_karung": "", "tara_per_karung_kg": "",
@@ -2002,7 +2014,7 @@ async def test_transfer_internal_tanpa_dokumen_pembanding(klien):
     assert 'name="jumlah_karung"' in form        # muatan tetap boleh dicatat
 
     await klien.post(f"{PREFIX}/timbang/TRANSFER", data={
-        "kode": kode_dari(form), "berat_kg": "13600",
+        "kunci": kode_dari(form), "berat_kg": "13600",
         "cara_timbang": "DUA_KALI", "supplier_id": "",
         "pihak_nama": "Gudang 1 → Gudang 2", "nomor_polisi": "AD 7 CC",
         "nama_sopir": "Slamet", "jumlah_karung": "", "tara_per_karung_kg": "",
@@ -2020,7 +2032,7 @@ async def test_transfer_internal_tidak_terkena_pagar_jumlah_karung(klien):
     await login(klien)
     form = (await klien.get(f"{PREFIX}/timbang/TRANSFER")).text
     await klien.post(f"{PREFIX}/timbang/TRANSFER", data={
-        "kode": kode_dari(form), "berat_kg": "13600",
+        "kunci": kode_dari(form), "berat_kg": "13600",
         "cara_timbang": "DUA_KALI", "supplier_id": "",
         "pihak_nama": "Gudang 1 → Gudang 2", "nomor_polisi": "AD 7 CC",
         "nama_sopir": "Slamet", "jumlah_karung": "", "tara_per_karung_kg": "",
@@ -2079,7 +2091,7 @@ async def test_masuk_dan_keluar_menolak_tanpa_nomor_polisi(klien, jenis):
     await login(klien)
     form = (await klien.get(f"{PREFIX}/timbang/{jenis}")).text
     r = await klien.post(f"{PREFIX}/timbang/{jenis}", data={
-        "kode": kode_dari(form), "berat_kg": "13600",
+        "kunci": kode_dari(form), "berat_kg": "13600",
         "cara_timbang": "DUA_KALI", "supplier_id": "1", "nomor_polisi": "  ",
         "nama_sopir": "Slamet", "jumlah_karung": "120", "tara_per_karung_kg": "0,25",
         "berat_acuan_kg": "10000", "nomor_acuan": "N-1", "tara_lain_kg": "0",
@@ -2109,7 +2121,7 @@ async def test_jasa_timbang_dan_transfer_tetap_boleh_tanpa_nomor_polisi(
     await login(klien)
     form = (await klien.get(f"{PREFIX}/timbang/{jenis}")).text
     r = await klien.post(f"{PREFIX}/timbang/{jenis}", data={
-        "kode": kode_dari(form), "berat_kg": "12850",
+        "kunci": kode_dari(form), "berat_kg": "12850",
         "cara_timbang": "SEKALI" if jenis == "BEBAS" else "DUA_KALI",
         "supplier_id": "", "pihak_nama": "CV Sumber Rejeki",
         "nomor_polisi": "", "nama_sopir": "Slamet", "jumlah_karung": "",
@@ -2253,7 +2265,7 @@ async def test_admin_biasa_tidak_lagi_mengelola_pengguna_dan_setelan(
         PREFIX + jalur,
         **({"data": {"kunci": "maks_foto_mb", "nilai": "8", "aksi": "simpan",
                      "username": "x", "nama": "X", "role": ROLE_PETUGAS,
-                     "sandi": "rahasia123", "perangkat_kode": ""}}
+                     "sandi": "rahasia123", "perangkat_kode": "PE"}}
            if metode == "post" else {}),
     )
     assert r.status_code == 403
@@ -2381,7 +2393,7 @@ async def test_jam_yang_diketik_petugas_tampil_sama_persis(klien):
     await login(klien)
     form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
     await klien.post(f"{PREFIX}/timbang/GABAH_BASAH", data={
-        "kode": kode_dari(form), "berat_kg": "13600",
+        "kunci": kode_dari(form), "berat_kg": "13600",
         "cara_timbang": "DUA_KALI", "supplier_id": "1",
         "nomor_polisi": "AD 5 BB", "jumlah_karung": "120",
         "tara_per_karung_kg": "0,25", "berat_acuan_kg": "10000",
@@ -2402,7 +2414,7 @@ async def test_pihak_tercetak_sebesar_nomor_polisi(klien, jalur):
     await login(klien)
     form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
     await klien.post(f"{PREFIX}/timbang/GABAH_BASAH", data={
-        "kode": kode_dari(form), "berat_kg": "13600",
+        "kunci": kode_dari(form), "berat_kg": "13600",
         "cara_timbang": "DUA_KALI", "supplier_id": "1",
         "nomor_polisi": "AD 5 BB", "jumlah_karung": "120",
         "tara_per_karung_kg": "0,25", "berat_acuan_kg": "10000",
@@ -2423,7 +2435,7 @@ async def test_nama_pihak_wajib_di_semua_arah(klien):
     await login(klien)
     form = (await klien.get(f"{PREFIX}/timbang/TRANSFER")).text
     r = await klien.post(f"{PREFIX}/timbang/TRANSFER", data={
-        "kode": kode_dari(form), "berat_kg": "13600",
+        "kunci": kode_dari(form), "berat_kg": "13600",
         "cara_timbang": "DUA_KALI", "supplier_id": "", "pihak_nama": "",
         "nomor_polisi": "", "nama_sopir": "Slamet", "jumlah_karung": "",
         "tara_per_karung_kg": "", "berat_acuan_kg": "", "nomor_acuan": "",
@@ -2447,7 +2459,7 @@ async def test_lembar_terbuka_menyebut_bahwa_pemicunya_sudah_hilang(
     await login(klien, "budi")
     form = (await klien.get(f"{PREFIX}/timbang/BERAS")).text
     await klien.post(f"{PREFIX}/timbang/BERAS", data={
-        "kode": kode_dari(form), "berat_kg": "3680",
+        "kunci": kode_dari(form), "berat_kg": "3680",
         "cara_timbang": "DUA_KALI", "supplier_id": "1",
         "nomor_polisi": "K 8382 CC", "jumlah_karung": "0",
         "tara_per_karung_kg": "0", "berat_acuan_kg": "9000",
@@ -2494,7 +2506,7 @@ async def test_lembar_terbuka_menyebut_bahwa_pemicunya_sudah_hilang(
 async def _mulai_masuk(klien, jenis="GABAH_BASAH", nopol="AD 5 BB") -> int:
     form = (await klien.get(f"{PREFIX}/timbang/{jenis}")).text
     await klien.post(f"{PREFIX}/timbang/{jenis}", data={
-        "kode": kode_dari(form), "berat_kg": "13600",
+        "kunci": kode_dari(form), "berat_kg": "13600",
         "cara_timbang": "DUA_KALI", "supplier_id": "1", "nomor_polisi": nopol,
         "jumlah_karung": "120", "tara_per_karung_kg": "0,25",
         "berat_acuan_kg": "10000", "tara_lain_kg": "0", "waktu": "",
@@ -2595,7 +2607,7 @@ async def test_tara_bawaan_ikut_berganti_tapi_yang_diketik_dihormati(
     # Tara 0,4 diketik sendiri — hasil menimbang karung yang benar-benar ada.
     form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
     await klien.post(f"{PREFIX}/timbang/GABAH_BASAH", data={
-        "kode": kode_dari(form), "berat_kg": "13600",
+        "kunci": kode_dari(form), "berat_kg": "13600",
         "cara_timbang": "DUA_KALI", "supplier_id": "1", "nomor_polisi": "B 1 CD",
         "jumlah_karung": "120", "tara_per_karung_kg": "0,4",
         "berat_acuan_kg": "10000", "tara_lain_kg": "0", "waktu": "",
@@ -2711,7 +2723,7 @@ async def test_tiket_menyebut_arah_dan_tidak_memakai_kata_masuk_untuk_jam(
     await login(klien, "budi")
     form = (await klien.get(f"{PREFIX}/timbang/BERAS")).text
     await klien.post(f"{PREFIX}/timbang/BERAS", data={
-        "kode": kode_dari(form), "berat_kg": "3570", "cara_timbang": "DUA_KALI",
+        "kunci": kode_dari(form), "berat_kg": "3570", "cara_timbang": "DUA_KALI",
         "supplier_id": "1", "nomor_polisi": "K 8482 CC", "jumlah_karung": "0",
         "tara_per_karung_kg": "0", "berat_acuan_kg": "10000",
         "tara_lain_kg": "0", "waktu": "", "catatan": "", "nomor_acuan": "SJ-1",
@@ -2736,7 +2748,7 @@ async def test_beras_masuk_dan_beras_keluar_bisa_dibedakan_di_daftar(
                                 ("BERAS", "AD 2 BB", "3570")):
         form = (await klien.get(f"{PREFIX}/timbang/{jenis}")).text
         await klien.post(f"{PREFIX}/timbang/{jenis}", data={
-            "kode": kode_dari(form), "berat_kg": berat,
+            "kunci": kode_dari(form), "berat_kg": berat,
             "cara_timbang": "DUA_KALI", "supplier_id": "1",
             "nomor_polisi": nopol, "jumlah_karung": "100",
             "tara_per_karung_kg": "0,1", "berat_acuan_kg": "9000",
@@ -2832,7 +2844,7 @@ async def test_pengiriman_menyimpan_ke_kolom_pelanggan(klien):
     await login(klien)
     form = (await klien.get(f"{PREFIX}/timbang/BERAS")).text
     await klien.post(f"{PREFIX}/timbang/BERAS", data={
-        "kode": kode_dari(form), "berat_kg": "3570", "cara_timbang": "DUA_KALI",
+        "kunci": kode_dari(form), "berat_kg": "3570", "cara_timbang": "DUA_KALI",
         "supplier_id": str(pid), "nomor_polisi": "K 8482 CC",
         "jumlah_karung": "100", "tara_per_karung_kg": "0,05",
         "berat_acuan_kg": "9000", "tara_lain_kg": "0", "waktu": "",
@@ -2884,7 +2896,7 @@ async def test_ringkasan_menautkan_lembar_pemeriksaan_yang_terbuka(
     await login(klien, "budi")
     form = (await klien.get(f"{PREFIX}/timbang/BERAS")).text
     await klien.post(f"{PREFIX}/timbang/BERAS", data={
-        "kode": kode_dari(form), "berat_kg": "3680", "cara_timbang": "DUA_KALI",
+        "kunci": kode_dari(form), "berat_kg": "3680", "cara_timbang": "DUA_KALI",
         "supplier_id": "", "pihak_nama": "CV Uji", "nomor_polisi": "K 8382 CC",
         "jumlah_karung": "0", "tara_per_karung_kg": "0",
         "berat_acuan_kg": "9000", "tara_lain_kg": "0", "waktu": "",
@@ -2923,7 +2935,7 @@ async def test_ringkasan_bersih_setelah_lembarnya_ditutup(klien, app_uji):
     await login(klien, "budi")
     form = (await klien.get(f"{PREFIX}/timbang/BERAS")).text
     await klien.post(f"{PREFIX}/timbang/BERAS", data={
-        "kode": kode_dari(form), "berat_kg": "3680", "cara_timbang": "DUA_KALI",
+        "kunci": kode_dari(form), "berat_kg": "3680", "cara_timbang": "DUA_KALI",
         "supplier_id": "", "pihak_nama": "CV Uji", "nomor_polisi": "K 1 AA",
         "jumlah_karung": "0", "tara_per_karung_kg": "0",
         "berat_acuan_kg": "9000", "tara_lain_kg": "0", "waktu": "",
@@ -2968,7 +2980,7 @@ async def test_pihak_kosong_ditolak_dengan_sebutan_arahnya(klien, jenis, sebutan
     await login(klien)
     form = (await klien.get(f"{PREFIX}/timbang/{jenis}")).text
     r = await klien.post(f"{PREFIX}/timbang/{jenis}", data={
-        "kode": kode_dari(form), "berat_kg": "13600",
+        "kunci": kode_dari(form), "berat_kg": "13600",
         "cara_timbang": "DUA_KALI", "supplier_id": "", "pihak_nama": "",
         "nomor_polisi": "AD 5 BB", "nama_sopir": "Slamet",
         "jumlah_karung": "100", "tara_per_karung_kg": "0,1",
@@ -2985,7 +2997,7 @@ async def test_pihak_boleh_dari_daftar_atau_diketik(klien):
                          (("supplier_id", ""), ("pihak_nama", "H. Baru"))):
         form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
         r = await klien.post(f"{PREFIX}/timbang/GABAH_BASAH", data={
-            "kode": kode_dari(form), "berat_kg": "13600",
+            "kunci": kode_dari(form), "berat_kg": "13600",
             "cara_timbang": "DUA_KALI", pilih[0]: pilih[1], tulis[0]: tulis[1],
             "nomor_polisi": "AD 5 BB", "nama_sopir": "Slamet",
             "jumlah_karung": "120", "tara_per_karung_kg": "0,25",
@@ -3000,7 +3012,7 @@ async def test_nama_sopir_wajib(klien):
     await login(klien)
     form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
     r = await klien.post(f"{PREFIX}/timbang/GABAH_BASAH", data={
-        "kode": kode_dari(form), "berat_kg": "13600",
+        "kunci": kode_dari(form), "berat_kg": "13600",
         "cara_timbang": "DUA_KALI", "supplier_id": "1", "pihak_nama": "",
         "nomor_polisi": "AD 5 BB", "nama_sopir": "   ",
         "jumlah_karung": "120", "tara_per_karung_kg": "0,25",
@@ -3037,7 +3049,7 @@ async def test_karung_diisi_di_timbang_pertama_terbawa_ke_kedua(klien):
     await login(klien)
     form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
     await klien.post(f"{PREFIX}/timbang/GABAH_BASAH", data={
-        "kode": kode_dari(form), "berat_kg": "13600",
+        "kunci": kode_dari(form), "berat_kg": "13600",
         "cara_timbang": "DUA_KALI", "supplier_id": "1", "pihak_nama": "",
         "nomor_polisi": "AD 5 BB", "nama_sopir": "Slamet",
         "jumlah_karung": "120", "tara_per_karung_kg": "0,25",
@@ -3062,7 +3074,7 @@ async def test_karung_boleh_baru_diisi_di_timbang_kedua(klien):
     await login(klien)
     form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
     await klien.post(f"{PREFIX}/timbang/GABAH_BASAH", data={
-        "kode": kode_dari(form), "berat_kg": "13600",
+        "kunci": kode_dari(form), "berat_kg": "13600",
         "cara_timbang": "DUA_KALI", "supplier_id": "1", "pihak_nama": "",
         "nomor_polisi": "AD 5 BB", "nama_sopir": "Slamet",
         "jumlah_karung": "", "tara_per_karung_kg": "",
@@ -3086,7 +3098,7 @@ async def test_tara_disarankan_juga_di_timbang_kedua(klien):
     await login(klien)
     form = (await klien.get(f"{PREFIX}/timbang/BERAS_PK")).text
     await klien.post(f"{PREFIX}/timbang/BERAS_PK", data={
-        "kode": kode_dari(form), "berat_kg": "13600",
+        "kunci": kode_dari(form), "berat_kg": "13600",
         "cara_timbang": "DUA_KALI", "supplier_id": "1", "pihak_nama": "",
         "nomor_polisi": "AD 5 BB", "nama_sopir": "Slamet",
         "jumlah_karung": "", "tara_per_karung_kg": "",
@@ -3114,7 +3126,7 @@ async def test_ringkasan_tidak_menyebut_pekerjaan_untuk_yang_sudah_tuntas(
     await login(klien, "budi")
     form = (await klien.get(f"{PREFIX}/timbang/BERAS")).text
     await klien.post(f"{PREFIX}/timbang/BERAS", data={
-        "kode": kode_dari(form), "berat_kg": "3680", "cara_timbang": "DUA_KALI",
+        "kunci": kode_dari(form), "berat_kg": "3680", "cara_timbang": "DUA_KALI",
         "supplier_id": "", "pihak_nama": "CV Uji", "nomor_polisi": "K 8 CC",
         "nama_sopir": "Slamet", "jumlah_karung": "0",
         "tara_per_karung_kg": "0", "berat_acuan_kg": "9000",
@@ -3156,7 +3168,7 @@ async def test_angka_dan_daftar_di_luar_batas_sepakat(klien, app_uji):
     await login(klien, "budi")
     form = (await klien.get(f"{PREFIX}/timbang/BERAS")).text
     await klien.post(f"{PREFIX}/timbang/BERAS", data={
-        "kode": kode_dari(form), "berat_kg": "3680", "cara_timbang": "DUA_KALI",
+        "kunci": kode_dari(form), "berat_kg": "3680", "cara_timbang": "DUA_KALI",
         "supplier_id": "", "pihak_nama": "CV Uji", "nomor_polisi": "K 9 DD",
         "nama_sopir": "Slamet", "jumlah_karung": "0",
         "tara_per_karung_kg": "0", "berat_acuan_kg": "9000",
@@ -3207,7 +3219,7 @@ async def test_kalimat_karung_di_timbang_kedua_mengikuti_arah(
     await login(klien)
     form = (await klien.get(f"{PREFIX}/timbang/{jenis}")).text
     await klien.post(f"{PREFIX}/timbang/{jenis}", data={
-        "kode": kode_dari(form), "berat_kg": "3680", "cara_timbang": "DUA_KALI",
+        "kunci": kode_dari(form), "berat_kg": "3680", "cara_timbang": "DUA_KALI",
         "supplier_id": "1", "pihak_nama": "Gudang 1 → Gudang 2",
         "nomor_polisi": "AD 5 BB", "nama_sopir": "Slamet",
         "jumlah_karung": "", "tara_per_karung_kg": "",
@@ -3231,7 +3243,7 @@ async def test_struk_jasa_timbang_tidak_mencetak_dokumen_nol(klien):
     await login(klien)
     form = (await klien.get(f"{PREFIX}/timbang/BEBAS")).text
     await klien.post(f"{PREFIX}/timbang/BEBAS", data={
-        "kode": kode_dari(form), "berat_kg": "14248", "cara_timbang": "SEKALI",
+        "kunci": kode_dari(form), "berat_kg": "14248", "cara_timbang": "SEKALI",
         "supplier_id": "", "pihak_nama": "Pak Arif", "nomor_polisi": "AD 9262 BE",
         "nama_sopir": "Pak Arif", "jumlah_karung": "0",
         "tara_per_karung_kg": "0", "berat_acuan_kg": "0", "nomor_acuan": "",
@@ -3420,11 +3432,10 @@ async def test_alur_retur_pelanggan_sampai_hasil(klien):
     await login(klien)
 
     form = (await klien.get(f"{PREFIX}/timbang/RETUR_PELANGGAN")).text
-    kode = kode_dari(form)
-    assert kode.startswith("RTP-")
+    kunci = kode_dari(form)
 
     r = await klien.post(f"{PREFIX}/timbang/RETUR_PELANGGAN", data={
-        "kode": kode, "berat_kg": "9000", "cara_timbang": "DUA_KALI",
+        "kunci": kunci, "berat_kg": "9000", "cara_timbang": "DUA_KALI",
         "supplier_id": str(pid), "pihak_nama": "", "nomor_polisi": "AD 9 ZZ",
         "nama_sopir": "Slamet", "nomor_acuan": "SJ-RETUR-1",
         "jumlah_karung": "0", "tara_per_karung_kg": "0",
@@ -3448,11 +3459,10 @@ async def test_alur_retur_supplier_berangkat_bermuatan(klien):
     """Urutan timbangnya terbalik; kalau salah dipilah nettonya jadi negatif."""
     await login(klien)
     form = (await klien.get(f"{PREFIX}/timbang/RETUR_SUPPLIER")).text
-    kode = kode_dari(form)
-    assert kode.startswith("RTS-")
+    kunci = kode_dari(form)
 
     await klien.post(f"{PREFIX}/timbang/RETUR_SUPPLIER", data={
-        "kode": kode, "berat_kg": "6000", "cara_timbang": "DUA_KALI",
+        "kunci": kunci, "berat_kg": "6000", "cara_timbang": "DUA_KALI",
         "supplier_id": "1", "pihak_nama": "", "nomor_polisi": "AD 9 ZZ",
         "nama_sopir": "Slamet", "nomor_acuan": "SJ-RETUR-2",
         "jumlah_karung": "0", "tara_per_karung_kg": "0",
@@ -3566,7 +3576,7 @@ async def test_nopol_yang_pernah_datang_ditawarkan_sebagai_saran(klien):
     # Satu truk lewat, lengkap dengan sopirnya.
     form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
     await klien.post(f"{PREFIX}/timbang/GABAH_BASAH", data={
-        "kode": kode_dari(form), "berat_kg": "13600",
+        "kunci": kode_dari(form), "berat_kg": "13600",
         "cara_timbang": "DUA_KALI", "supplier_id": "1", "pihak_nama": "",
         "nomor_polisi": "AD 9911 ZZ", "nama_sopir": "Slamet",
         "jumlah_karung": "120", "tara_per_karung_kg": "0,25",
@@ -3593,7 +3603,7 @@ async def test_sopir_terisi_dari_plat_tetapi_asalnya_disebut(klien):
     await login(klien)
     form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
     await klien.post(f"{PREFIX}/timbang/GABAH_BASAH", data={
-        "kode": kode_dari(form), "berat_kg": "13600",
+        "kunci": kode_dari(form), "berat_kg": "13600",
         "cara_timbang": "DUA_KALI", "supplier_id": "1", "pihak_nama": "",
         "nomor_polisi": "AD 7722 YY", "nama_sopir": "Warno",
         "jumlah_karung": "120", "tara_per_karung_kg": "0,25",

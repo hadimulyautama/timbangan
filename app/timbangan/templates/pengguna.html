@@ -36,6 +36,33 @@
 
   <div class="kartu" style="padding:0;overflow:hidden">
     <div class="gulung">
+{# ── Akun tanpa kode perangkat ──
+   Kode perangkat masuk ke NOMOR TIKET dan tercetak di struk. Akun tanpa kode
+   memakai "P0", dan semua akun tanpa kode memakai P0 yang SAMA — sehingga dua
+   petugas yang menimbang bersamaan menerima nomor yang sama lalu saling
+   menimpa. Itu temuan QA T-01, dan admin bawaan justru salah satu yang tak
+   punya kode.
+
+   Akun baru kini wajib berkode. Yang LAMA sengaja tidak diisi otomatis:
+   kodenya sudah tercetak di struk yang beredar, jadi menetapkannya diam-diam
+   membuat struk lama menunjuk perangkat yang bukan penerbitnya. Daftarnya
+   disebut di sini supaya pemiliknya yang memutuskan. #}
+{% set tanpa_kode = baris|rejectattr('perangkat_kode')|list %}
+{% if tanpa_kode %}
+  <div class="nota nota--hati" style="margin-bottom:14px">
+    <b>{{ tanpa_kode|length }} akun belum punya kode perangkat.</b>
+    Kode itu masuk ke nomor tiket dan tercetak di struk; akun tanpa kode
+    memakai <b>P0</b> — dan semuanya memakai P0 yang sama, sehingga nomor
+    tiketnya bisa bertabrakan.
+    <div style="margin-top:6px">
+      {% for p in tanpa_kode %}
+        <a href="{{ PREFIX }}/pengguna/{{ p.id }}">{{ p.nama }}</a>{{ "," if not loop.last }}
+      {% endfor %}
+    </div>
+    <small class="redup">Tidak diisi otomatis — kode lama sudah tercetak di
+    struk yang beredar, jadi Anda yang menentukan.</small>
+  </div>
+{% endif %}
       <table>
         <thead>
           <tr><th>Nama</th><th>Pengguna</th><th>Peran</th><th>Perangkat</th>

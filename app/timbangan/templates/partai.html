@@ -74,7 +74,9 @@
 
 <form method="post" action="{{ aksi_url }}">
   {% if not trx %}
-    <input type="hidden" name="kode" value="{{ kode }}">
+    {# Kunci kiriman, BUKAN nomor tiket — server yang menerbitkan nomornya
+       saat menyimpan. Lihat `service.alokasi_nomor`. #}
+    <input type="hidden" name="kunci" value="{{ kunci }}">
 
     <div class="grup">
       <div class="lbl">{{ PIHAK_LABEL.get(aturan.arah, 'Pihak') }}</div>
