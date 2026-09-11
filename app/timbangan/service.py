@@ -14,6 +14,7 @@ Dua hal yang membentuk seluruh rancangan modul ini:
 from __future__ import annotations
 
 import json
+import dataclasses
 import math
 from typing import Sequence
 import re
@@ -837,6 +838,14 @@ def _isi_berbeda(trx: TimbanganTransaksi, data: InputTimbang) -> str | None:
         ada = getattr(trx, kolom)
         minta = diminta[kolom]
         if kolom == "timbang1_kg":
+            # Pada PARTAI, `timbang1_kg` adalah JUMLAH seluruh baris — ia
+            # memang berubah tiap barang susulan naik timbangan.
+            # Membandingkannya dengan angka di formulir awal akan menuduh
+            # kiriman ulang yang sah sebagai "dua penimbangan berbeda", dan
+            # tiket yang sudah berisi empat karung jadi tak bisa disentuh
+            # sama sekali.
+            if trx.cara_timbang == CARA_PARTAI:
+                continue
             if ada is not None and abs(float(ada) - float(minta)) > 1e-6:
                 return (f"berat timbang ({fmt.kg(ada)} ≠ {fmt.kg(minta)})")
             continue
@@ -1340,6 +1349,14 @@ async def simpan_timbang_pertama(
         # jalur async memicu pemuatan malas di luar greenlet — yang berakhir
         # sebagai 500, bukan sebagai kesalahan yang bisa dibaca.
         await db.refresh(trx, ["penimbangan"])
+        # ── Kiriman ULANG formulir awal tak boleh menghapus barang susulan ──
+        #
+        # Baris di bawah menulis ULANG seluruh daftar dari satu angka —
+        # perilaku yang benar saat tiketnya baru lahir, dan merusak sesudah
+        # barang susulan masuk: baris ketiga & keempat lenyap tanpa satu pun
+        # pesan. Temuan QA T-10.
+        if len(trx.penimbangan) > 1:
+            return trx
         for lama in list(trx.penimbangan):
             trx.penimbangan.remove(lama)
         trx.penimbangan.append(TimbanganPenimbangan(
@@ -1408,6 +1425,7 @@ async def tambah_penimbangan(
     db: AsyncSession, *, akun: TimbanganAkun, kode: str,
     berat_kg: float | None = None, berat: Sequence[float] | None = None,
     catatan: str | None = None, waktu_operator: datetime | None = None,
+    kunci: str | None = None,
     ip: str | None = None,
 ) -> TimbanganTransaksi:
     """Naikkan satu atau beberapa barang lagi ke timbangan, pada kode yang sama.
@@ -1423,7 +1441,21 @@ async def tambah_penimbangan(
     if any(b <= 0 for b in daftar):
         raise LayananError("Berat timbang harus lebih dari 0 kg.")
 
-    trx = _pastikan_partai_terbuka(await ambil_kode(db, kode), kode)
+    trx = _pastikan_partai_terbuka(await ambil_kode_terkunci(db, kode), kode)
+
+    # ── Kiriman ULANG tak menambah lagi ──
+    #
+    # Penambahan partai dulu tak punya penanda apa pun, jadi kiriman ulang —
+    # ketukan dobel, atau antrean luring yang mengirim lagi saat sinyal
+    # kembali — tak bisa dibedakan dari karung berikutnya yang kebetulan sama
+    # beratnya. "+70 kg" jadi 250 kg, bukan 180. Temuan QA T-10.
+    #
+    # Tak berbuat apa-apa, bukan menolak: antrean luring yang ditolak akan
+    # mencoba selamanya dan macet.
+    if kunci:
+        await db.refresh(trx, ["penimbangan"])
+        if any((b.kunci_baris or "").startswith(kunci) for b in trx.penimbangan):
+            return trx
 
     kapasitas = (await setelan.semua(db))["kapasitas_timbangan_kecil_kg"]
     lebih = [b for b in daftar if b > kapasitas]
@@ -1434,11 +1466,14 @@ async def tambah_penimbangan(
         )
 
     waktu = sekarang()
-    for b in daftar:
+    for i, b in enumerate(daftar):
         trx.penimbangan.append(TimbanganPenimbangan(
             urutan=len(trx.penimbangan) + 1, berat_kg=b,
             waktu=waktu_operator or waktu, petugas_id=akun.id,
             catatan=(catatan or None),
+            # Kunci menandai KIRIMANNYA. Baris kedua dan seterusnya dalam satu
+            # kiriman diberi akhiran supaya tetap unik di kolomnya.
+            kunci_baris=(f"{kunci}#{i}" if kunci else None),
         ))
     _jumlahkan_partai(trx)
     ringkas = " + ".join(f"{b:g}" for b in daftar)
@@ -1911,24 +1946,28 @@ async def koreksi_transaksi(
     if not sebelum:
         return trx
 
-    # Hitung ulang bila transaksi sudah punya kedua angka.
-    if trx.timbang2_kg is not None and trx.cara_timbang == CARA_DUA_KALI:
-        aturan = await aturan_untuk(db, trx.jenis_kode)
-        bermuatan, kosong = _bermuatan_dan_kosong(
-            trx.arah, float(trx.timbang1_kg), float(trx.timbang2_kg)
-        )
-        trx.berat_bermuatan_kg = bermuatan
-        trx.berat_kosong_kg = kosong
-        _terapkan_hasil(trx, logic.hitung(
-            aturan=aturan,
-            berat_bermuatan_kg=bermuatan,
-            berat_kosong_kg=kosong,
-            muatan=_baris_logic(trx.muatan),
-            tara_lain_kg=float(trx.tara_lain_kg or 0),
-            kapasitas_kg=(await setelan.semua(db))["kapasitas_jembatan_kg"],
-        ))
+    # ── Hitung ulang, untuk SETIAP cara timbang ──
+    #
+    # Dulu hanya `DUA_KALI`. Jasa timbang SEKALI yang dikoreksi 12.000 → 8.000
+    # nettonya tetap 12.000: angka yang dikoreksi tersimpan, hasilnya tidak.
+    # Dan tiket partai lebih kacau lagi — koreksi mengubah `timbang1_kg`,
+    # padahal pada partai angka itu cuma baris PERTAMA dari beberapa.
+    kontrol_lama = trx.status_kontrol
+    if await _hitung_ulang_koreksi(db, trx):
         sesudah["status_kontrol"] = trx.status_kontrol
-        sesudah["selisih_kg"] = float(trx.selisih_kg)
+        sesudah["selisih_kg"] = float(trx.selisih_kg or 0)
+
+    # ── Status yang berubah jadi wajib-periksa MEMBUKA lembarnya ──
+    #
+    # Temuan QA T-07. Tiket bertanda INVESTIGASI tanpa satu pun lembar berarti
+    # tak ada yang menindaklanjutinya: lembar itulah antrean pemeriksanya.
+    # Jalur timbang kedua sudah membukanya sejak dulu; jalur koreksi tidak,
+    # dan tak ada yang menyadarinya karena keduanya berakhir dengan status
+    # yang sama di layar.
+    if (trx.status_kontrol != kontrol_lama
+            and trx.status_kontrol in _WAJIB_PERIKSA
+            and trx.status_tiket == TIKET_SELESAI):
+        await buka_pemeriksaan(db, akun=akun, trx=trx)
 
     trx.jumlah_revisi = (trx.jumlah_revisi or 0) + 1
     trx.diubah_oleh_id = akun.id
@@ -1942,6 +1981,96 @@ async def koreksi_transaksi(
     await db.commit()
     await db.refresh(trx)
     return trx
+
+
+#: Status kontrol yang menuntut lembar pemeriksaan dibuka.
+_WAJIB_PERIKSA = ("INVESTIGASI", "WAJIB_PERIKSA")
+
+
+async def _hitung_ulang_koreksi(db: AsyncSession, trx: TimbanganTransaksi) -> bool:
+    """Hitung ulang hasil sesudah koreksi — SATU jalur per cara timbang.
+
+    Dulu satu `if` yang hanya menyebut `DUA_KALI`, dan dua cara lainnya
+    diam-diam tak pernah dihitung ulang. Bentuk `if` tunggal itu pula yang
+    membuat kelupaannya tak kelihatan: tak ada tempat yang menuntut ketiganya
+    disebutkan.
+
+    Kembalikan True bila ada yang dihitung ulang.
+    """
+    kapasitas = (await setelan.semua(db))["kapasitas_jembatan_kg"]
+    # Aturan dari SNAPSHOT tiketnya, bukan aturan hari ini — lihat
+    # `aturan_dari_snapshot`.
+    aturan = aturan_dari_snapshot(trx) or await aturan_untuk(db, trx.jenis_kode)
+
+    if trx.cara_timbang == CARA_SEKALI:
+        # Tak ada pembanding: bruto = angka satu-satunya, tanpa kontrol.
+        bruto = float(trx.timbang1_kg or 0)
+        trx.berat_bermuatan_kg = bruto
+        trx.berat_kosong_kg = None
+        _terapkan_hasil(trx, logic.hitung(
+            aturan=aturan, berat_bermuatan_kg=bruto, berat_kosong_kg=None,
+            muatan=_baris_logic(trx.muatan),
+            tara_lain_kg=float(trx.tara_lain_kg or 0), kapasitas_kg=kapasitas,
+        ))
+        return True
+
+    if trx.cara_timbang == CARA_PARTAI:
+        # Pada partai, berat totalnya JUMLAH baris penimbangan — `timbang1_kg`
+        # cuma baris pertama. Menghitung dari situ memberi angka yang selalu
+        # kurang, sebanyak apa pun barang yang menyusul.
+        await db.refresh(trx, ["penimbangan"])
+        total = sum(float(b.berat_kg or 0) for b in trx.penimbangan)
+        trx.berat_bermuatan_kg = total
+        trx.berat_kosong_kg = None
+        _terapkan_hasil(trx, logic.hitung(
+            aturan=aturan, berat_bermuatan_kg=total, berat_kosong_kg=None,
+            muatan=_baris_logic(trx.muatan),
+            tara_lain_kg=float(trx.tara_lain_kg or 0), kapasitas_kg=kapasitas,
+        ))
+        return True
+
+    if trx.timbang2_kg is None:
+        return False          # DUA_KALI yang belum lengkap — tak ada hasilnya
+    bermuatan, kosong = _bermuatan_dan_kosong(
+        trx.arah, float(trx.timbang1_kg), float(trx.timbang2_kg)
+    )
+    trx.berat_bermuatan_kg = bermuatan
+    trx.berat_kosong_kg = kosong
+    _terapkan_hasil(trx, logic.hitung(
+        aturan=aturan, berat_bermuatan_kg=bermuatan, berat_kosong_kg=kosong,
+        muatan=_baris_logic(trx.muatan),
+        tara_lain_kg=float(trx.tara_lain_kg or 0), kapasitas_kg=kapasitas,
+    ))
+    return True
+
+
+def aturan_dari_snapshot(trx: TimbanganTransaksi) -> "logic.AturanJenis | None":
+    """Bangun aturan dari `aturan_snapshot` tiket — bukan aturan hari ini.
+
+    Snapshotnya ditulis pada TIAP penimbangan sejak lama, dan tak pernah
+    sekali pun dibaca. Temuan QA T-13.
+
+    Akibatnya tiket lama dinilai ulang dengan aturan yang berlaku sekarang:
+    toleransi yang berubah bulan lalu membuat tiket bulan sebelumnya tiba-tiba
+    berstatus lain, dan bukti yang dicetak ULANG bisa berbeda dari yang dulu
+    diserahkan ke sopir — termasuk flag rahasia, yang menentukan apakah angka
+    acuan ikut tercetak.
+
+    Yang tak punya snapshot (tiket paling lama) mengembalikan None, dan
+    pemanggilnya jatuh ke aturan sekarang. Itu memang satu-satunya yang
+    tersisa untuk mereka.
+    """
+    mentah = (trx.aturan_snapshot or "").strip()
+    if not mentah:
+        return None
+    try:
+        data = json.loads(mentah)
+        sah = {f.name for f in dataclasses.fields(logic.AturanJenis)}
+        return logic.AturanJenis(**{k: v for k, v in data.items() if k in sah})
+    except Exception:
+        # Snapshot rusak atau dari bentuk lama: jatuh ke aturan sekarang,
+        # bukan menggagalkan pencetakan bukti.
+        return None
 
 
 async def void_transaksi(

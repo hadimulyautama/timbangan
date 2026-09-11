@@ -396,7 +396,10 @@ async def buat_partai(
         trx = await service.simpan_timbang_pertama(db, akun=akun, data=data, ip=ip)
         if berat[1:]:
             trx = await service.tambah_penimbangan(
-                db, akun=akun, kode=trx.kode, berat=berat[1:], ip=ip
+                db, akun=akun, kode=trx.kode, berat=berat[1:],
+                # Kunci yang sama dengan formulirnya: kiriman ulang tak
+                # menambah karung yang sama untuk kedua kalinya.
+                kunci=(kunci.strip() or None), ip=ip,
             )
         if aksi == "selesai":
             trx = await service.selesaikan_partai(db, akun=akun, kode=trx.kode, ip=ip)
@@ -423,6 +426,7 @@ async def layar_partai(
         return redirect(f"/transaksi/{transaksi_id}")
     return render(
         request, "partai.html",
+        kunci=str(uuid4()),
         b=baris,
         aturan=await service.aturan_untuk(db, baris.trx.jenis_kode),
         kembali=f"{PREFIX}/tiket",
@@ -435,6 +439,9 @@ async def lanjut_partai(
     request: Request,
     berat_kg: list[str] = Form([]),
     aksi: str = Form("sementara"),
+    # Penanda kiriman: ketukan dobel atau kiriman ulang antrean luring tak
+    # boleh menambah karung yang sama untuk kedua kalinya (temuan QA T-10).
+    kunci: str = Form(""),
     akun: TimbanganAkun = Depends(butuh_akun),
     db: AsyncSession = Depends(get_db),
 ):
@@ -448,7 +455,9 @@ async def lanjut_partai(
         # pada kunjungan sebelumnya.
         if berat:
             await service.tambah_penimbangan(db, akun=akun, kode=kode,
-                                             berat=berat, ip=ip)
+                                             berat=berat,
+                                             kunci=(kunci.strip() or None),
+                                             ip=ip)
         if aksi == "selesai":
             await service.selesaikan_partai(db, akun=akun, kode=kode, ip=ip)
     except (service.LayananError, logic.ValidasiError) as e:

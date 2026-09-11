@@ -34,6 +34,7 @@ MIGRASI = (
     # 0029 hanya melebarkan kolom `arah`, jadi tak mengubah daftar kolom —
     # ia sengaja tak ada di sini.
     AKAR / "migrations" / "versions" / "0030_timbangan_nomor_atomik.py",
+    AKAR / "migrations" / "versions" / "0032_partai_kunci_baris.py",
 )
 
 # Daftar di atas DITULIS TANGAN, dan karena itu ia basi tiap kali ada migrasi
@@ -45,6 +46,7 @@ MIGRASI = (
 #: karena "tidak mengubah kolom" adalah klaim yang bisa keliru.
 TANPA_KOLOM_BARU = {
     "0029_timbangan_retur.py": "hanya melebarkan String(10) → String(16)",
+    "0031_semai_penghitung_nomor.py": "hanya mengisi data, tak menambah kolom",
 }
 
 

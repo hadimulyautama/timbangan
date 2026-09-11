@@ -24,6 +24,24 @@
      diam-diam, dan yang kehilangan tak pernah tahu. Temuan QA T-04. #}
   <input type="hidden" name="versi" value="{{ versi }}">
 
+  {# ── Nilai ASLI, apa adanya, tanpa pembulatan ──
+     Borang ini mengisi ulang tiap kolom dengan nilai yang SUDAH DIBULATKAN
+     (|angka 0 desimal; tara 3 desimal padahal disimpan 4), dan rutenya
+     memperlakukan tiap kolom terisi sebagai perubahan. Akibatnya memperbaiki
+     NAMA SOPIR ikut mengubah tara 0,0858 → 0,086 dan nota 13.990,5 → 13.990.
+     Temuan QA T-06.
+
+     Nilai asli dikirim di sini supaya rutenya bisa membandingkan dan hanya
+     menerapkan yang benar-benar berbeda. #}
+  <input type="hidden" name="asli_timbang1_kg" value="{{ trx.timbang1_kg }}">
+  <input type="hidden" name="asli_timbang2_kg" value="{{ trx.timbang2_kg if trx.timbang2_kg is not none else '' }}">
+  <input type="hidden" name="asli_nomor_polisi" value="{{ trx.nomor_polisi or '' }}">
+  <input type="hidden" name="asli_nama_sopir" value="{{ trx.nama_sopir or '' }}">
+  <input type="hidden" name="asli_nomor_acuan" value="{{ m.nomor_acuan if m else '' }}">
+  <input type="hidden" name="asli_berat_acuan_kg" value="{{ m.berat_acuan_kg if m else '' }}">
+  <input type="hidden" name="asli_jumlah_karung" value="{{ m.jumlah_karung if m else '' }}">
+  <input type="hidden" name="asli_tara_per_karung_kg" value="{{ m.tara_per_karung_kg if m else '' }}">
+
     {{ berat('timbang1_kg', 'Timbang pertama', trx.timbang1_kg|angka, '', false) }}
     {% if trx.timbang2_kg is not none %}
       {{ berat('timbang2_kg', 'Timbang kedua', trx.timbang2_kg|angka, '', false) }}

@@ -529,6 +529,16 @@ class TimbanganPenimbangan(Base):
     petugas_id: Mapped[int | None] = mapped_column(ForeignKey("timbangan_akun.id"))
     catatan: Mapped[str | None] = mapped_column(String(120))
 
+    # ── Penanda kiriman, supaya karung yang sama tak tercatat dua kali ──
+    #
+    # Penambahan partai dulu tak punya penanda apa pun, jadi kiriman ULANG —
+    # ketukan dobel, atau antrean luring yang mengirim lagi saat sinyal
+    # kembali — tak bisa dibedakan dari karung berikutnya yang kebetulan sama
+    # beratnya. "+70 kg" jadi 250 kg, bukan 180. Temuan QA T-10.
+    #
+    # Boleh kosong: baris yang dibuat sebelum kolom ini ada memang tak punya.
+    kunci_baris: Mapped[str | None] = mapped_column(String(36), unique=True, index=True)
+
     transaksi: Mapped["TimbanganTransaksi"] = relationship(back_populates="penimbangan")
 
 

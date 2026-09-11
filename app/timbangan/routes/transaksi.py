@@ -182,6 +182,14 @@ async def simpan_koreksi(
     request: Request,
     alasan: str = Form(...),
     versi: str = Form(""),
+    asli_timbang1_kg: str = Form(""),
+    asli_timbang2_kg: str = Form(""),
+    asli_nomor_polisi: str = Form(""),
+    asli_nama_sopir: str = Form(""),
+    asli_nomor_acuan: str = Form(""),
+    asli_berat_acuan_kg: str = Form(""),
+    asli_jumlah_karung: str = Form(""),
+    asli_tara_per_karung_kg: str = Form(""),
     timbang1_kg: str = Form(""),
     timbang2_kg: str = Form(""),
     nomor_polisi: str = Form(""),
@@ -206,14 +214,32 @@ async def simpan_koreksi(
             err="Koreksi harus disertai alasan.",
         )
 
+    # ── Hanya yang BERBEDA dari nilai aslinya yang diterapkan ──
+    #
+    # Borang mengisi ulang tiap kolom dengan nilai yang SUDAH DIBULATKAN, dan
+    # kode ini dulu memperlakukan tiap kolom terisi sebagai perubahan.
+    # Akibatnya memperbaiki nama sopir ikut mengubah tara 0,0858 → 0,086 dan
+    # nota 13.990,5 → 13.990 — dua angka yang tak pernah disentuh siapa pun.
+    # Temuan QA T-06.
+    def _berubah_angka(baru_: str, asli_: str) -> bool:
+        """Beda sungguhan, bukan beda ejaan. "13.990" dan "13990,0" sama."""
+        if not baru_.strip():
+            return False
+        if not asli_.strip():
+            return True
+        return abs(_angka(baru_) - _angka(asli_)) > 1e-9
+
+    def _berubah_teks(baru_: str, asli_: str) -> bool:
+        return bool(baru_.strip()) and baru_.strip() != (asli_ or "").strip()
+
     perubahan: dict = {}
-    if timbang1_kg:
+    if _berubah_angka(timbang1_kg, asli_timbang1_kg):
         perubahan["timbang1_kg"] = _angka(timbang1_kg)
-    if timbang2_kg and b.trx.timbang2_kg is not None:
+    if b.trx.timbang2_kg is not None and _berubah_angka(timbang2_kg, asli_timbang2_kg):
         perubahan["timbang2_kg"] = _angka(timbang2_kg)
-    if nomor_polisi:
+    if _berubah_teks(nomor_polisi, asli_nomor_polisi):
         perubahan["nomor_polisi"] = nomor_polisi
-    if nama_sopir:
+    if _berubah_teks(nama_sopir, asli_nama_sopir):
         perubahan["nama_sopir"] = nama_sopir
     if supplier_id.isdigit():
         # Kolomnya ditentukan arah transaksi, bukan nama isian di formulir.
@@ -224,7 +250,13 @@ async def simpan_koreksi(
         perubahan["catatan"] = catatan.strip()
 
     muatan = None
-    if jumlah_karung or berat_acuan_kg or tara_per_karung_kg or nomor_acuan:
+    muatan_berubah = (
+        _berubah_angka(jumlah_karung, asli_jumlah_karung)
+        or _berubah_angka(berat_acuan_kg, asli_berat_acuan_kg)
+        or _berubah_angka(tara_per_karung_kg, asli_tara_per_karung_kg)
+        or _berubah_teks(nomor_acuan, asli_nomor_acuan)
+    )
+    if muatan_berubah:
         lama = b.trx.muatan[0] if b.trx.muatan else None
         muatan = [service.InputMuatan(
             jenis_kode=b.trx.jenis_kode,
