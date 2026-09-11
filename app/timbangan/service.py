@@ -31,6 +31,7 @@ from app.models import Pelanggan, Supplier
 from app.timbangan import format as fmt, logic, setelan
 from app.timbangan.config import tsettings
 from app.timbangan.db import berzona, sekarang
+from app.timbangan.tautan_produksi import pastikan_bebas_tautan
 from app.timbangan.models import (
     CARA_DUA_KALI,
     CARA_PARTAI,
@@ -1206,6 +1207,75 @@ def jepit_persen(nilai: float | None) -> float:
         return 0.0
     return max(-BATAS_PERSEN, min(BATAS_PERSEN, float(nilai)))
 
+#: Toleransi jam perangkat yang tak persis sama dengan jam server. Ponsel
+#: petugas sering meleset satu-dua menit, dan menolak selisih semenit hanya
+#: membuat orang berhenti mengisi jamnya sama sekali.
+_TOLERANSI_DEPAN = timedelta(minutes=10)
+
+
+async def pastikan_waktu_wajar(
+    db: AsyncSession,
+    *,
+    akun: TimbanganAkun,
+    waktu: datetime | None,
+    sesudah: datetime | None = None,
+    label: str = "Jam timbang",
+    kode: str | None = None,
+    ip: str | None = None,
+) -> None:
+    """Batasi jam timbang yang diketik sendiri oleh petugas.
+
+    Isian jam ada supaya pencatatan yang terlambat tetap jujur — petugas yang
+    baru sempat mengetik satu jam kemudian menulis jam sebenarnya. Tanpa
+    batas, isian yang sama juga memindahkan tiket ke periode yang sudah
+    ditutup: timbang kedua bertanggal Maret untuk tiket September, di luar
+    jendela tujuh hari yang dibaca produksi, sehingga rekap dua sistem
+    berhenti cocok tanpa ada yang tahu sebabnya. Temuan QA T-16.
+
+    Tiga pagar, dan ketiganya menjawab hal berbeda:
+
+      · tidak di MASA DEPAN — jam yang belum terjadi bukan pencatatan
+        terlambat, melainkan salah ketik atau angan-angan;
+      · tidak SEBELUM timbang pertama — truk tak bisa keluar sebelum masuk;
+      · tidak lebih mundur dari batas yang disetel — di luar itu Admin yang
+        memutuskan, dan keputusannya bernama di audit.
+    """
+    if waktu is None:
+        return
+    waktu = berzona(waktu)
+    if waktu is None:
+        return
+    kini = sekarang()
+    if waktu > kini + _TOLERANSI_DEPAN:
+        raise LayananError(
+            f"{label} tidak boleh di masa depan."
+        )
+    sesudah = berzona(sesudah)
+    if sesudah is not None and waktu < sesudah:
+        raise LayananError(
+            f"{label} tidak boleh sebelum timbang pertama "
+            f"({berzona(sesudah):%d-%m-%Y %H:%M})."
+        )
+
+    batas = float((await setelan.semua(db))["jam_mundur_maksimum"])
+    if kini - waktu <= timedelta(hours=batas):
+        return
+    if not akun.is_admin:
+        raise LayananError(
+            f"{label} lebih dari {batas:g} jam ke belakang. Minta Admin yang "
+            "mengisinya — memundurkan tanggal memindahkan tiket ke periode "
+            "yang mungkin sudah ditutup."
+        )
+    # Admin boleh, tetapi tidak diam-diam. Yang dijaga bukan wewenangnya
+    # melainkan kemungkinan menelusurinya kemudian.
+    await catat_audit(
+        db, akun=akun, aksi="WAKTU_MUNDUR", entitas="transaksi",
+        entitas_id=kode or "-",
+        ringkasan=f"{label} dimundurkan ke {waktu:%d-%m-%Y %H:%M} "
+                  f"(batas {batas:g} jam)", ip=ip,
+    )
+
+
 async def simpan_timbang_pertama(
     db: AsyncSession, *, akun: TimbanganAkun, data: InputTimbang, ip: str | None = None
 ) -> TimbanganTransaksi:
@@ -1217,6 +1287,14 @@ async def simpan_timbang_pertama(
     if data.berat_kg <= 0:
         raise LayananError("Berat timbang harus lebih dari 0 kg.")
     _periksa_isian(data)
+    # Diperiksa SEBELUM baris tiketnya ada sama sekali. Penjaga ini membaca
+    # setelan, dan pembacaan itu membilas sesi — baris tiket yang setengah
+    # terisi akan ikut terbilas dan ditolak Postgres, bukan ditolak dengan
+    # kalimat yang bisa dibaca petugas.
+    await pastikan_waktu_wajar(
+        db, akun=akun, waktu=data.waktu_operator,
+        label="Jam timbang pertama", kode=data.kode, ip=ip,
+    )
 
     aturan = await aturan_untuk(db, data.jenis_kode)
     _wajib_nopol(aturan.arah, data.nomor_polisi, cara=data.cara_timbang)
@@ -1628,6 +1706,12 @@ async def simpan_timbang_kedua(
         return trx                      # kiriman ulang sejati — sudah tuntas
     if berat_kg <= 0:
         raise LayananError("Berat timbang harus lebih dari 0 kg.")
+    # Diperiksa SEBELUM apa pun disentuh: jam yang ditolak tak boleh sempat
+    # mengubah tanggal tiket, dan tanggal tiket menentukan periode laporannya.
+    await pastikan_waktu_wajar(
+        db, akun=akun, waktu=waktu_operator, sesudah=trx.timbang1_waktu,
+        label="Jam timbang kedua", kode=trx.kode, ip=ip,
+    )
 
     aturan = await aturan_untuk(db, trx.jenis_kode)
     waktu = sekarang()
@@ -1750,6 +1834,10 @@ async def ubah_jenis(
         raise LayananError("Transaksi sudah dibatalkan.")
     if not (alasan or "").strip():
         raise LayananError("Perubahan jenis barang harus disertai alasan.")
+    # Komoditas menentukan TABEL batch di produksi. Menggantinya sesudah
+    # tertaut meninggalkan batch gabah yang menunjuk tiket PK — dan tak ada
+    # constraint di mana pun yang melarang keadaan itu bertahan.
+    await pastikan_bebas_tautan(db, trx, tindakan="Mengubah jenis barang")
 
     baru = (jenis_kode or "").strip().upper()
     if not baru or baru == trx.jenis_kode:
@@ -1913,6 +2001,24 @@ async def koreksi_transaksi(
             pihak_nama=perubahan.get("pihak_nama", trx.pihak_nama),
         )
 
+    # ── Yang IKUT TERSALIN ke batch produksi tak boleh dikoreksi diam-diam ──
+    #
+    # Produksi menyalin pemasok, nopol, dan jam kedatangan SEKALI saat batch
+    # dibuat, lalu tak pernah membacanya lagi. Bobot lain perkaranya: ada
+    # poller yang menyusulkan revisinya. Jadi pagar ini hanya berdiri di depan
+    # kolom yang revisinya tak punya jalan sampai ke sebelah.
+    #
+    # Membetulkan nama sopir atau catatan tetap bebas. Pagar yang mengunci
+    # segalanya akan dicari jalan memutarnya, dan jalan memutar itu tak
+    # meninggalkan jejak.
+    IKUT_KE_BATCH = {"supplier_id", "pelanggan_id", "pihak_nama",
+                     "nomor_polisi", "timbang1_waktu"}
+    disentuh = {k for k in perubahan if k in IKUT_KE_BATCH
+                and getattr(trx, k) != perubahan[k]}
+    if disentuh:
+        await pastikan_bebas_tautan(
+            db, trx, tindakan="Mengoreksi " + ", ".join(sorted(disentuh)))
+
     sebelum, sesudah = {}, {}
     for kolom, nilai in perubahan.items():
         if kolom not in dapat_diubah:
@@ -1984,7 +2090,13 @@ async def koreksi_transaksi(
 
 
 #: Status kontrol yang menuntut lembar pemeriksaan dibuka.
-_WAJIB_PERIKSA = ("INVESTIGASI", "WAJIB_PERIKSA")
+#:
+#: Diambil dari `logic`, bukan diketik ulang. Daftar yang diketik di sini dulu
+#: berbunyi ("INVESTIGASI", "WAJIB_PERIKSA") — dan "WAJIB_PERIKSA" bukan nama
+#: status mana pun. Akibatnya jalur koreksi tak pernah membuka lembar untuk
+#: PERLU_PEMERIKSAAN maupun KELEBIHAN, dan tak ada yang menyadarinya karena
+#: layarnya tetap menampilkan status yang benar.
+_WAJIB_PERIKSA = logic.STATUS_WAJIB_PERIKSA
 
 
 async def _hitung_ulang_koreksi(db: AsyncSession, trx: TimbanganTransaksi) -> bool:
@@ -2088,6 +2200,10 @@ async def void_transaksi(
         raise LayananError("Pembatalan harus disertai alasan.")
     if trx.status_transaksi == TRX_VOID:
         return trx
+    # Gabahnya mungkin sudah masuk stok di sebelah. Membatalkan tiketnya di
+    # sini tak menariknya keluar dari sana — yang terjadi hanyalah dua sistem
+    # berhenti sepakat tentang truk yang sama.
+    await pastikan_bebas_tautan(db, trx, tindakan="Membatalkan tiket ini")
 
     trx.status_transaksi = TRX_VOID
     trx.void_alasan = alasan.strip()
@@ -2109,17 +2225,51 @@ async def tutup_paksa(
     akun: TimbanganAkun,
     trx: TimbanganTransaksi,
     alasan: str,
+    tanpa_timbang_keluar: bool = False,
     ip: str | None = None,
 ) -> TimbanganTransaksi:
     """Tutup tiket yang tidak akan pernah punya timbang kedua.
 
     Truk yang batal bongkar tetap meninggalkan jejak: tiketnya ditutup dengan
     alasan, bukan dihapus supaya daftar terlihat rapi.
+
+    **Muatan yang DITOLAK bukan alasan melewatkan timbang keluar.** Truk yang
+    ditolak tetap keluar dari pabrik, dan tanpa angka keluarnya tak ada
+    kontrol masuk−keluar sama sekali (RANCANGAN §4.3) — truk bisa pergi
+    membawa lebih banyak daripada yang ia bawa masuk, dan tak ada satu angka
+    pun yang bisa menunjukkannya. Yang benar untuk muatan ditolak adalah
+    menyelesaikan timbang keduanya seperti biasa; barang diterima jatuh ke
+    sekitar nol dengan sendirinya, dan selisihnya tetap terkontrol.
+
+    Jalan ini karena itu hanya untuk truk yang MEMANG sudah pergi tanpa
+    ditimbang, dan `tanpa_timbang_keluar` adalah pengakuan tertulis bahwa
+    itulah yang terjadi. Temuan QA T-15.
     """
     if trx.status_tiket != TIKET_TERBUKA:
         raise LayananError("Tiket ini tidak dalam keadaan terbuka.")
     if not (alasan or "").strip():
         raise LayananError("Penutupan paksa harus disertai alasan.")
+    if not tanpa_timbang_keluar:
+        raise LayananError(
+            "Truk yang ditolak tetap wajib ditimbang keluar — selesaikan "
+            "timbang keduanya, dan barang diterima akan terhitung nol. "
+            "Penutupan paksa hanya untuk truk yang sudah pergi tanpa "
+            "sempat ditimbang keluar."
+        )
+    # ── Tiket orang lain hanya boleh ditutup Admin ke atas ──
+    #
+    # Sebelumnya siapa pun bisa. Andi menutup tiket Siti dengan alasannya
+    # sendiri, dan Siti tak pernah tahu — yang tertinggal di layar hanyalah
+    # tiketnya yang hilang dari daftar terbuka.
+    if not akun.is_admin and (trx.timbang1_petugas_id or trx.dibuat_oleh_id) \
+            not in (akun.id, None):
+        raise LayananError(
+            "Tiket ini dibuka petugas lain. Menutup paksa tiket orang lain "
+            "hanya bisa oleh Admin."
+        )
+    # Menutup paksa mengosongkan hasil timbangnya. Bila produksi sudah menaut
+    # batch ke tiket ini, batch itu akan menunggu bobot selamanya.
+    await pastikan_bebas_tautan(db, trx, tindakan="Menutup paksa tiket ini")
 
     trx.status_tiket = TIKET_DITUTUP_PAKSA
     trx.tutup_paksa_alasan = alasan.strip()
@@ -2128,7 +2278,8 @@ async def tutup_paksa(
 
     await catat_audit(
         db, akun=akun, aksi="TUTUP_PAKSA", entitas="transaksi", entitas_id=trx.kode,
-        ringkasan=trx.tutup_paksa_alasan, ip=ip,
+        ringkasan=f"{trx.tutup_paksa_alasan} — truk pergi tanpa timbang keluar",
+        ip=ip,
     )
     await db.commit()
     await db.refresh(trx)
@@ -2176,6 +2327,10 @@ async def hapus_transaksi(
         raise LayananError("Menghapus catatan timbang hanya bisa Super Admin.")
     if not (alasan or "").strip():
         raise LayananError("Penghapusan harus disertai alasan.")
+    # Diperiksa DI SINI, bukan dibiarkan foreign key produksi yang menolak.
+    # Keduanya sama-sama menahan barisnya, tetapi yang satu berbunyi seperti
+    # penjelasan dan yang lain berbunyi seperti aplikasi rusak.
+    await pastikan_bebas_tautan(db, trx, tindakan="Menghapus tiket ini")
 
     kode = trx.kode
     await db.refresh(trx, ["muatan"])
@@ -2671,6 +2826,44 @@ async def selesaikan_pemeriksaan(
 
 # ═══════════════════════════ Cetak & foto ═══════════════════════════
 
+def pastikan_boleh_cetak(trx) -> None:
+    """Hanya tiket AKTIF dan SELESAI yang boleh keluar sebagai bukti.
+
+    Sampai 11 September 2026 cetak hanya memeriksa kepemilikan tiket, dan
+    dua jenis kertas beredar sebagai bukti sah tanpa satu kata pun yang
+    menyebut keadaannya: struk tiket yang sudah DIBATALKAN, dan struk tiket
+    yang masih TERBUKA — lengkap dengan baris netto yang angkanya belum ada.
+    Keduanya ditandatangani pihak luar. Temuan QA T-11.
+
+    Sebabnya ikut disebut. Penolakan yang hanya berbunyi "tidak bisa dicetak"
+    membuat petugas mencari jalan lain, dan salah satu jalan itu akan berhasil.
+    """
+    if trx.status_transaksi != TRX_AKTIF:
+        raise LayananError(
+            "Tiket ini sudah dibatalkan, jadi tak boleh dicetak sebagai bukti."
+        )
+    if trx.status_tiket == TIKET_DITUTUP_PAKSA:
+        raise LayananError(
+            "Tiket ini ditutup paksa tanpa timbang kedua — tak ada angka yang "
+            "bisa dijadikan bukti."
+        )
+    if trx.status_tiket != TIKET_SELESAI:
+        raise LayananError(
+            "Timbang kedua belum ada, jadi buktinya belum bisa dicetak."
+        )
+
+
+async def cetakan_ke(db: AsyncSession, trx_id: int) -> int:
+    """Nomor cetakan BERIKUTNYA — yang akan tertera di kertas yang sedang
+    disiapkan. Dihitung sebelum kertasnya keluar, bukan sesudah, karena
+    tandanya harus ikut tercetak."""
+    return ((await db.execute(
+        select(func.max(TimbanganCetak.urutan)).where(
+            TimbanganCetak.transaksi_id == trx_id
+        )
+    )).scalar() or 0) + 1
+
+
 async def catat_cetak(
     db: AsyncSession,
     *,
@@ -2681,11 +2874,8 @@ async def catat_cetak(
     ip: str | None = None,
 ) -> TimbanganCetak:
     """Catat satu kali cetak. Cetak kedua dan seterusnya wajib beralasan."""
-    urutan = ((await db.execute(
-        select(func.max(TimbanganCetak.urutan)).where(
-            TimbanganCetak.transaksi_id == trx.id
-        )
-    )).scalar() or 0) + 1
+    pastikan_boleh_cetak(trx)
+    urutan = await cetakan_ke(db, trx.id)
 
     if urutan > 1 and not (alasan or "").strip():
         raise LayananError("Cetak ulang harus disertai alasan.")
@@ -2693,12 +2883,16 @@ async def catat_cetak(
     baris = TimbanganCetak(
         transaksi_id=trx.id, urutan=urutan, ulang=urutan > 1,
         format=(format if format in ("80MM", "NCR") else "80MM"),
+        # Nomor revisi tiket SAAT kertas ini keluar. Sengketa dibuka
+        # berbulan-bulan kemudian, dan yang ditanya adalah "lembar mana yang
+        # dipegang orang itu" — tanpa angka ini pertanyaannya tak berjawab.
+        revisi=int(trx.jumlah_revisi or 0),
         alasan=(alasan or None), oleh_id=akun.id,
     )
     db.add(baris)
     await catat_audit(
         db, akun=akun, aksi="CETAK", entitas="transaksi", entitas_id=trx.kode,
-        ringkasan=f"cetak ke-{urutan} ({baris.format})"
+        ringkasan=f"cetak ke-{urutan} ({baris.format}, revisi {baris.revisi})"
                   + (f" — {alasan}" if alasan else ""), ip=ip,
     )
     await db.commit()

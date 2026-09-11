@@ -262,8 +262,12 @@ async def test_tutup_paksa_tiket_lewat_halaman(klien):
     tiket = await klien.get(f"{PREFIX}/tiket")
     trx_id = int(re.search(r"/tiket/(\d+)", tiket.text).group(1))
 
+    # Alasannya kini bukan "mutu ditolak": muatan yang ditolak tetap wajib
+    # ditimbang keluar (T-15). Jalan ini hanya untuk truk yang sudah pergi,
+    # dan centangnya adalah pengakuan tertulis atas hal itu.
     r = await klien.post(f"{PREFIX}/tiket/{trx_id}/tutup",
-                         data={"alasan": "Mutu ditolak, truk kembali"})
+                         data={"alasan": "Truk pergi saat petugas istirahat",
+                               "tanpa_timbang_keluar": "1"})
     assert "ditutup beserta alasannya" in r.text
     # Kalimatnya bukan lagi soal truk: partai kecil datang tanpa kendaraan,
     # dan daftar ini menampung keduanya.
@@ -2389,7 +2393,20 @@ def test_waktu_operator_kosong_atau_ngawur_jatuh_ke_jam_sistem():
 
 
 async def test_jam_yang_diketik_petugas_tampil_sama_persis(klien):
-    """Yang diketik 09:15 harus terbaca 09:15 — bukan 16:15."""
+    """Yang diketik harus terbaca sama — bukan bergeser tujuh jam.
+
+    Jamnya dihitung mundur dari SEKARANG, bukan ditulis sebagai tanggal
+    tetap: sejak T-16, memundurkan jam lebih dari batas yang disetel memang
+    ditolak, jadi tanggal tetap di masa lalu akan membuat uji ini gagal
+    karena kalendernya, bukan karena zonanya.
+    """
+    from datetime import timedelta
+
+    from app.timbangan.db import sekarang
+
+    jam = (sekarang() - timedelta(hours=3)).replace(second=0, microsecond=0)
+    geser = jam + timedelta(hours=7)          # inilah kekeliruan yang dijaga
+
     await login(klien)
     form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
     await klien.post(f"{PREFIX}/timbang/GABAH_BASAH", data={
@@ -2397,12 +2414,12 @@ async def test_jam_yang_diketik_petugas_tampil_sama_persis(klien):
         "cara_timbang": "DUA_KALI", "supplier_id": "1",
         "nomor_polisi": "AD 5 BB", "jumlah_karung": "120",
         "tara_per_karung_kg": "0,25", "berat_acuan_kg": "10000",
-        "tara_lain_kg": "0", "waktu": "2026-08-31T09:15",
+        "tara_lain_kg": "0", "waktu": jam.strftime("%Y-%m-%dT%H:%M"),
         "catatan": "", "nomor_acuan": "N-1", "nama_sopir": "Slamet", "pihak_nama": "",
     })
     tiket = await klien.get(f"{PREFIX}/tiket")
-    assert "09:15" in tiket.text
-    assert "16:15" not in tiket.text
+    assert jam.strftime("%H:%M") in tiket.text
+    assert geser.strftime("%H:%M") not in tiket.text
 
 
 # ─────────────── Nama pihak ikut tercetak besar ───────────────

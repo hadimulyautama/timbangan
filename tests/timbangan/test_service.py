@@ -161,16 +161,28 @@ async def test_pengiriman_kurang_dari_surat_jalan_ditandai(db, petugas, supplier
 
 
 async def test_tanggal_mengikuti_timbang_kedua(db, petugas, supplier):
-    """Truk masuk menjelang tengah malam tercatat di hari ia selesai."""
+    """Truk masuk menjelang tengah malam tercatat di hari ia selesai.
+
+    Jamnya dihitung mundur dari SEKARANG, bukan ditulis sebagai tanggal
+    tetap. Tanggal tetap di masa lalu makin lama makin jauh, dan sejak T-16
+    memundurkan jam lebih dari batas yang disetel memang ditolak — uji yang
+    memakainya akan gagal suatu hari karena kalendernya, bukan karena
+    kodenya.
+    """
+    from app.timbangan.db import sekarang
+
+    tengah_malam = sekarang().replace(hour=23, minute=40, second=0, microsecond=0) \
+        - timedelta(days=1)
     data = masuk_gabah("TRX-20260830-P1-005", supplier.id, 13_600)
-    data.waktu_operator = datetime(2026, 8, 30, 23, 40)
+    data.waktu_operator = tengah_malam
     await service.simpan_timbang_pertama(db, akun=petugas, data=data)
 
+    keesokan = tengah_malam + timedelta(hours=1, minutes=35)
     trx = await service.simpan_timbang_kedua(
         db, akun=petugas, kode=data.kode, berat_kg=3_570,
-        waktu_operator=datetime(2026, 8, 31, 1, 15),
+        waktu_operator=keesokan,
     )
-    assert trx.tanggal.isoformat() == "2026-08-31"
+    assert trx.tanggal == keesokan.date()
 
 
 async def test_jasa_timbang_sekali_langsung_selesai(db, petugas):
@@ -370,24 +382,34 @@ async def test_void_menyimpan_data_dan_menuntut_alasan(db, petugas, admin2, supp
 
 
 async def test_tutup_paksa_tiket_yang_tidak_jadi_bongkar(db, petugas, supplier):
+    """Alasannya kini SELALU "truk pergi tanpa ditimbang keluar".
+
+    Uji ini dulu beralasan "mutu ditolak" dan lulus — yaitu persis celah
+    T-15: muatan yang ditolak tetap keluar dari pabrik, dan menutup tiketnya
+    tanpa timbang keluar meniadakan satu-satunya kontrol masuk−keluar yang
+    ada. Muatan ditolak sekarang diselesaikan lewat timbang kedua biasa.
+    """
     data = masuk_gabah("TRX-20260830-P1-016", supplier.id, 13_600)
     trx = await service.simpan_timbang_pertama(db, akun=petugas, data=data)
 
     trx = await service.tutup_paksa(
-        db, akun=petugas, trx=trx, alasan="Truk batal bongkar, mutu ditolak"
+        db, akun=petugas, trx=trx, alasan="Truk pergi saat petugas istirahat",
+        tanpa_timbang_keluar=True,
     )
     assert trx.status_tiket == TIKET_DITUTUP_PAKSA
     assert trx.status_kontrol is None
     assert not await service.tiket_terbuka(db)
 
     with pytest.raises(service.LayananError, match="terbuka"):
-        await service.tutup_paksa(db, akun=petugas, trx=trx, alasan="lagi")
+        await service.tutup_paksa(db, akun=petugas, trx=trx, alasan="lagi",
+                                  tanpa_timbang_keluar=True)
 
 
 async def test_timbang_kedua_ditolak_setelah_tutup_paksa(db, petugas, supplier):
     data = masuk_gabah("TRX-20260830-P1-017", supplier.id, 13_600)
     trx = await service.simpan_timbang_pertama(db, akun=petugas, data=data)
-    await service.tutup_paksa(db, akun=petugas, trx=trx, alasan="batal")
+    await service.tutup_paksa(db, akun=petugas, trx=trx, alasan="truk pergi",
+                              tanpa_timbang_keluar=True)
     with pytest.raises(service.LayananError, match="ditutup paksa"):
         await service.simpan_timbang_kedua(
             db, akun=petugas, kode=data.kode, berat_kg=3_570
@@ -448,6 +470,12 @@ async def test_tara_bawaan_dipakai_bila_belum_ada_sampling(db, supplier):
 async def test_cetak_ulang_wajib_beralasan(db, petugas, supplier):
     data = masuk_gabah("TRX-20260830-P1-018", supplier.id, 13_600)
     trx = await service.simpan_timbang_pertama(db, akun=petugas, data=data)
+    # Timbang keduanya diselesaikan dulu. Uji ini dulu mencetak tiket yang
+    # masih TERBUKA dan lulus — persis celah T-11: struk lengkap dengan baris
+    # netto keluar untuk truk yang angkanya belum ada.
+    trx = await service.simpan_timbang_kedua(
+        db, akun=petugas, kode=data.kode, berat_kg=3_570
+    )
 
     pertama = await service.catat_cetak(db, akun=petugas, trx=trx)
     assert pertama.urutan == 1 and not pertama.ulang

@@ -607,15 +607,23 @@ async def tutup_paksa_tiket(
     transaksi_id: int,
     request: Request,
     alasan: str = Form(...),
+    tanpa_timbang_keluar: str = Form(""),
     akun: TimbanganAkun = Depends(butuh_akun),
     db: AsyncSession = Depends(get_db),
 ):
+    """Tutup tiket truk yang sudah pergi tanpa sempat ditimbang keluar.
+
+    Muatan yang DITOLAK tidak lewat sini — ia diselesaikan lewat timbang
+    kedua biasa, supaya kontrol masuk−keluar tetap ada. Lihat
+    `service.tutup_paksa`.
+    """
     baris = await service.ambil_transaksi(db, transaksi_id)
     if baris is None:
         return redirect("/tiket", err="Tiket tidak ditemukan.")
     try:
         await service.tutup_paksa(
             db, akun=akun, trx=baris.trx, alasan=alasan,
+            tanpa_timbang_keluar=bool(tanpa_timbang_keluar),
             ip=request.client.host if request.client else None,
         )
     except service.LayananError as e:

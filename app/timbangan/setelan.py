@@ -110,6 +110,15 @@ DAFTAR: tuple[Definisi, ...] = (
         minimum=1, maksimum=720,
     ),
     Definisi(
+        kunci="jam_mundur_maksimum",
+        nama="Jam timbang boleh dimundurkan sampai",
+        satuan="jam",
+        arti="Lebih mundur dari ini hanya boleh Admin, dan tercatat di audit.",
+        env="TIMBANGAN_JAM_MUNDUR_MAKS",
+        bawaan=lambda: tsettings.jam_mundur_maksimum,
+        minimum=1, maksimum=720,
+    ),
+    Definisi(
         kunci="maks_foto_mb",
         nama="Ukuran maksimum satu foto",
         satuan="MB",

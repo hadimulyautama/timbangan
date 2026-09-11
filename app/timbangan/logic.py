@@ -138,7 +138,18 @@ PIHAK_LABEL = {
 }
 
 #: Status yang mewajibkan lembar pemeriksaan SOP dibuka.
-STATUS_WAJIB_PERIKSA = {PERLU_PEMERIKSAAN, INVESTIGASI, KELEBIHAN}
+#:
+#: `KURANG` masuk ke sini pada 11 September 2026. Sebelumnya pengiriman yang
+#: kurang dari surat jalan ditutup SELESAI begitu saja: tak ada lembar yang
+#: dibuka, tak ada yang menghitungnya di "perlu tindakan", dan kekurangan
+#: 1.008 kg berakhir tanpa satu pun jejak yang menuntut seseorang
+#: menjelaskannya. Temuan QA T-14.
+#:
+#: Lembar pemeriksaan ADALAH cara "wajib beralasan" itu ditegakkan: ia hanya
+#: bisa ditutup dengan kategori hasil dan catatan resolusi. Tiketnya tidak
+#: ditahan terbuka — truknya sudah pergi, dan tiket yang tak bisa ditutup
+#: hanya memindahkan masalahnya ke daftar tiket terbuka.
+STATUS_WAJIB_PERIKSA = {PERLU_PEMERIKSAAN, INVESTIGASI, KELEBIHAN, KURANG}
 
 
 class ValidasiError(ValueError):

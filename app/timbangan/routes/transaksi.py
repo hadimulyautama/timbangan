@@ -6,6 +6,7 @@ from datetime import date, timedelta
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import Response
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.timbangan import epos, logic, pdf, service
@@ -401,9 +402,17 @@ async def _bahan_cetak(db: AsyncSession, transaksi_id: int, akun):
 
 
 async def _isi_bukti(db, transaksi_id, akun):
-    """Satu kamus data untuk semua bentuk cetakan bukti timbang."""
+    """Satu kamus data untuk semua bentuk cetakan bukti timbang.
+
+    Kesahan tiketnya diperiksa DI SINI, di satu tempat yang dilewati ketiga
+    jalur cetak (ePOS, struk PDF, lembar NCR). Pemeriksaan yang dipasang di
+    tiap rute akan tertinggal di salah satunya, dan yang tertinggal justru
+    jadi satu-satunya pintu yang masih mengeluarkan kertas.
+    """
     b, aturan, petugas = await _bahan_cetak(db, transaksi_id, akun)
+    service.pastikan_boleh_cetak(b.trx)
     return b, aturan, dict(
+        cetakan_ke=await service.cetakan_ke(db, b.trx.id),
         trx=b.trx, aturan=aturan,
         pihak=(b.supplier_nama or b.trx.pihak_nama or ""),
         petugas=petugas.get(b.trx.petugas_bukti_id, ""),
@@ -556,6 +565,17 @@ async def hapus_transaksi(
         )
     except service.LayananError as e:
         return redirect(f"/transaksi/{transaksi_id}", err=str(e))
+    except IntegrityError:
+        # Jaring terakhir. Tautan produksi sudah diperiksa di layanan, jadi
+        # yang sampai ke sini adalah penunjuk yang BELUM dikenal — tabel baru
+        # di repo sebelah, misalnya. Tetap saja orangnya tak boleh melihat
+        # halaman galat untuk sesuatu yang sebenarnya punya penjelasan.
+        await db.rollback()
+        return redirect(
+            f"/transaksi/{transaksi_id}",
+            err="Tiket ini masih ditunjuk catatan lain, jadi belum bisa "
+                "dihapus. Batalkan (VOID) saja bila memang keliru.",
+        )
     return redirect("/transaksi", ok=f"{kode} dihapus permanen.")
 
 

@@ -14,10 +14,16 @@ yang menangkapnya. Berkas ini adalah kontrak tertulis atas jahitan tersebut —
 kalau ia perlu diubah, berarti kontraknya berubah, dan itu harus disepakati
 dua sisi.
 
-Karena itu: **jangan menambah kolom di sini, dan jangan membuat migrasi yang
-menyentuhnya.** Kalau bentuk tabelnya berubah di sana, berkas ini yang
-menyesuaikan — bukan sebaliknya. Definisinya disalin apa adanya agar
-`create_all` pada database uji menghasilkan tabel yang sepadan.
+Karena itu: **jangan membuat migrasi di repo ini yang menyentuhnya.** Kalau
+bentuk tabelnya berubah di sana, berkas ini yang menyesuaikan — bukan
+sebaliknya. Definisinya disalin apa adanya agar `create_all` pada database uji
+menghasilkan tabel yang sepadan.
+
+Kolom yang ditambahkan di sini hanya boleh kolom yang MEMANG DIBACA modul ini,
+dan penambahannya berarti kontraknya melebar — bukan sekadar pemetaan yang
+dilengkapi. Sampai 11 September 2026 daftarnya: `purchase_batches` dan
+`pk_purchase_batches` masing-masing dibaca lewat `timbangan_transaksi_id` dan
+`kode_batch`, untuk mengetahui apakah sebuah tiket sudah dipakai produksi.
 """
 from __future__ import annotations
 
@@ -90,26 +96,47 @@ class Supplier(Base, TimestampMixin):
 
 
 class PurchaseBatch(Base, TimestampMixin):
-    """Batch pembelian gabah (Gudang 1). Sasaran
-    `timbangan_transaksi.purchase_batch_id`.
+    """Batch pembelian gabah (Gudang 1) — dan arah tautannya yang sebenarnya.
 
-    Seperti `User`: sengaja hanya kunci primernya. Tautan ini SATU ARAH —
-    catatan timbang boleh menunjuk sebuah batch pembelian, tetapi modul ini
-    tidak pernah membaca isinya. Yang menghubungkan keduanya adalah sistem
-    penggilingan, di repo sebelah.
+    Berkas ini dulu menulis bahwa tabel ini adalah "sasaran
+    `timbangan_transaksi.purchase_batch_id`". Itu keliru, dan kekeliruannya
+    mahal: kedua kolom penunjuk-balik di `timbangan_transaksi` tidak pernah
+    diisi siapa pun. Yang benar-benar dipakai adalah arah SEBALIKNYA —
+    produksi menulis `purchase_batches.timbangan_transaksi_id` saat operator
+    menaut batch ke tiket.
+
+    Selama tautannya dikira tak pernah ada, timbangan membatalkan,
+    mengubah, dan menghapus tiket yang gabahnya sudah masuk stok di sebelah.
+    Yang terakhir bahkan tak sampai berubah apa-apa: foreign key inilah yang
+    menolaknya, dan yang dilihat Admin adalah halaman galat. Temuan QA X-08
+    dan T-12.
+
+    Dua kolom di bawah karenanya DIBACA modul ini — hanya dibaca, lewat
+    `app.timbangan.tautan_produksi`. Tidak ada satu pun jalur di repo ini
+    yang menulis ke tabel ini, dan tak ada migrasi di sini yang
+    menyentuhnya.
     """
 
     __tablename__ = "purchase_batches"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    #: Ditulis produksi saat batch ditaut ke tiket. UNIQUE di sana — tetapi
+    #: keunikannya berlaku per tabel, jadi tiket yang sama masih mungkin juga
+    #: muncul di `pk_purchase_batches`. Keduanya wajib diperiksa.
+    timbangan_transaksi_id: Mapped[int | None] = mapped_column(index=True)
+    #: Kode yang dibaca orang ("GB-20260911-02"). Disebut dalam pesan
+    #: penolakan, karena tindak lanjutnya ada di aplikasi sebelah dan
+    #: orangnya harus tahu apa yang dicari di sana.
+    kode_batch: Mapped[str | None] = mapped_column(String(40))
 
 
 class PkPurchaseBatch(Base, TimestampMixin):
-    """Batch pembelian beras PK (Gudang 2). Sasaran
-    `timbangan_transaksi.pk_purchase_batch_id`. Lihat catatan di
-    `PurchaseBatch`.
+    """Batch pembelian beras PK (Gudang 2). Lihat catatan di `PurchaseBatch`
+    — arah tautannya sama, dan keduanya sama-sama harus diperiksa.
     """
 
     __tablename__ = "pk_purchase_batches"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    timbangan_transaksi_id: Mapped[int | None] = mapped_column(index=True)
+    kode_batch: Mapped[str | None] = mapped_column(String(40))

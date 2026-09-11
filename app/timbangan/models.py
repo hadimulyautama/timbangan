@@ -593,6 +593,10 @@ class TimbanganCetak(Base):
     # yang benar-benar diterima pengirim.
     format: Mapped[str] = mapped_column(String(10), nullable=False, default="80MM")
     ulang: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    #: Nomor revisi tiket SAAT kertas ini keluar. Cetak ulang sesudah koreksi
+    #: memuat angka yang berbeda dari cetakan sebelumnya; tanpa kolom ini,
+    #: dua lembar untuk satu truk tak bisa dibedakan lagi di kemudian hari.
+    revisi: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     alasan: Mapped[str | None] = mapped_column(Text)
     oleh_id: Mapped[int | None] = mapped_column(ForeignKey("timbangan_akun.id"))
     waktu: Mapped[datetime] = mapped_column(

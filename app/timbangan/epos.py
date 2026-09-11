@@ -118,7 +118,8 @@ def _bungkus(perintah: list[str]) -> str:
 
 def struk_timbang(*, trx, aturan, pihak: str, petugas: str, muatan,
                   perusahaan: str, alamat: str, telepon: str,
-                  arah_masuk: bool, tampilkan_selisih: bool) -> str:
+                  arah_masuk: bool, tampilkan_selisih: bool,
+                  cetakan_ke: int = 1) -> str:
     """Perintah cetak untuk satu bukti timbang, siap dikirim ke printer.
 
     Tandatangannya sengaja sama persis dengan `pdf.bukti_thermal`, sehingga
@@ -138,6 +139,20 @@ def struk_timbang(*, trx, aturan, pihak: str, petugas: str, muatan,
     p.append(_teks(_potong(telepon, KOLOM), align="center"))
     p.append(_teks("-" * KOLOM, align="left"))
     p.append(_teks("B U K T I   T I M B A N G", align="center", em=True))
+    # ── Lembar kedua dan seterusnya mengaku sebagai lembar kedua ──
+    #
+    # Sampai 11 September 2026 cetak ulang identik dengan cetakan pertama, dan
+    # dua lembar untuk satu truk tak bisa dibedakan. Begitu di antara keduanya
+    # ada koreksi, keduanya memuat angka berbeda — dan yang memegangnya orang
+    # di luar pabrik. Temuan QA T-11.
+    #
+    # Tandanya di ATAS nomor tiket, bukan di kaki: yang membacanya sering
+    # hanya melihat kepala kertas.
+    if cetakan_ke > 1:
+        p.append(_teks(f"CETAKAN ULANG ke-{cetakan_ke}", align="center", em=True))
+    revisi = int(getattr(trx, "jumlah_revisi", 0) or 0)
+    if revisi:
+        p.append(_teks(f"Revisi {revisi}", align="center"))
     p.append(_teks("-" * KOLOM, align="left"))
 
     p.append(_teks(_sisi("No.", trx.kode)))

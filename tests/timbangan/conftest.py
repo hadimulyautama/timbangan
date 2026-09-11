@@ -14,7 +14,12 @@ import app.models  # noqa: F401
 from app.database import Base
 from app.models import Supplier
 from app.timbangan import logic, service
-from app.timbangan.models import ROLE_ADMIN, ROLE_PETUGAS, TimbanganAkun
+from app.timbangan.models import (
+    ROLE_ADMIN,
+    ROLE_PETUGAS,
+    ROLE_SUPERADMIN,
+    TimbanganAkun,
+)
 
 
 @pytest_asyncio.fixture
@@ -58,6 +63,12 @@ async def admin2(db):
 @pytest_asyncio.fixture
 async def admin(db):
     return await _akun(db, "wahid", ROLE_ADMIN, "P0")
+
+
+@pytest_asyncio.fixture
+async def super_admin(db):
+    """Penghapusan permanen wewenang Super Admin — puncak tangganya sendiri."""
+    return await _akun(db, "puncak", ROLE_SUPERADMIN, "P8")
 
 
 @pytest_asyncio.fixture

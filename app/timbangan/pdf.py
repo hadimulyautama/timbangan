@@ -59,9 +59,25 @@ def _isian(c, x, y, lebar, label, nilai, *, mono=False):
     c.line(x, y, x + lebar, y)
 
 
+def _tanda_ulang(trx, cetakan_ke: int) -> str:
+    """Kalimat "ini bukan lembar pertama", atau kosong bila memang pertama.
+
+    Satu tempat untuk kedua bentuk cetakan. Tanda yang ditulis dua kali akan
+    berbeda bunyinya pada perubahan berikutnya — dan yang berbeda justru jadi
+    satu-satunya lembar yang terlihat mencurigakan padahal sah.
+    """
+    bagian = []
+    if cetakan_ke > 1:
+        bagian.append(f"CETAKAN ULANG ke-{cetakan_ke}")
+    revisi = int(getattr(trx, "jumlah_revisi", 0) or 0)
+    if revisi:
+        bagian.append(f"Revisi {revisi}")
+    return "  ·  ".join(bagian)
+
+
 def bukti_ncr(*, trx, aturan, pihak: str, petugas: str, muatan,
               perusahaan: str, alamat: str, telepon: str,
-              arah_masuk: bool) -> bytes:
+              arah_masuk: bool, cetakan_ke: int = 1) -> bytes:
     """Lembar setengah NCR 215 × 165 mm.
 
     Angka selisih TIDAK PERNAH digambar di sini, apa pun komoditasnya —
@@ -105,6 +121,11 @@ def bukti_ncr(*, trx, aturan, pihak: str, petugas: str, muatan,
     c.setFont(TEBAL, 10.5)
     judul = "BUKTI TIMBANG"
     c.drawCentredString(M + L / 2, y - 5.6 * mm, " ".join(judul))
+    tanda = _tanda_ulang(trx, cetakan_ke)
+    if tanda:
+        c.setFont(TEBAL, 7.4)
+        c.drawCentredString(M + L / 2, y - 10 * mm, tanda)
+        y -= 4.4 * mm
     y -= 8.4 * mm
     c.setLineWidth(0.7)
     c.line(M, y, M + L, y)
@@ -210,7 +231,8 @@ def bukti_ncr(*, trx, aturan, pihak: str, petugas: str, muatan,
     return buf.getvalue()
 def bukti_thermal(*, trx, aturan, pihak: str, petugas: str, muatan,
                   perusahaan: str, alamat: str, telepon: str,
-                  arah_masuk: bool, tampilkan_selisih: bool) -> bytes:
+                  arah_masuk: bool, tampilkan_selisih: bool,
+                  cetakan_ke: int = 1) -> bytes:
     """Struk 80 mm (area cetak 72 mm), tinggi menyesuaikan isi.
 
     Berbeda dari lembar NCR, struk ini MASIH mengikuti aturan per komoditas:
@@ -218,8 +240,9 @@ def bukti_thermal(*, trx, aturan, pihak: str, petugas: str, muatan,
     butir 9). Karena itu ia menerima `tampilkan_selisih`.
     """
     baris = baris_angka(trx, arah_masuk)
+    tanda = _tanda_ulang(trx, cetakan_ke)
     tinggi = (58 + 5.2 * len(baris) + (14 if tampilkan_selisih else 0)
-              + (8 if trx.catatan else 0) + 28) * mm
+              + (8 if trx.catatan else 0) + (5 if tanda else 0) + 28) * mm
 
     buf = io.BytesIO()
     c = rl_canvas.Canvas(buf, pagesize=(STRUK_L, tinggi))
@@ -255,6 +278,8 @@ def bukti_thermal(*, trx, aturan, pihak: str, petugas: str, muatan,
     tengah(telepon, BIASA, 6.6, 3.2 * mm)
     garis()
     tengah("B U K T I   T I M B A N G", TEBAL, 7.6, 5 * mm)
+    if tanda:
+        tengah(tanda, TEBAL, 6.8, 3.6 * mm)
     garis()
 
     pasang("No.", trx.kode)

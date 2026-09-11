@@ -122,22 +122,38 @@
 </form>
 
   {# Truk yang batal bongkar tetap meninggalkan jejak — tiketnya ditutup
-     dengan alasan, bukan dihapus agar daftar terlihat rapi. #}
+     dengan alasan, bukan dihapus agar daftar terlihat rapi.
+
+     MUATAN YANG DITOLAK TIDAK LEWAT SINI. Truk yang ditolak tetap keluar dari
+     pabrik, dan tanpa angka keluarnya tak ada kontrol masuk−keluar sama
+     sekali: truk bisa pergi membawa lebih banyak daripada yang ia bawa masuk,
+     dan tak ada satu angka pun yang bisa menunjukkannya. Karena itu jalan ini
+     kini menuntut pengakuan tertulis bahwa truknya memang sudah pergi.
+     Temuan QA T-15. #}
   <details class="kartu tanpa-cetak">
     <summary style="cursor:pointer;font-weight:700;font-size:14px">
-      Truk tidak jadi bongkar
+      Truk pergi tanpa ditimbang keluar
     </summary>
+    <div class="bantu" style="margin-top:10px">
+      <b>Muatan ditolak bukan alasan melewatkan timbang keluar.</b> Kalau
+      truknya masih ada, timbang keluar seperti biasa — barang diterima akan
+      terhitung nol dengan sendirinya, dan selisihnya tetap terkontrol.
+    </div>
     <form method="post" action="{{ PREFIX }}/tiket/{{ trx.id }}/tutup"
           style="margin-top:12px;display:flex;flex-direction:column;gap:10px">
       <div class="grup">
         <div class="lbl">Alasan</div>
         <textarea class="fld" name="alasan" rows="2" required
-                  placeholder="Mutu ditolak, truk kembali, dsb."></textarea>
+                  placeholder="Truk pergi saat petugas istirahat, dsb."></textarea>
       </div>
+      <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px">
+        <input type="checkbox" name="tanpa_timbang_keluar" value="1" required>
+        <span>Truk sudah pergi dan tidak bisa ditimbang keluar lagi.</span>
+      </label>
       <button type="submit" class="tbl halus">Tutup tiket ini</button>
       <div class="bantu">
         Tiket tetap tersimpan beserta alasannya dan tidak dihitung sebagai
-        transaksi.
+        transaksi. Tiket yang dibuka petugas lain hanya bisa ditutup Admin.
       </div>
     </form>
   </details>

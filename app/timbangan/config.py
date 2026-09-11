@@ -61,6 +61,13 @@ class TimbanganSettings:
     # Tiket timbang pertama yang menganggur lebih lama dari ini ditandai untuk
     # ditutup paksa (truk tidak jadi bongkar, atau petugas lupa).
     jam_tiket_menganggur: int = _i("TIMBANGAN_JAM_TIKET_MENGANGGUR", 12)
+    # Sejauh mana petugas boleh MEMUNDURKAN jam timbang yang ia ketik sendiri.
+    # Isian jam memang ada supaya pencatatan yang terlambat tetap jujur, tetapi
+    # tanpa batas ia juga memindahkan tiket ke periode yang sudah ditutup —
+    # timbang kedua bertanggal Maret untuk tiket September, di luar jendela
+    # tujuh hari yang dibaca produksi. Lewat batas ini: hanya Admin, dan
+    # tercatat di audit. Temuan QA T-16.
+    jam_mundur_maksimum: int = _i("TIMBANGAN_JAM_MUNDUR_MAKS", 48)
 
     # ── Printer struk di pos timbang ──
     # Alamat printer Epson ber-ePOS-Print di jaringan lokal gudang. Yang
