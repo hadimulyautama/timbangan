@@ -103,3 +103,46 @@ def test_layar_kerja_TIDAK_menyala():
             continue
         assert "segar_otomatis" not in berkas.read_text(), (
             f"{nama} boleh menyegarkan diri — ketikan petugas bisa hilang")
+
+
+# ─────────────── Penanda keadaan: bertanya dulu, mengunduh belakangan ───────────────
+
+def test_bertanya_dulu_sebelum_mengunduh_halaman():
+    """Denyut yang mengunduh seluruh halaman hanya untuk menyimpulkan "tak ada
+    yang berubah" membakar kuota petugas — dan petugas memakai kuotanya
+    sendiri. Yang ditanya lebih dulu satu penanda pendek."""
+    assert "tanyaPenanda" in JS
+    blok = JS[JS.index("function periksa() {"):JS.index("function periksaIsi")]
+    assert "tanyaPenanda()" in blok
+    assert "periksaIsi()" in blok
+    # Halamannya TIDAK diambil di fungsi yang menanyakan penanda.
+    assert "fetch(location.href" not in blok
+
+
+def test_belum_tahu_diperlakukan_sebagai_mungkin_berubah():
+    """`null` terjadi tepat sesudah aplikasi dibuka — dan di situlah justru
+    yang paling mungkin basi, karena telepon bisa saja sejam di kantong.
+    Menganggapnya "tak berubah" berarti mengulang keluhan yang sedang
+    diperbaiki."""
+    blok = JS[JS.index("function periksa() {"):JS.index("function periksaIsi")]
+    assert "p !== null && penanda !== null" in blok, (
+        "penanda yang belum diketahui harus melanjutkan, bukan berhenti")
+
+
+def test_gagal_bertanya_tak_memicu_muat_ulang():
+    """Sesi habis menjawab halaman masuk, bukan JSON. Kalau itu ditafsirkan
+    sebagai "ada perubahan", layarnya memuat ulang tanpa henti."""
+    blok = JS[JS.index("function tanyaPenanda"):JS.index("function periksa() {")]
+    assert "r.ok ? r.json() : null" in blok
+    assert ".catch(" in blok and "return null" in blok
+
+
+def test_penandanya_ikut_perubahan_bukan_cuma_penambahan():
+    """Tiket DIUBAH saat timbang kedua — bobot keluar diisi, statusnya
+    berpindah — dan nomornya tak bergerak sedikit pun di situ."""
+    src = (AKAR / "app/timbangan/routes/pos.py").read_text()
+    blok = src[src.index('@router.get("/keadaan")'):src.index('@router.get("/")')]
+    assert "max(id)" in blok and "max(updated_at)" in blok
+    # Dari basis data, bukan jam perangkat: jam yang bergeser bisa membuat
+    # satu perubahan terlewat selamanya.
+    assert "extract(epoch" in blok

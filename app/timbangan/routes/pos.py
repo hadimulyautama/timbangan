@@ -90,6 +90,37 @@ def _waktu_operator(teks: str | None) -> datetime | None:
 
 # ═══════════════════════════ Beranda ═══════════════════════════
 
+@router.get("/keadaan")
+async def keadaan(
+    akun: TimbanganAkun = Depends(butuh_akun),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Satu penanda: APAKAH ada yang berubah — bukan apa yang berubah.
+
+    Dipanggil berkala oleh tiap perangkat yang layar bacanya menyala. Sebelum
+    ini, denyut penyegaran mengunduh SELURUH halaman hanya untuk menyimpulkan
+    "tak ada yang berubah" di hampir semua denyutnya — dan petugas memakai
+    kuotanya sendiri. Sekarang halamannya baru dimuat ulang kalau penanda ini
+    berbeda dari yang terakhir dilihat.
+
+    `updated_at` ikut, tidak cukup nomornya saja: sebuah tiket DIUBAH saat
+    timbang kedua — bobot keluar diisi, statusnya berpindah — dan nomornya
+    tidak bergerak sedikit pun di situ. Tanpa bagian ini, penimbangan kedua
+    tak akan pernah muncul sendiri di layar siapa pun.
+
+    Yang dipakai nomor dan cap waktu dari basis data, bukan jam perangkat:
+    jam yang bergeser sedikit bisa membuat satu perubahan terlewat selamanya.
+    """
+    from sqlalchemy import text as _text
+
+    r = (await db.execute(_text(
+        "select coalesce(max(id), 0), "
+        "coalesce(cast(extract(epoch from max(updated_at)) as bigint), 0) "
+        "from timbangan_transaksi"
+    ))).first()
+    return {"n": f"{r[0]}.{r[1]}"}
+
+
 @router.get("/")
 async def beranda(
     request: Request,

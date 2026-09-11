@@ -918,8 +918,11 @@
     var badan = document.body;
     if (!badan || !badan.dataset || !badan.dataset.segarOtomatis) { return; }
 
-    var DENYUT = 60000;   // Lebih jarang daripada Pos Produksi: memuat ulang
-                          // seluruh halaman lebih berat daripada menukar isi.
+    /* Dirapatkan dari 60 detik sejak denyutnya cuma BERTANYA, bukan
+       mengunduh halaman. Tetap lebih longgar daripada Pos Produksi: di sini
+       perubahan berarti memuat ulang seluruh halaman, jadi terlalu rapat
+       membuat layar berkedip lebih sering daripada perlu. */
+    var DENYUT = 15000;
     var kotor = false;    // ada yang sudah diketik di halaman ini
     var denyut = null;
 
@@ -954,7 +957,36 @@
      * gulungan kembali ke atas. Berkedip tiap menit tanpa alasan mengajari
      * orang bahwa aplikasinya rewel. Jadi isinya diambil diam-diam dan
      * dibandingkan; kalau sama persis, tak terjadi apa-apa. */
+    /* Penanda keadaan: bertanya dulu, mengunduh belakangan.
+     *
+     * `null` berarti BELUM TAHU, dan itu diperlakukan sebagai "mungkin
+     * berubah" — halamannya tetap diperiksa. Keadaan itu terjadi tepat
+     * sesudah aplikasi dibuka, dan di situlah justru yang paling mungkin
+     * basi: telepon bisa saja sejam di dalam kantong.
+     *
+     * Gagal bertanya juga `null`: jaringan putus, atau sesi habis dan yang
+     * datang halaman masuk, bukan JSON. Yang terakhir penting — kalau
+     * pengalihan ke halaman masuk ditafsirkan sebagai "ada perubahan",
+     * layarnya akan memuat ulang tanpa henti. */
+    var penanda = null;
+
+    function tanyaPenanda() {
+      return fetch(PREFIX + '/keadaan', { credentials: 'same-origin', cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) { return (j && j.n) ? String(j.n) : null; })
+        .catch(function () { return null; });
+    }
+
     function periksa() {
+      if (!bolehSegar()) { return; }
+      tanyaPenanda().then(function (p) {
+        var sama = (p !== null && penanda !== null && p === penanda);
+        if (p !== null) { penanda = p; }
+        if (!sama) { periksaIsi(); }   // tak sama: baru halamannya diambil
+      });
+    }
+
+    function periksaIsi() {
       if (!bolehSegar()) { return; }
       var sekarang = document.querySelector('.bingkai');
       if (!sekarang) { return; }
