@@ -1,0 +1,88 @@
+# Uji penuh Pos Timbang, dengan Postgres sungguhan.
+#
+# Temuan QA UJI-02, 11 September 2026. Suite repo ini berjalan di SQLite, dan
+# SQLite berbohong dengan cara yang persis menyembunyikan bug yang paling mahal
+# di sini: NaN jadi NULL (T-08), VARCHAR tak dibatasi (T-09), foreign key mati
+# (T-12), dan satu koneksi saja sehingga balapan baris tak mungkin terjadi
+# (T-03, T-04). Kelimanya lolos di suite lalu gagal di pos timbang.
+#
+# Skema dibangun memakai URUTAN RESMI (lihat produksi/scripts/bangun_skema.sh):
+# chain produksi lebih dulu — ia yang membuat tabel master dan timbangan_*
+# 0022–0026 — lalu stamp 0026 dan upgrade. `stamp head` di sini akan
+# melewatkan 0027–0029 diam-diam (temuan QA X-03).
+#
+# Alur ini TIDAK menyentuh Railway: tak ada rahasia, tak ada deploy.
+name: uji
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  uji:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: uji
+          POSTGRES_DB: uji_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      UJI_PG_URL: postgresql+asyncpg://postgres:uji@127.0.0.1:5432/uji_ci
+      DATABASE_URL: postgresql+asyncpg://postgres:uji@127.0.0.1:5432/uji_ci
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: timbangan
+
+      # Chain produksi yang membuat tabel master & timbangan_* 0022–0026.
+      # Tanpanya, migrasi di sini gagal di FK ke `suppliers`.
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/produksi
+          path: produksi
+          # Repo privat: perlu token baca. Bila tak tersedia, langkah ini
+          # dilewati dan uji Postgres-nya ikut dilewati — lebih baik daripada
+          # alur yang merah karena hal yang bukan kesalahan kodenya.
+          token: ${{ secrets.TOKEN_REPO_PRODUKSI || github.token }}
+        continue-on-error: true
+        id: ambil_produksi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Pasang dependensi
+        working-directory: timbangan
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Bangun skema (urutan resmi)
+        if: steps.ambil_produksi.outcome == 'success'
+        run: |
+          pip install -r produksi/requirements.txt
+          (cd produksi && alembic upgrade head)
+          (cd timbangan && alembic stamp 0026_timbangan_hapus_pengawas)
+          (cd timbangan && alembic upgrade head)
+
+      - name: Periksa selisih model ↔ migrasi (laporan)
+        if: steps.ambil_produksi.outcome == 'success'
+        working-directory: timbangan
+        run: alembic check || true
+        continue-on-error: true
+
+      - name: Uji penuh
+        working-directory: timbangan
+        run: pytest -q

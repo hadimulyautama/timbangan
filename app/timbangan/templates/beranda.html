@@ -84,14 +84,22 @@
 
 {% block isi %}
 
-  {# Tiket terbuka lebih dulu: truk yang sedang menunggu adalah pekerjaan
-     yang paling mendesak, bukan transaksi baru. #}
+  {# ── Antrean diringkas, dan "Mulai penimbangan" tak lagi di bawahnya ──
+
+     Tiket terbuka memang pekerjaan yang paling mendesak, dan itu tak berubah.
+     Yang keliru adalah menaruh SELURUHNYA di atas: dua puluh tiket berarti
+     6.400 piksel gulir sebelum petugas sampai ke "Barang masuk" — sementara
+     truk berikutnya sudah berhenti di jembatan. Temuan QA UI-06.
+
+     Lima teratas saja; sisanya di balik "lihat semua". Yang lima itu memang
+     yang paling lama menunggu, jadi ia tetap daftar yang benar untuk dilihat
+     lebih dulu. #}
   {% if terbuka %}
     <div>
       <div class="lbl" style="margin-bottom:8px">
         Menunggu timbang kedua ({{ terbuka|length }})
       </div>
-      {% for b in terbuka %}
+      {% for b in terbuka[:5] %}
         <a href="{{ PREFIX }}/tiket/{{ b.trx.id }}" class="pilihan"
            style="margin-bottom:8px">
           <div class="pilihan__isi">
@@ -109,6 +117,12 @@
           {% endif %}
         </a>
       {% endfor %}
+      {% if terbuka|length > 5 %}
+        <a href="{{ PREFIX }}/tiket" class="btn btn--halus"
+           style="display:block;text-align:center">
+          Lihat semua {{ terbuka|length }} tiket terbuka
+        </a>
+      {% endif %}
     </div>
   {% endif %}
 

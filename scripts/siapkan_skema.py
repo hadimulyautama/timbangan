@@ -8,9 +8,11 @@ perlakuan berlawanan:
   1. `alembic_version_timbangan` sudah berisi  → `upgrade head` biasa.
   2. Tabel versi kosong TAPI `timbangan_transaksi` sudah ada → skema ini
      dibuat sewaktu modulnya masih ikut repo penggilingan. Yang benar adalah
-     `stamp head`: mengakui skema yang ada, bukan membuatnya lagi. Tanpa ini
-     deploy pertama akan mencoba CREATE TABLE atas tabel yang sudah berisi
-     data produksi, lalu gagal.
+     `stamp` SAMPAI BATAS WARISANNYA lalu `upgrade head`: mengakui yang sudah
+     ada, lalu membuat yang belum. Tanpa stamp, deploy pertama mencoba CREATE
+     TABLE atas tabel yang sudah berisi data produksi lalu gagal; tanpa
+     upgrade sesudahnya, migrasi 0027–0029 terlewat diam-diam dan setiap kueri
+     tiket gagal karena kolom yang tak pernah dibuat (temuan QA X-03).
   3. Keduanya kosong → database baru, `upgrade head` dari nol.
 
 Keadaan 2 hanya mungkin terjadi sekali seumur database. Ia tetap ditulis di
@@ -29,6 +31,11 @@ from app.database import dapatkan_engine
 
 TABEL_VERSI = "alembic_version_timbangan"
 TABEL_PENANDA = "timbangan_transaksi"
+
+#: Revisi TERAKHIR yang dibuat oleh chain penggilingan (migrasi 0022–0026 di
+#: repo produksi). Skema warisan berhenti di sini; 0027 dan sesudahnya adalah
+#: milik repo ini sendiri dan harus benar-benar dijalankan.
+REVISI_WARISAN = "0026_timbangan_hapus_pengawas"
 
 
 async def periksa() -> str:
@@ -58,10 +65,22 @@ def main() -> None:
         print(
             "[skema] Tabel timbangan sudah ada tetapi riwayat migrasinya belum "
             "tercatat di repo ini — skema warisan dari repo penggilingan. "
-            "Mengakuinya dengan stamp, BUKAN membuat ulang.",
+            f"Mengakuinya dengan stamp {REVISI_WARISAN}, BUKAN membuat ulang.",
             flush=True,
         )
-        sys.exit(jalankan(["alembic", "stamp", "head"]))
+        # ── Stamp SAMPAI BATAS WARISANNYA, bukan sampai HEAD ──
+        #
+        # Yang dibuat chain penggilingan hanyalah sampai 0026. `stamp head`
+        # karenanya mengaku sudah menjalankan 0027–0029 juga — padahal
+        # kolom-kolomnya tak pernah dibuat. Akibatnya setiap kueri tiket gagal
+        # ("pelanggan_id tidak ada") sementara /health tetap menjawab ok:
+        # pos timbang menyala, tak bisa dipakai, dan tak ada satu tanda pun
+        # yang menyebut sebabnya. Temuan QA X-03.
+        #
+        # Stamp lalu upgrade: yang warisan diakui, yang belum ada dibuat.
+        kode = jalankan(["alembic", "stamp", REVISI_WARISAN])
+        if kode != 0:
+            sys.exit(kode)
     sys.exit(jalankan(["alembic", "upgrade", "head"]))
 
 

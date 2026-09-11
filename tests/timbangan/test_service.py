@@ -160,7 +160,7 @@ async def test_pengiriman_kurang_dari_surat_jalan_ditandai(db, petugas, supplier
     assert trx.status_kontrol == logic.KURANG
 
 
-async def test_tanggal_mengikuti_timbang_kedua(db, petugas, supplier):
+async def test_tanggal_mengikuti_timbang_kedua(db, admin, supplier):
     """Truk masuk menjelang tengah malam tercatat di hari ia selesai.
 
     Jamnya dihitung mundur dari SEKARANG, bukan ditulis sebagai tanggal
@@ -171,15 +171,20 @@ async def test_tanggal_mengikuti_timbang_kedua(db, petugas, supplier):
     """
     from app.timbangan.db import sekarang
 
+    # Dua hari lalu pukul 23:40 → keesokan harinya 01:15. Keduanya PASTI di
+    # masa lalu, jadi ujinya tak bergantung pada jam berapa ia dijalankan.
+    # Pelakunya Admin: memundurkan jam lebih dari batas yang disetel memang
+    # hanya boleh Admin sejak T-16, dan yang diuji di sini bukan pagar itu.
     tengah_malam = sekarang().replace(hour=23, minute=40, second=0, microsecond=0) \
-        - timedelta(days=1)
+        - timedelta(days=2)
     data = masuk_gabah("TRX-20260830-P1-005", supplier.id, 13_600)
     data.waktu_operator = tengah_malam
-    await service.simpan_timbang_pertama(db, akun=petugas, data=data)
+    await service.simpan_timbang_pertama(db, akun=admin, data=data)
 
     keesokan = tengah_malam + timedelta(hours=1, minutes=35)
+    assert keesokan.date() != tengah_malam.date(), "ujinya harus melewati tengah malam"
     trx = await service.simpan_timbang_kedua(
-        db, akun=petugas, kode=data.kode, berat_kg=3_570,
+        db, akun=admin, kode=data.kode, berat_kg=3_570,
         waktu_operator=keesokan,
     )
     assert trx.tanggal == keesokan.date()

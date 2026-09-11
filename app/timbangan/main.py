@@ -62,4 +62,18 @@ async def akar():
 
 @app.get("/health")
 async def health() -> dict:
-    return {"status": "ok", "modul": "timbangan"}
+    """Kesehatan, termasuk apakah SKEMA-nya selaras dengan kode ini.
+
+    X-03 membuat migrasi 0027–0029 terlewat diam-diam, sehingga setiap kueri
+    tiket gagal karena kolom yang tak pernah dibuat — sementara jawaban ini
+    tetap "ok". Pos timbang menyala, tak bisa dipakai, dan tak ada satu tanda
+    pun yang menyebut sebabnya. Temuan QA X-04.
+    """
+    from app.timbangan.skema import keadaan
+
+    skema = await keadaan()
+    return {
+        "status": "ok" if skema["selaras"] else "skema-tidak-selaras",
+        "skema": skema,
+        "modul": "timbangan",
+    }

@@ -266,6 +266,15 @@ Pos timbang bersinyal lemah; angka yang hilang tidak bisa ditimbang ulang karena
 | Simpan lokal | Transaksi sah begitu disimpan, tanpa menunggu jaringan |
 | Antrean kirim | Terkirim sendiri saat sinyal kembali; bertahan meski aplikasi ditutup |
 
+> **KOREKSI 11 September 2026 (temuan QA T-18).** Paragraf di bawah
+> menggambarkan rancangan, bukan yang berjalan. Sejak nomor tiket dipindah ke
+> server (migrasi 0030, demi menutup T-01 nomor saling timpa), penimbangan
+> TANPA JARINGAN tidak lagi mungkin: tiket baru tak bisa dibuat sama sekali.
+> Antrean kirimnya pun tak punya pemanggil, service worker mengabaikan POST,
+> dan bila kelak dipanggil ia akan mengirim JSON ke endpoint yang menerima
+> Form — 422, lalu hilang. Pedoman petugas sudah dibetulkan: bila sinyal
+> hilang, CATAT DI KERTAS. Usulan luring yang sungguhan ada di §2.4a.
+
 **Nomor transaksi tidak minta ke server:** `TRX-<tanggal>-<kode pos>-<urutan perangkat>`. Final sejak awal, sehingga bukti timbang boleh langsung dicetak; dua perangkat offline tidak bertabrakan. Master data (komoditas, tara, pihak, kendaraan) disimpan di perangkat agar form tetap menghitung tanpa jaringan.
 
 Yang gagal karena data kurang — misalnya kendaraan belum terdaftar — ditandai merah dan bisa diperbaiki **tanpa mengetik ulang angka timbang**.
@@ -608,7 +617,7 @@ status transaksi.
 | 5 | Logika bisnis per mode + uji tiga contoh resmi | ✅ `logic.py` |
 | 6 | Autentikasi, peran, sesi | ✅ sesi sampai Keluar |
 | 7 | Rute & template | ✅ 18 halaman |
-| 8 | Lapisan offline: penanda luring, antrean kirim, service worker | ✅ |
+| 8 | Lapisan offline: penanda luring, antrean kirim, service worker | ⚠️ SEBAGIAN — lihat §2.4 |
 | 9 | Halaman cetak thermal 72 mm (AirPrint/Mopria) | ✅ |
 | 10 | Ringkasan, monitoring, ekspor CSV | ✅ |
 | 11 | Penyemaian master komoditas & akun admin awal | ✅ saat service menyala |
@@ -632,3 +641,35 @@ modul** — dari tabel database sampai layar dan berkas ekspor.
 
 *Dokumen ini acuan pembangunan. Seluruh keputusan pada bagian 12 sudah
 ditetapkan dan berjalan di produksi sejak 30 Agustus 2026.*
+
+---
+
+## §2.4a Luring yang sungguhan (USULAN — belum dikerjakan)
+
+Ditulis 11 September 2026 sebagai jawaban atas temuan QA T-18: dokumen lama
+menjanjikan penimbangan tanpa jaringan, aplikasinya tidak bisa, dan petugas
+yang memercayainya akan kehilangan timbangannya tanpa tahu.
+
+Yang hilang bukan satu hal, melainkan empat — dan tiga di antaranya baru
+terlihat setelah yang pertama diperbaiki:
+
+1. **Nomor tiket.** Sejak T-01 nomor diterbitkan server secara atomik, dan itu
+   memang benar: nomor yang dibuat perangkat saling timpa saat dua perangkat
+   luring. Luring sungguhan butuh nomor SEMENTARA di perangkat (mis.
+   `LUR-P1-0007`), ditukar nomor resmi saat kiriman diterima — dan struk tak
+   boleh dicetak sebelum penukaran itu.
+2. **Pemanggil antrean.** `antrean.js` menyimpan, tetapi tak ada satu baris
+   pun yang memanggilnya saat sinyal kembali. Perlu pendengar `online` dan
+   satu percobaan berkala.
+3. **Service worker mengabaikan POST.** Ia hanya menyimpan GET. Kiriman yang
+   gagal harus ditangkap di sana lalu dimasukkan antrean, bukan dibiarkan
+   gagal di halaman.
+4. **Bentuk kiriman.** Antreannya mengirim JSON; rutenya menerima Form. Yang
+   sudah terlanjur terkirim akan dijawab 422 dan hilang tanpa jejak.
+
+Urutan kerjanya: (4) samakan bentuk kiriman, (2) pemanggil antrean, (3)
+service worker, lalu (1) nomor sementara — yang terakhir paling besar dan
+paling berisiko, dan tiga yang pertama sudah berguna sendiri untuk kiriman
+yang gagal karena sinyal putus SEBENTAR.
+
+Sampai itu selesai, pedoman petugas berkata apa adanya: catat di kertas.
