@@ -234,3 +234,61 @@ def test_akun_lama_tanpa_kode_tidak_diisi_otomatis():
     assert "op.execute" not in teks, "migrasi menjalankan SQL bebas"
     # Dan alasannya memang tertulis, supaya yang berikutnya tak mengisinya.
     assert "tercetak di struk" in teks or "kunci karangan" in teks
+
+
+# ─────────── Penghitung yang tertinggal ───────────
+#
+# Gangguan produksi 11 September 2026. Migrasi 0030 membuat penghitung KOSONG,
+# jadi untuk perangkat yang hari itu sudah menimbang, nomor pertama yang
+# diterbitkan sudah dimiliki tiket lain. Petugas hanya melihat "Internal
+# server error", dan kegagalannya tidak sembuh sendiri: kenaikan penghitung
+# ikut dibatalkan bersama transaksi yang gagal.
+
+async def test_penghitung_tertinggal_tidak_menerbitkan_nomor_yang_sudah_ada(
+    db, petugas
+):
+    """Inti gangguannya: penghitung kosong di hari yang sudah berjalan."""
+    from app.timbangan import logic, service
+    from app.timbangan.models import TimbanganTransaksi
+
+    # Tiket yang sudah ada, dibuat sebelum penghitung lahir.
+    hari = service.sekarang().date()
+    awalan = service.AWALAN_KODE[logic.MASUK]
+    perangkat = (petugas.perangkat_kode or "P0").upper()
+    for n in (1, 2):
+        db.add(TimbanganTransaksi(
+            kode=f"{awalan}-{hari:%Y%m%d}-{perangkat}-{n:03d}",
+            tanggal=hari, arah=logic.MASUK, jenis_kode="GABAH_BASAH",
+            timbang1_kg=10_000,
+        ))
+    await db.flush()
+
+    # Penghitung masih kosong — persis keadaan sesudah migrasi 0030.
+    kode = await service.alokasi_nomor(db, petugas, logic.MASUK)
+
+    assert kode == f"{awalan}-{hari:%Y%m%d}-{perangkat}-003", kode
+    # Dan yang penting: nomor itu memang belum dimiliki siapa pun.
+    assert (await service.ambil_kode(db, kode)) is None
+
+
+async def test_nomor_berikutnya_tetap_maju_setelah_dilompatkan(db, petugas):
+    """Sekali dilompatkan, penghitung harus INGAT — kalau tidak, tiap
+    penyimpanan berikutnya mengulang pemeriksaan yang sama selamanya."""
+    from app.timbangan import logic, service
+    from app.timbangan.models import TimbanganTransaksi
+
+    hari = service.sekarang().date()
+    awalan = service.AWALAN_KODE[logic.MASUK]
+    perangkat = (petugas.perangkat_kode or "P0").upper()
+    db.add(TimbanganTransaksi(
+        kode=f"{awalan}-{hari:%Y%m%d}-{perangkat}-005",
+        tanggal=hari, arah=logic.MASUK, jenis_kode="GABAH_BASAH",
+        timbang1_kg=10_000,
+    ))
+    await db.flush()
+
+    pertama = await service.alokasi_nomor(db, petugas, logic.MASUK)
+    kedua = await service.alokasi_nomor(db, petugas, logic.MASUK)
+
+    assert pertama.endswith("-006"), pertama
+    assert kedua.endswith("-007"), kedua

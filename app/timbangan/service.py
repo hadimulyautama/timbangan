@@ -762,6 +762,51 @@ async def alokasi_nomor(db: AsyncSession, akun: TimbanganAkun, arah: str) -> str
         set_={"n": TimbanganNomor.n + 1},
     ).returning(TimbanganNomor.n)
     urut = (await db.execute(perintah)).scalar_one()
+
+    # ── Pagar: penghitung yang TERTINGGAL dari kenyataan ───────────────
+    #
+    # Penghitung bisa berada di belakang nomor yang sudah terpakai — ia baru
+    # dibuat di tengah hari yang sudah berjalan (persis yang terjadi saat
+    # penghitung ini diperkenalkan), atau basis data dipulihkan dari salinan.
+    #
+    # Akibatnya nomor yang diterbitkan sudah dimiliki tiket lain, penyimpanan
+    # gagal di batas unik, dan petugas hanya melihat "Internal server error".
+    # Yang membuatnya berbahaya bukan tabrakannya, melainkan bahwa ia TIDAK
+    # SEMBUH SENDIRI: kenaikan penghitung ikut dibatalkan bersama transaksi
+    # yang gagal, sehingga percobaan berikutnya mengambil angka yang sama
+    # persis. Di produksi 11 September 2026 satu petugas karenanya tak bisa
+    # menyimpan apa pun selama hampir empat jam.
+    #
+    # Satu kueri beralas indeks, dan ia menegakkan janji modul ini sekaligus:
+    # nomor hanya boleh MAJU, tak pernah mundur ke celah yang tertinggal.
+    tertinggi = (await db.execute(
+        select(func.max(TimbanganTransaksi.kode)).where(
+            TimbanganTransaksi.kode.like(
+                f"{awalan_kode}-{hari:%Y%m%d}-{perangkat}-%"
+            )
+        )
+    )).scalar()
+    if tertinggi:
+        try:
+            # Angkanya berlapis nol dengan lebar tetap, jadi urutan abjad
+            # sama dengan urutan angka.
+            terpakai = int(str(tertinggi).rsplit("-", 1)[1])
+        except (IndexError, ValueError):
+            terpakai = 0
+        if terpakai >= urut:
+            urut = terpakai + 1
+            # Penghitung ikut dilompatkan, kalau tidak pemeriksaan ini
+            # terulang pada tiap penyimpanan berikutnya selamanya.
+            await db.execute(
+                update(TimbanganNomor)
+                .where(
+                    TimbanganNomor.awalan == awalan_kode,
+                    TimbanganNomor.tanggal == hari,
+                    TimbanganNomor.perangkat == perangkat,
+                )
+                .values(n=urut)
+            )
+
     return f"{awalan_kode}-{hari:%Y%m%d}-{perangkat}-{urut:03d}"
 
 
