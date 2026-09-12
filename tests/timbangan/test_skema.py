@@ -38,6 +38,7 @@ MIGRASI = (
     AKAR / "migrations" / "versions" / "0033_cetak_revisi.py",
     AKAR / "migrations" / "versions" / "0034_sesi_versi.py",
     AKAR / "migrations" / "versions" / "0035_indeks_tiket.py",
+    AKAR / "migrations" / "versions" / "0036_indeks_duplikat.py",
 )
 
 # Daftar di atas DITULIS TANGAN, dan karena itu ia basi tiap kali ada migrasi

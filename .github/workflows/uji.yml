@@ -77,11 +77,14 @@ jobs:
           (cd timbangan && alembic stamp 0026_timbangan_hapus_pengawas)
           (cd timbangan && alembic upgrade head)
 
-      - name: Periksa selisih model ↔ migrasi (laporan)
+      # PENJAGA, bukan laporan. Selisih model ↔ migrasi sudah dirapikan
+      # (migrasi 0036 dan deklarasi indeks di model, temuan QA X-19), jadi
+      # `check` bersih dan selisih BARU berarti seseorang mengubah model tanpa
+      # menulis migrasinya — ketahuan di sini, bukan saat deploy.
+      - name: Periksa selisih model ↔ migrasi
         if: steps.ambil_produksi.outcome == 'success'
         working-directory: timbangan
-        run: alembic check || true
-        continue-on-error: true
+        run: alembic check
 
       - name: Uji penuh
         working-directory: timbangan

@@ -219,8 +219,13 @@ class TimbanganKendaraan(Base, TimestampMixin):
     __tablename__ = "timbangan_kendaraan"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    # `unique=True` SAJA, tanpa `index=True`. Constraint unik sudah berindeks;
+    # menyebut keduanya membuat SQLAlchemy mengharapkan indeks unik bernama
+    # `ix_...` sementara basis data punya constraint `..._key`, dan
+    # autogenerate lalu mengusulkan menukar keduanya tiap kali dijalankan.
+    # Temuan QA X-19.
     nomor_polisi: Mapped[str] = mapped_column(
-        String(20), unique=True, nullable=False, index=True
+        String(20), unique=True, nullable=False
     )
     catatan: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="aktif")
@@ -311,7 +316,7 @@ class TimbanganTransaksi(Base, TimestampMixin):
     # awalan menurut arah barang — lihat `service.AWALAN_KODE`. Tiket yang
     # dibuat sebelum 4 September 2026 berawalan TRX- dan dibiarkan apa adanya.
     kode: Mapped[str] = mapped_column(
-        String(32), unique=True, nullable=False, index=True
+        String(32), unique=True, nullable=False
     )
     # ── Kunci kiriman: identitas yang SEBENARNYA dari sebuah penimbangan ──
     #
@@ -566,10 +571,14 @@ class TimbanganPemeriksaan(Base, TimestampMixin):
     """
 
     __tablename__ = "timbangan_pemeriksaan"
+    __table_args__ = (
+        # Dinamai apa adanya seperti di basis data.
+        Index("ix_timbangan_pemeriksaan_transaksi", "transaksi_id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     transaksi_id: Mapped[int] = mapped_column(
-        ForeignKey("timbangan_transaksi.id"), nullable=False, index=True
+        ForeignKey("timbangan_transaksi.id"), nullable=False
     )
 
     langkah_ulang_timbang: Mapped[str | None] = mapped_column(Text)
@@ -602,7 +611,7 @@ class TimbanganCetak(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     transaksi_id: Mapped[int] = mapped_column(
-        ForeignKey("timbangan_transaksi.id"), nullable=False, index=True
+        ForeignKey("timbangan_transaksi.id"), nullable=False
     )
     urutan: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     # 80MM / NCR — supaya bila kelak ada sengketa, tercatat lembar bentuk apa
@@ -620,6 +629,8 @@ class TimbanganCetak(Base):
     )
 
     __table_args__ = (
+        # Dinamai apa adanya seperti di basis data.
+        Index("ix_timbangan_cetak_transaksi", "transaksi_id"),
         UniqueConstraint("transaksi_id", "urutan", name="uq_timbangan_cetak_urutan"),
     )
 
@@ -671,7 +682,7 @@ class TimbanganSkorSupplier(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     supplier_id: Mapped[int] = mapped_column(
-        ForeignKey("suppliers.id"), nullable=False, index=True
+        ForeignKey("suppliers.id"), nullable=False
     )
     # 'TERKINI' atau 'YYYY-MM'
     periode: Mapped[str] = mapped_column(String(10), nullable=False, default="TERKINI")
@@ -685,6 +696,8 @@ class TimbanganSkorSupplier(Base):
     )
 
     __table_args__ = (
+        # Dinamai apa adanya seperti di basis data.
+        Index("ix_timbangan_skor_supplier_supplier", "supplier_id"),
         UniqueConstraint(
             "supplier_id", "periode", name="uq_timbangan_skor_supplier_periode"
         ),
