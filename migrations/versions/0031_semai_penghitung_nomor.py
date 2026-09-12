@@ -28,6 +28,7 @@ Revision ID: 0031_semai_penghitung_nomor
 Revises: 0030_timbangan_nomor_atomik
 """
 import re
+from datetime import date
 from typing import Sequence, Union
 
 import sqlalchemy as sa
@@ -53,13 +54,30 @@ def upgrade() -> None:
         sa.text("select kode from timbangan_transaksi where kode is not null")
     ).fetchall()
 
-    tertinggi: dict[tuple[str, str, str], int] = {}
+    tertinggi: dict[tuple[str, date, str], int] = {}
     for (kode,) in baris:
         cocok = POLA.match(kode or "")
         if not cocok:
             continue
         awalan, tanggal, perangkat, urut = cocok.groups()
-        kunci = (awalan, f"{tanggal[:4]}-{tanggal[4:6]}-{tanggal[6:]}", perangkat)
+        # ── Tanggalnya OBJEK date, bukan teks ──
+        #
+        # `timbangan_nomor.tanggal` bertipe DATE, dan asyncpg menolak teks
+        # untuk parameter bertipe date: "'str' object has no attribute
+        # 'toordinal'". psycopg2 dulu memaksanya diam-diam, jadi kekeliruan
+        # ini tak terlihat di mana pun yang memakai driver itu — dan uji repo
+        # ini berjalan di SQLite, yang menerima teks apa adanya.
+        #
+        # Akibatnya migrasi ini GAGAL di server, dan karena entrypoint
+        # berhenti bila migrasi gagal, Pos Timbang tak bisa menyala dengan
+        # versi baru sejak 11 September 2026 pukul 15:47. Yang berjalan di
+        # pos timbang sampai sekarang adalah versi sebelum itu.
+        try:
+            hari = date(int(tanggal[:4]), int(tanggal[4:6]), int(tanggal[6:]))
+        except ValueError:
+            continue      # tanggal mustahil di dalam kode — dilewati, seperti
+                          # kode yang polanya tak cocok sama sekali
+        kunci = (awalan, hari, perangkat)
         tertinggi[kunci] = max(tertinggi.get(kunci, 0), int(urut))
 
     for (awalan, tanggal, perangkat), n in tertinggi.items():
