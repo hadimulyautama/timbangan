@@ -479,6 +479,11 @@ class TimbanganMuatan(Base):
     """
 
     __tablename__ = "timbangan_muatan"
+    __table_args__ = (
+        # Kedua tabel ini SELALU ditanya "semua baris milik tiket nomor
+        # sekian", dan tak satu pun punya indeks untuk itu. Temuan QA T-22.
+        Index("ix_timbangan_muatan_transaksi", "transaksi_id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     transaksi_id: Mapped[int] = mapped_column(
@@ -624,6 +629,11 @@ class TimbanganFoto(Base):
     bersifat sementara, bukti tidak boleh hilang saat deploy ulang."""
 
     __tablename__ = "timbangan_foto"
+    __table_args__ = (
+        # Kedua tabel ini SELALU ditanya "semua baris milik tiket nomor
+        # sekian", dan tak satu pun punya indeks untuk itu. Temuan QA T-22.
+        Index("ix_timbangan_foto_transaksi", "transaksi_id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     transaksi_id: Mapped[int] = mapped_column(
@@ -634,7 +644,14 @@ class TimbanganFoto(Base):
     nama_file: Mapped[str] = mapped_column(String(255), nullable=False)
     mime: Mapped[str] = mapped_column(String(100), nullable=False, default="image/jpeg")
     ukuran_byte: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    konten: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    # ── Isi fotonya TIDAK ikut termuat kecuali diminta ──
+    #
+    # `TimbanganTransaksi.foto` bersifat `selectin`, jadi setiap daftar tiket
+    # menarik SELURUH BLOB fotonya — berpuluh megabyte untuk halaman yang
+    # cuma menampilkan nomor polisi dan berat. `deferred` membuat kolom ini
+    # baru dibaca saat benar-benar disentuh, yaitu ketika seseorang membuka
+    # fotonya. Temuan QA T-22.
+    konten: Mapped[bytes] = mapped_column(LargeBinary, nullable=False, deferred=True)
     diunggah_oleh_id: Mapped[int | None] = mapped_column(ForeignKey("timbangan_akun.id"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

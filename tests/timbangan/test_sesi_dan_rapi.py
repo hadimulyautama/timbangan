@@ -250,3 +250,29 @@ async def test_total_barang_dipisah_per_arah(db, petugas, supplier):
     assert r.keluar_kg == 0
     # Jasa timbang tak pernah ikut: barangnya tak masuk dan tak keluar.
     assert r.masuk_kg + r.keluar_kg < 12_850
+
+
+# ─────────────────────────── T-21 ───────────────────────────
+
+async def test_ubah_jenis_tiket_partai_tak_melempar_galat(db, petugas, admin,
+                                                          supplier):
+    """Tiket partai tak punya `timbang2_kg`, dan jalur hitung lamanya
+    menghitung dari dua angka. Hasilnya TypeError — halaman galat 500, bukan
+    kalimat yang bisa dibaca Admin. Temuan QA T-21."""
+    from app.timbangan.models import CARA_PARTAI
+
+    data = InputTimbang(
+        kode="TRX-PT-001", arah=logic.MASUK, jenis_kode="BERAS_PK",
+        berat_kg=70, cara_timbang=CARA_PARTAI, supplier_id=supplier.id,
+        nama_sopir="Slamet", perangkat_kode="P1",
+        muatan=[InputMuatan(jenis_kode="BERAS_PK", jumlah_karung=1,
+                            tara_per_karung_kg=0.25, berat_acuan_kg=70)])
+    trx = await service.simpan_timbang_pertama(db, akun=petugas, data=data)
+    await service.selesaikan_partai(db, akun=petugas, kode=trx.kode)
+
+    # Ke komoditas KELUAR — arahnya ikut berbalik.
+    await service.ubah_jenis(db, akun=admin, trx=trx, jenis_kode="BEKATUL",
+                             alasan="salah pilih komoditas")
+    assert trx.jenis_kode == "BEKATUL"
+    # Beratnya tetap jumlah baris partainya, bukan nol atau angka karangan.
+    assert float(trx.berat_bermuatan_kg or 0) == 70

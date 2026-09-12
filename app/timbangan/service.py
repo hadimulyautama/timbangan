@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import dataclasses
+import logging
 import math
 from typing import Sequence
 import re
@@ -61,6 +62,9 @@ from app.timbangan.models import (
     TimbanganTaraStandar,
     TimbanganTransaksi,
 )
+
+
+log = logging.getLogger("timbangan.service")
 
 
 class LayananError(Exception):
@@ -1914,7 +1918,20 @@ async def ubah_jenis(
             trx.timbang2_petugas_id, trx.timbang1_petugas_id)
         sebelum["timbang_ditukar"] = True
 
-    if trx.status_tiket == TIKET_SELESAI:
+    if trx.status_tiket == TIKET_SELESAI and trx.cara_timbang != CARA_DUA_KALI:
+        # ── Partai & sekali-timbang punya jalur hitungnya sendiri ──
+        #
+        # Keduanya tak punya `timbang2_kg`, dan blok di bawah ini menghitung
+        # dari dua angka. Pada tiket PARTAI itu berakhir sebagai TypeError —
+        # halaman galat 500, bukan kalimat yang bisa dibaca Admin — dan pada
+        # tiket sekali-timbang ia menghasilkan angka yang salah dengan tenang.
+        # Temuan QA T-21.
+        #
+        # `_hitung_ulang_koreksi` sudah menjawab ketiga cara timbang dengan
+        # benar; dipakai di sini supaya tak ada dua tempat yang menghitung hal
+        # yang sama secara berbeda.
+        await _hitung_ulang_koreksi(db, trx)
+    elif trx.status_tiket == TIKET_SELESAI:
         bermuatan, kosong = _bermuatan_dan_kosong(
             trx.arah, float(trx.timbang1_kg), float(trx.timbang2_kg)
             if trx.timbang2_kg is not None else None
@@ -3262,12 +3279,45 @@ class BarisMonitoring:
     status_disarankan: str
 
 
+#: Berapa baris dibaca sekali jalan, dan pagar terakhirnya.
+#:
+#: Halaman kecil menjaga pemakaian memori; pagar besar mencegah satu layar
+#: menghabiskan menit-menit bila rentang tanggalnya dibiarkan seluas mungkin.
+HALAMAN_MONITORING = 1_000
+BATAS_MONITORING = 50_000
+
+
 async def monitoring_supplier(
     db: AsyncSession, f: FilterTransaksi, *, minimal_transaksi: int = 3
 ) -> list[BarisMonitoring]:
     """Skor & pola per pihak. Bahasa hasilnya selalu 'perlu diperiksa',
     tidak pernah menuduh."""
-    semua = await daftar_transaksi(db, f, batas=5000)
+    # ── Dibaca SELURUHNYA, bertahap — bukan dipotong diam-diam di 5.000 ──
+    #
+    # Batas lama memotong tanpa satu kata pun. Pada 6.000 tiket, seribu di
+    # antaranya hilang dari hitungan, dan skor pemasok yang keluar dihitung
+    # dari sebagian data — angka yang tampak sah dan tidak benar. Yang paling
+    # mungkin terpotong justru yang paling lama, yaitu riwayat yang membuat
+    # pola terlihat. Temuan QA T-22.
+    #
+    # Dibaca per halaman supaya yang ada di memori sekali waktu tetap
+    # terbatas, dan foto BLOB-nya kini tak ikut termuat (`deferred`).
+    semua: list[BarisTransaksi] = []
+    halaman = 0
+    while True:
+        potong = await daftar_transaksi(db, f, batas=HALAMAN_MONITORING,
+                                        offset=halaman * HALAMAN_MONITORING)
+        semua.extend(potong)
+        if len(potong) < HALAMAN_MONITORING:
+            break
+        halaman += 1
+        if halaman * HALAMAN_MONITORING >= BATAS_MONITORING:
+            # Pagar terakhir, dan ia BERBUNYI — bukan memotong diam-diam.
+            log.warning(
+                "Monitoring pemasok berhenti di %s tiket; masih ada sisanya. "
+                "Persempit rentang tanggalnya.", BATAS_MONITORING)
+            break
+
     per_supplier: dict[int, list[BarisTransaksi]] = {}
     nama: dict[int, str] = {}
     for b in semua:

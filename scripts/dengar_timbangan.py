@@ -26,6 +26,7 @@ import argparse
 import glob
 import subprocess
 import sys
+import time
 from datetime import datetime
 
 #: Nama port berbeda di macOS dan Linux; keduanya dicoba agar skrip yang sama
@@ -51,6 +52,13 @@ def siapkan(port: str, baud: int) -> None:
          "raw", "-echo", "-ixon", "-crtscts"],
         check=True,
     )
+
+
+#: Jeda saat tak ada data, dan berapa kali menunggu sebelum menyerah.
+#: 0,05 detik cukup pendek untuk tak melewatkan kiriman indikator, cukup
+#: panjang untuk membuat gelung ini hampir tak memakai prosesor.
+JEDA = 0.05
+BATAS_KOSONG = 600            # ≈30 detik
 
 
 def tampilkan(potongan: bytes) -> None:
@@ -103,10 +111,25 @@ def main() -> int:
     try:
         # buffering=0 supaya byte tampil begitu tiba, bukan menunggu penuh.
         with open(port, "rb", buffering=0) as serial:
+            kosong = 0
             while True:
                 potongan = serial.read(256)
                 if not potongan:
+                    # ── Jangan berputar sekencang-kencangnya ──
+                    #
+                    # Bila kabel USB dicabut, `read` kembali kosong SEKETIKA,
+                    # terus-menerus — gelung ini lalu memakan satu inti
+                    # prosesor penuh sampai seseorang menyadarinya. Di laptop
+                    # itu terdengar dari kipasnya; di komputer pos timbang
+                    # yang ditinggal menyala, tidak. Temuan QA T-28.
+                    kosong += 1
+                    if kosong >= BATAS_KOSONG:
+                        print(f"\nTidak ada data selama {BATAS_KOSONG * JEDA:.0f} "
+                              "detik. Kabelnya mungkin lepas — berhenti.")
+                        break
+                    time.sleep(JEDA)
                     continue
+                kosong = 0
                 jumlah += len(potongan)
                 tampilkan(potongan)
                 if simpan:
