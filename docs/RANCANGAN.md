@@ -673,3 +673,38 @@ paling berisiko, dan tiga yang pertama sudah berguna sendiri untuk kiriman
 yang gagal karena sinyal putus SEBENTAR.
 
 Sampai itu selesai, pedoman petugas berkata apa adanya: catat di kertas.
+
+---
+
+## §5a Tata kelola tara standar (USULAN — belum dikerjakan)
+
+Ditulis 12 September 2026 sebagai jawaban atas temuan QA T-17.
+
+DRAF-REVISI §5 menetapkan alur persetujuan untuk tara standar. Yang berjalan
+hari ini tidak punya satu pun bagiannya:
+
+- **Sampling langsung berlaku.** Siapa pun yang boleh membuka layar tara bisa
+  mengganti angka tara seluruh pemasok, dan angka itu langsung dipakai
+  menghitung berat barang pada tiket berikutnya. Tara adalah pengurang: satu
+  angka yang naik 0,05 kg per karung memotong 6 kg dari muatan 120 karung,
+  tiap truk, tanpa satu tanda pun di layar.
+- **Tak ada jumlah sampel minimum.** Draf menuntut 30; kode menerima satu.
+- **`tara_standar_id` tak disimpan di tiket.** Jadi ketika angkanya kelak
+  diubah, tak ada cara mengetahui tiket lama dihitung dengan tara yang mana —
+  dan pertanyaan itu muncul justru saat ada sengketa berat.
+- **Layar membulatkan 4 desimal ke 3.** Angka yang ditampilkan dan angka yang
+  dipakai menghitung karenanya berbeda, dan yang memeriksanya akan mencari
+  kesalahan di tempat yang salah.
+
+Urutan yang saya usulkan, dari yang paling murah:
+
+1. **Simpan `tara_standar_id` di tiket** saat tiket dibuat. Satu kolom, satu
+   migrasi, dan ia menjawab pertanyaan sengketa selamanya — bahkan sebelum
+   sisanya dikerjakan.
+2. **Tampilkan 4 desimal** seperti yang tersimpan.
+3. **Minimal sampel** sebagai penjaga di layanan, angkanya di setelan.
+4. **Alur PENDING → disetujui**, yang paling besar: ia menuntut layar baru,
+   pemberitahuan, dan keputusan siapa yang berwenang menyetujui.
+
+Butir 4 menunggu keputusan pemilik soal siapa penyetujunya. Butir 1–3 bisa
+dikerjakan kapan saja dan tak mengubah siapa pun yang berwenang.

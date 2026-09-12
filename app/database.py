@@ -43,8 +43,19 @@ def _siapkan() -> None:
         raise RuntimeError(
             "DATABASE_URL belum diset — tidak bisa menyambung ke database."
         )
+    # ── Zona sesi basis data disetel EKSPLISIT ──
+    #
+    # Postgres di Railway berzona UTC, dan beberapa kueri memakai
+    # `CURRENT_DATE` atau mengelompokkan tanggal di sisi SQL. Tanpa setelan
+    # ini, "hari ini" menurut basis data berganti pukul 07:00 WIB — jadi truk
+    # yang ditimbang pukul 05:30 masuk rekap hari sebelumnya. Temuan QA X-17.
+    #
+    # Per KONEKSI, bukan lewat variabel lingkungan kontainer: yang menentukan
+    # adalah sesi Postgres-nya, dan kontainer yang zonanya benar pun tetap
+    # membuka sesi berzona UTC.
     _engine = create_async_engine(
-        settings.database_url, echo=False, pool_pre_ping=True
+        settings.database_url, echo=False, pool_pre_ping=True,
+        connect_args={"server_settings": {"timezone": settings.app_timezone}},
     )
     _pabrik = async_sessionmaker(
         _engine, class_=AsyncSession, expire_on_commit=False
