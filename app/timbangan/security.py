@@ -2,7 +2,10 @@
 
 Sandi, bentuk token, dan keputusan "boleh masuk?" milik paket bersama
 `hmu_identitas` sejak Tahap 2 rancang ulang (13 September 2026) — sama
-dengan Pos Produksi, Meja, Gudang 2, dan Kantor. Yang tinggal di sini:
+dengan Pos Produksi, Meja, Gudang 2, dan Kantor. Perubahan yang HANYA menyentuh
+folder vendored `hmu_identitas/` tidak memicu deploy layanan ini di Railway
+(watch paths menandainya SKIPPED, 13 Sep 2026) — sentuh berkas di `app/`
+juga, atau tambahkan `hmu_identitas/**` ke watch paths di dashboard. Yang tinggal di sini:
 kunci HMAC modul ini, cookie, dan cara pos timbang menemukan PROFIL
 (`timbangan_akun`) dari sesi.
 
