@@ -58,16 +58,33 @@ class Langkah:
     user_id: int | None = None       # orang di users (BUAT_AKUN)
     keterangan: str = ""
     catatan: list[str] = field(default_factory=list)
+    nama_baru: str | None = None    # nama orang saat dibuat (BUAT_ORANG)
 
 
-async def rencana(db: AsyncSession) -> list[Langkah]:
-    """Baca saja — tak mengubah apa pun."""
+LEWATI = "lewati"
+
+
+async def rencana(db: AsyncSession, *, lewati: set[str] | None = None,
+                  nama: dict[str, str] | None = None) -> list[Langkah]:
+    """Baca saja — tak mengubah apa pun.
+
+    `lewati`: nama pengguna yang TIDAK ditautkan (mis. akun generik `admin`
+    yang bukan orang — satu akun per ORANG, bukan per jabatan). `nama`: nama
+    lengkap pengganti saat orangnya dibuat, karena nama di pos timbang sering
+    informal ("Elfira Geya") sedangkan master memakai nama lengkap.
+    """
+    lewati = {x.strip().lower() for x in (lewati or set())}
+    nama = {k.strip().lower(): v for k, v in (nama or {}).items()}
     hasil: list[Langkah] = []
     profil = (await db.execute(select(TimbanganAkun).order_by(TimbanganAkun.id))).scalars().all()
     for t in profil:
         if t.akun_id is not None:
             hasil.append(Langkah(t.id, t.username, t.nama, t.role, SUDAH, akun_id=t.akun_id,
                                  keterangan="sudah tertaut"))
+            continue
+        if t.username in lewati:
+            hasil.append(Langkah(t.id, t.username, t.nama, t.role, LEWATI,
+                                 keterangan="dilewati atas permintaan — tetap akun lama"))
             continue
         lewat_user = None
         if t.user_id:
@@ -103,6 +120,7 @@ async def rencana(db: AsyncSession) -> list[Langkah]:
                 hasil.append(Langkah(t.id, t.username, t.nama, t.role, KONFLIK,
                                      keterangan=f"{len(kandidat)} orang bernama '{t.nama}' di users tanpa akun — pilih dulu"))
                 continue
+        nama_baru = nama.get(t.username, t.nama.strip())
         if orang is not None:
             l = Langkah(t.id, t.username, t.nama, t.role, BUAT_AKUN, user_id=orang.id,
                         keterangan=f"buat akun bersama '{t.username}' untuk users #{orang.id} ({orang.nama}, {orang.role})")
@@ -112,18 +130,21 @@ async def rencana(db: AsyncSession) -> list[Langkah]:
             hasil.append(l)
         else:
             l = Langkah(t.id, t.username, t.nama, t.role, BUAT_ORANG,
-                        keterangan=f"buat orang '{t.nama}' ({P.dari_timbangan(t.role)}) + akun bersama '{t.username}'")
+                        keterangan=f"buat orang '{nama_baru}' ({P.dari_timbangan(t.role)}) + akun bersama '{t.username}'")
+            l.nama_baru = nama_baru
             l.catatan.append("sandi = sandi pos timbang yang sekarang (hash disalin)")
+            if nama_baru != t.nama.strip():
+                l.catatan.append(f"nama di master: '{nama_baru}' (pos timbang: '{t.nama.strip()}')")
             hasil.append(l)
     return hasil
 
 
 async def terapkan(db: AsyncSession, daftar: list[Langkah] | None = None) -> list[Langkah]:
-    """Jalankan rencana. KONFLIK dan SUDAH dilewati. Mengembalikan yang dikerjakan."""
+    """Jalankan rencana. KONFLIK, SUDAH, dan LEWATI dilewati. Mengembalikan yang dikerjakan."""
     daftar = daftar if daftar is not None else await rencana(db)
     dikerjakan: list[Langkah] = []
     for l in daftar:
-        if l.tindakan in (KONFLIK, SUDAH):
+        if l.tindakan in (KONFLIK, SUDAH, LEWATI):
             continue
         t = await db.get(TimbanganAkun, l.profil_id)
         if t is None or t.akun_id is not None:
@@ -132,7 +153,7 @@ async def terapkan(db: AsyncSession, daftar: list[Langkah] | None = None) -> lis
             akun = await db.get(Akun, l.akun_id)
         else:
             if l.tindakan == BUAT_ORANG:
-                orang = User(nama=t.nama.strip(), role=P.dari_timbangan(t.role), status=AKTIF)
+                orang = User(nama=(l.nama_baru or t.nama).strip(), role=P.dari_timbangan(t.role), status=AKTIF)
                 db.add(orang)
                 await db.flush()
                 l.user_id = orang.id
@@ -175,7 +196,7 @@ def cetak(daftar: list[Langkah]) -> str:
         baris.append(f"{l.profil_id:>4}  {l.username:<16}{l.nama[:23]:<24}{l.role_lama:<11}{l.tindakan:<11}{l.keterangan}")
         for c in l.catatan:
             baris.append(f"{'':>4}  {'':<16}{'':<24}{'':<11}{'':<11}· {c}")
-    n = {k: sum(1 for l in daftar if l.tindakan == k) for k in (TAUT, BUAT_AKUN, BUAT_ORANG, KONFLIK, SUDAH)}
+    n = {k: sum(1 for l in daftar if l.tindakan == k) for k in (TAUT, BUAT_AKUN, BUAT_ORANG, KONFLIK, SUDAH, LEWATI)}
     baris.append(f"\ntaut {n[TAUT]} · buat akun {n[BUAT_AKUN]} · buat orang {n[BUAT_ORANG]} · "
-                 f"KONFLIK {n[KONFLIK]} · sudah tertaut {n[SUDAH]}")
+                 f"KONFLIK {n[KONFLIK]} · sudah tertaut {n[SUDAH]} · dilewati {n[LEWATI]}")
     return "\n".join(baris)

@@ -102,3 +102,27 @@ async def test_konflik_tak_disentuh(Sesi):
         assert daftar[0].tindakan == it.KONFLIK and "putuskan" in daftar[0].keterangan
         assert await it.terapkan(db, daftar) == []
         assert (await db.execute(select(TimbanganAkun))).scalars().one().akun_id is None
+
+
+async def test_lewati_dan_nama_lengkap(Sesi):
+    """Akun generik `admin` dilewati (bukan orang); nama informal pos timbang
+    diganti nama lengkap master saat orangnya dibuat."""
+    async with Sesi() as db:
+        db.add(TimbanganAkun(username="admin", nama="Administrator", role=ROLE_SUPERADMIN,
+                             password_hash=S.hash_sandi("adminadmin"), perangkat_kode="P0"))
+        db.add(TimbanganAkun(username="elfira", nama="Elfira Geya", role=ROLE_ADMIN,
+                             password_hash=S.hash_sandi("elfira123"), perangkat_kode="P1"))
+        await db.commit()
+    async with Sesi() as db:
+        daftar = await it.rencana(db, lewati={"admin"}, nama={"elfira": "Elfira Geya Ananda"})
+        assert {l.username: l.tindakan for l in daftar} == {"admin": it.LEWATI, "elfira": it.BUAT_ORANG}
+        assert "dilewati 1" in it.cetak(daftar)
+        dikerjakan = await it.terapkan(db, daftar)
+        assert [l.username for l in dikerjakan] == ["elfira"]
+    async with Sesi() as db:
+        orang = (await db.execute(select(User))).scalars().all()
+        assert [u.nama for u in orang] == ["Elfira Geya Ananda"] and orang[0].role == P.ADMIN
+        admin = (await db.execute(select(TimbanganAkun).where(TimbanganAkun.username == "admin"))).scalars().one()
+        assert admin.akun_id is None
+        elf = (await db.execute(select(TimbanganAkun).where(TimbanganAkun.username == "elfira"))).scalars().one()
+        assert elf.akun_id is not None and elf.nama == "Elfira Geya Ananda"
