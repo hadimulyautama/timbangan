@@ -14,6 +14,28 @@
     </div>
   {% endif %}
 
+  {% if orang.tertaut %}
+    <div class="bantu">
+      Akun ini <b>akun bersama</b>: nama, nama pengguna, peran, sandi, dan
+      status diubah di Pos Produksi atau Meja (Kelola pengguna) dan berlaku
+      untuk semua aplikasi sekaligus. Yang milik pos timbang hanya kode
+      perangkat.
+    </div>
+    <form method="post" action="{{ PREFIX }}/pengguna/{{ orang.id }}"
+          style="display:flex;flex-direction:column;gap:14px">
+      <div class="baris"><span>Nama</span><b>{{ orang.nama }}</b></div>
+      <div class="baris"><span>Nama pengguna</span><b>{{ orang.username }}</b></div>
+      <div class="baris"><span>Peran</span><b>{{ orang.role_label }}</b></div>
+      {{ isian('perangkat_kode', 'Kode perangkat', orang.perangkat_kode or '',
+               '', 'text',
+               'P1, P2, dan seterusnya. Ikut menyusun nomor transaksi, jadi dua '
+               'perangkat tidak boleh memakai kode yang sama.',
+               false, false, 'maxlength="8" autocapitalize="characters"') }}
+      <button type="submit" class="tbl blok" data-sibuk="Menyimpan…">
+        Simpan kode perangkat
+      </button>
+    </form>
+  {% else %}
   <form method="post" action="{{ PREFIX }}/pengguna/{{ orang.id }}"
         style="display:flex;flex-direction:column;gap:14px">
 
@@ -54,6 +76,7 @@
       Simpan perubahan
     </button>
   </form>
+  {% endif %}
 
   <div class="kartu">
     <div class="kartu__judul">Keterangan</div>
@@ -67,7 +90,7 @@
         {{ orang.created_at|tgl_jam }}</b></div>
   </div>
 
-  {% if not diri_sendiri %}
+  {% if not diri_sendiri and not orang.tertaut %}
     <form method="post" action="{{ PREFIX }}/pengguna/{{ orang.id }}/status">
       <button type="submit" class="tbl halus blok">
         {{ 'Nonaktifkan akun ini' if orang.status == 'aktif' else 'Aktifkan akun ini' }}

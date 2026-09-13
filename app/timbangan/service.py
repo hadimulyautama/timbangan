@@ -29,6 +29,10 @@ from zoneinfo import ZoneInfo
 
 from app.config import settings
 from app.models import Pelanggan, Supplier
+from hmu_identitas import masuk as identitas
+from hmu_identitas import peran as P
+from hmu_identitas import pintu
+from hmu_identitas.model import Akun
 from app.timbangan import format as fmt, logic, setelan
 from app.timbangan.config import tsettings
 from app.timbangan.db import berzona, sekarang
@@ -2437,7 +2441,9 @@ async def _admin_aktif_lain(db: AsyncSession, kecuali_id: int) -> int:
 
     Yang dijaga adalah "masih ada yang bisa mengelola pengguna", dan Super
     Admin bisa. Menghitungnya terpisah akan menolak penurunan peran yang
-    sebenarnya aman.
+    sebenarnya aman. Profil tertaut ikut terhitung lewat kolom `role`-nya
+    yang disinkronkan tiap masuk; Super Admin bersama yang belum punya
+    profil dihitung `security.ada_super_aktif`.
     """
     return (await db.execute(
         select(func.count(TimbanganAkun.id)).where(
@@ -2479,6 +2485,25 @@ async def _terapkan_ubah_akun(
     from app.timbangan.security import hash_sandi
 
     sebelum, sesudah, berubah = {}, {}, []
+
+    # ── Profil tertaut: nama, nama pengguna, peran, dan sandi milik akun
+    #    bersama — diubah di Pos Produksi / Meja oleh Super Admin ──
+    if orang.tertaut:
+        milik_bersama = []
+        if username is not None and username.strip().lower() not in ("", orang.username):
+            milik_bersama.append("nama pengguna")
+        if nama is not None and nama.strip() not in ("", orang.nama):
+            milik_bersama.append("nama")
+        if role is not None and role != orang.role:
+            milik_bersama.append("peran")
+        if sandi_baru:
+            milik_bersama.append("sandi")
+        if milik_bersama:
+            raise LayananError(
+                f"{', '.join(milik_bersama).capitalize()} milik akun bersama — "
+                "ubah di Pos Produksi atau Meja (Kelola pengguna). Di sini "
+                "hanya kode perangkat.")
+        username = nama = role = sandi_baru = None
 
     if username is not None:
         bersih = username.strip().lower()
@@ -2642,6 +2667,11 @@ async def ubah_profil(
     """
     from app.timbangan.security import cek_sandi
 
+    if orang.tertaut:
+        return await _ubah_profil_bersama(
+            db, orang=orang, nama=nama, username=username,
+            sandi_lama=sandi_lama, sandi_baru=sandi_baru, ip=ip)
+
     if sandi_baru:
         if not sandi_lama:
             raise LayananError(
@@ -2783,9 +2813,18 @@ async def ubah_status_akun(
     db: AsyncSession, *, admin: TimbanganAkun, orang: TimbanganAkun,
     ip: str | None = None,
 ) -> str:
-    """Aktifkan atau nonaktifkan satu akun."""
+    """Aktifkan atau nonaktifkan satu akun (yang BELUM ditautkan).
+
+    Profil tertaut punya satu saklar untuk semua aplikasi di Pos Produksi /
+    Meja (`hmu_identitas.masuk.nonaktifkan`); dua saklar untuk satu orang
+    adalah persis temuan QA X-11.
+    """
     if not admin.is_admin:
         raise LayananError("Hanya Admin yang boleh mengubah akun.")
+    if orang.tertaut:
+        raise LayananError(
+            f"{orang.nama} memakai akun bersama — nonaktifkan di Pos Produksi "
+            "atau Meja (Kelola pengguna); berlaku untuk semua aplikasi sekaligus.")
     await _jaga_wewenang_super(db, admin=admin, orang=orang)
     if orang.id == admin.id:
         raise LayananError("Anda tidak bisa menonaktifkan akun sendiri.")
@@ -2805,6 +2844,142 @@ async def ubah_status_akun(
     )
     await db.commit()
     return orang.status
+
+
+# ═══════════════════════════ Identitas bersama ═══════════════════════════
+#
+# Sejak Tahap 2 rancang ulang (13 Sep 2026): kredensial, peran, status, dan
+# nama orang tinggal di akun bersama (`produksi_akun` + `users`,
+# `hmu_identitas`). `timbangan_akun` yang tertaut adalah PROFIL pos timbang:
+# kode perangkat, dan sasaran foreign key seluruh catatan timbang.
+
+async def sinkron_profil(db: AsyncSession, profil: TimbanganAkun, bersama: Akun) -> bool:
+    """Cerminkan nama/peran/status akun bersama ke profil. True bila berubah.
+
+    Kolom cermin dipertahankan (bukan dibuang) karena kueri, templat, dan
+    `akun_nama` di audit membacanya; yang menjamin kebenarannya adalah
+    penyelarasan di sini — tiap masuk dan tiap permintaan bersesi.
+    """
+    berubah = False
+    role = P.ke_timbangan(bersama.peran)
+    status = "aktif" if bersama.aktif else "nonaktif"
+    for kolom, nilai in (("nama", bersama.nama), ("role", role), ("status", status),
+                         ("user_id", bersama.user_id), ("username", bersama.username)):
+        if getattr(profil, kolom) != nilai:
+            setattr(profil, kolom, nilai)
+            berubah = True
+    if berubah:
+        await db.commit()
+    return berubah
+
+
+async def profil_untuk(db: AsyncSession, bersama: Akun, *, buat: bool = True,
+                       perangkat_kode: str | None = None) -> TimbanganAkun | None:
+    """Profil pos timbang milik akun bersama — dibuat bila belum ada.
+
+    Dibuat TANPA kode perangkat: kode itu masuk ke nomor tiket dan tercetak
+    di struk, jadi Admin yang menetapkannya (daftar "belum punya kode" ada di
+    layar Pengguna, temuan QA T-01). Nama pengguna lama yang kebetulan sama
+    tetapi belum ditautkan ikut ditautkan di sini: satu orang, satu baris.
+    """
+    profil = (await db.execute(
+        select(TimbanganAkun).where(TimbanganAkun.akun_id == bersama.id)
+    )).scalars().first()
+    if profil is not None or not buat:
+        return profil
+    lama = (await db.execute(
+        select(TimbanganAkun).where(TimbanganAkun.username == bersama.username,
+                                    TimbanganAkun.akun_id.is_(None))
+    )).scalars().first()
+    if lama is not None:
+        lama.akun_id = bersama.id
+        lama.password_hash = None
+        profil = lama
+    else:
+        profil = TimbanganAkun(
+            username=bersama.username, nama=bersama.nama,
+            role=P.ke_timbangan(bersama.peran), akun_id=bersama.id,
+            user_id=bersama.user_id, password_hash=None,
+            perangkat_kode=(perangkat_kode or "").strip().upper()[:8] or None,
+        )
+        db.add(profil)
+    await db.flush()
+    await sinkron_profil(db, profil, bersama)
+    await db.commit()
+    return profil
+
+
+async def masuk_bersama(db: AsyncSession, username: str, sandi: str) -> tuple[Akun, TimbanganAkun]:
+    """Masuk dengan akun bersama: kredensial (paket), pintu pos timbang,
+    profil (dibuat bila perlu). Melempar `identitas.Tolak`."""
+    bersama = await identitas.periksa_kredensial(db, username, sandi)
+    sebab = pintu.sebab_tolak(bersama.peran, pintu.TIMBANGAN)
+    if sebab:
+        raise identitas.Tolak(403, sebab)
+    profil = await profil_untuk(db, bersama)
+    if profil.status != "aktif":
+        raise identitas.Tolak(403, identitas.PESAN_NONAKTIF)
+    return bersama, profil
+
+
+async def buat_profil(db: AsyncSession, *, admin: TimbanganAkun, username: str,
+                      perangkat_kode: str, ip: str | None = None) -> TimbanganAkun:
+    """Admin menautkan akun bersama yang sudah ada ke pos timbang, dengan
+    kode perangkatnya. Akunnya sendiri dibuat Super Admin di Pos Produksi /
+    Meja — di sini tak ada lagi pembuatan sandi."""
+    uname = identitas.normal_username(username)
+    bersama = (await db.execute(select(Akun).where(Akun.username == uname))).scalars().first()
+    if bersama is None:
+        raise LayananError(
+            f"Tidak ada akun bersama bernama '{uname}'. Buat akunnya dulu di "
+            "Pos Produksi atau Meja (Kelola pengguna, Super Admin), lalu "
+            "tautkan di sini dengan kode perangkatnya.")
+    sebab = pintu.sebab_tolak(bersama.peran, pintu.TIMBANGAN)
+    if sebab:
+        raise LayananError(sebab)
+    if await profil_untuk(db, bersama, buat=False) is not None:
+        raise LayananError(f"{bersama.nama} sudah punya profil pos timbang.")
+    kode = (perangkat_kode or "").strip().upper()[:8]
+    if not kode:
+        raise LayananError("Kode perangkat wajib diisi — ia masuk ke nomor tiket dan "
+                           "tercetak di struk. Contoh: P1, P2.")
+    kembar = (await db.execute(
+        select(TimbanganAkun.nama).where(TimbanganAkun.perangkat_kode == kode)
+    )).scalars().first()
+    if kembar is not None:
+        raise LayananError(f"Kode perangkat {kode} sudah dipakai {kembar}. Dua akun "
+                           "berkode sama akan menerbitkan nomor tiket yang sama.")
+    profil = await profil_untuk(db, bersama, perangkat_kode=kode)
+    if profil.perangkat_kode != kode:
+        profil.perangkat_kode = kode
+    await catat_audit(
+        db, akun=admin, aksi="BUAT_AKUN", entitas="akun", entitas_id=profil.id,
+        ringkasan=f"{profil.username} ditautkan ke akun bersama, kode {kode}", ip=ip,
+    )
+    await db.commit()
+    return profil
+
+
+async def _ubah_profil_bersama(
+    db: AsyncSession, *, orang: TimbanganAkun, nama, username, sandi_lama, sandi_baru, ip,
+) -> list[str]:
+    """Akun saya, untuk profil tertaut: sandi diganti di akun bersama (versi
+    sesi naik di semua aplikasi); nama & nama pengguna diubah di Pos Produksi."""
+    if (nama and nama.strip() != orang.nama) or (username and username.strip().lower() != orang.username):
+        raise LayananError("Nama dan nama pengguna milik akun bersama — ubah di "
+                           "Pos Produksi (Pengaturan).")
+    if not sandi_baru:
+        return []
+    bersama = await db.get(Akun, orang.akun_id)
+    try:
+        versi = await identitas.ganti_sandi(db, bersama, sandi_lama=sandi_lama, sandi_baru=sandi_baru)
+    except identitas.Tolak as e:
+        raise LayananError(e.pesan) from None
+    orang.token_version = versi  # dibaca rute untuk memasang cookie baru
+    await catat_audit(db, akun=orang, aksi="UBAH_AKUN", entitas="akun", entitas_id=orang.id,
+                      ringkasan=f"{orang.username}: sandi diubah (akun bersama)", ip=ip)
+    await db.commit()
+    return ["sandi"]
 
 
 # ═══════════════════════════ Pemeriksaan (SOP butir 6) ═══════════════════

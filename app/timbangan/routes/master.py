@@ -28,6 +28,7 @@ from app.timbangan.security import (
     NAMA_COOKIE,
     ada_super_aktif,
     buat_token,
+    buat_token_bersama,
     butuh_admin,
     butuh_akun,
     butuh_super,
@@ -323,7 +324,19 @@ async def akun_saya_simpan(
 
     if not berubah:
         return redirect("/akun", ok="Tidak ada yang diubah.")
-    return redirect("/pengaturan", ok=f"{', '.join(berubah).capitalize()} diubah.")
+    balasan = redirect("/pengaturan", ok=f"{', '.join(berubah).capitalize()} diubah.")
+    if "sandi" in berubah:
+        # Versi sesi naik (di akun bersama bila tertaut) — token di perangkat
+        # ini pun ikut mati, jadi pasang yang baru supaya orangnya tak
+        # terlempar ke halaman masuk persis sesudah mengganti sandinya.
+        token = (buat_token_bersama(orang.akun_id, versi=orang.token_version or 1)
+                 if orang.tertaut else buat_token(orang.id, versi=orang.token_version or 1))
+        balasan.set_cookie(
+            NAMA_COOKIE, token, max_age=tsettings.sesi_hari * 24 * 3600,
+            httponly=True, samesite="lax", secure=request.url.scheme == "https",
+            path=PREFIX,
+        )
+    return balasan
 
 
 async def _pulang_kelola(db: AsyncSession, akun: TimbanganAkun, pesan: str):
@@ -362,72 +375,26 @@ async def daftar_pengguna(
 async def simpan_pengguna(
     request: Request,
     username: str = Form(...),
-    nama: str = Form(...),
-    role: str = Form(...),
-    sandi: str = Form(...),
     perangkat_kode: str = Form(""),
     akun: TimbanganAkun = Depends(butuh_super_atau_pertama),
     db: AsyncSession = Depends(get_db),
 ):
-    from app.timbangan.security import hash_sandi
+    """Tautkan akun BERSAMA yang sudah ada ke pos timbang.
 
+    Sejak identitas bersama, pos timbang tak lagi membuat sandi maupun
+    peran: itu dikerjakan Super Admin di Pos Produksi / Meja (Kelola
+    pengguna). Yang ditetapkan di sini hanya yang memang milik pos timbang
+    — kode perangkat, karena ia masuk ke nomor tiket dan tercetak di struk
+    (temuan QA T-01).
+    """
     try:
-        await service.jaga_pemberian_peran(db, admin=akun, role=role)
+        profil = await service.buat_profil(
+            db, admin=akun, username=username, perangkat_kode=perangkat_kode,
+            ip=request.client.host if request.client else None,
+        )
     except service.LayananError as e:
         return redirect("/pengguna", err=str(e))
-
-    bersih = username.strip().lower()
-    ada = (await db.execute(
-        select(TimbanganAkun).where(TimbanganAkun.username == bersih)
-    )).scalars().first()
-    if ada is not None:
-        return redirect("/pengguna", err=f"Nama pengguna '{bersih}' sudah dipakai.")
-
-    # ── Kode perangkat WAJIB & UNIK untuk akun baru ──
-    #
-    # Ia masuk ke nomor tiket dan tercetak di struk yang dipegang sopir. Akun
-    # tanpa kode memakai "P0", dan semua akun tanpa kode memakai P0 yang sama —
-    # sehingga dua petugas menerima nomor yang sama. Itu temuan QA T-01, dan
-    # admin bawaan justru salah satu yang tak punya kode.
-    #
-    # Akun LAMA yang kosong sengaja tidak diisi otomatis: kodenya sudah
-    # tercetak di struk-struk yang beredar, jadi menetapkannya diam-diam
-    # membuat struk lama menunjuk perangkat yang bukan penerbitnya. Daftarnya
-    # muncul di layar Pengguna supaya pemilik yang memutuskan.
-    kode_perangkat = perangkat_kode.strip().upper() or None
-    if not kode_perangkat:
-        return redirect(
-            "/pengguna",
-            err="Kode perangkat wajib diisi — ia masuk ke nomor tiket dan "
-                "tercetak di struk. Contoh: P1, P2.")
-    kembar = (await db.execute(
-        select(TimbanganAkun.nama).where(
-            TimbanganAkun.perangkat_kode == kode_perangkat)
-    )).scalars().first()
-    if kembar is not None:
-        return redirect(
-            "/pengguna",
-            err=f"Kode perangkat {kode_perangkat} sudah dipakai {kembar}. "
-                "Dua akun berkode sama akan menerbitkan nomor tiket yang sama.")
-
-    try:
-        sandi_hash = hash_sandi(sandi)
-    except ValueError as e:
-        return redirect("/pengguna", err=str(e))
-
-    baru = TimbanganAkun(
-        username=bersih, nama=nama.strip(), role=role,
-        password_hash=sandi_hash,
-        perangkat_kode=kode_perangkat,
-    )
-    db.add(baru)
-    await db.flush()
-    await service.catat_audit(
-        db, akun=akun, aksi="BUAT_AKUN", entitas="akun", entitas_id=baru.id,
-        ringkasan=f"{baru.username} sebagai {baru.role}",
-    )
-    await db.commit()
-    return await _pulang_kelola(db, akun, f"Akun {baru.nama} dibuat.")
+    return await _pulang_kelola(db, akun, f"{profil.nama} ditautkan ke pos timbang.")
 
 
 @router.get("/pengguna/{akun_id}")
@@ -490,7 +457,8 @@ async def ubah_pengguna(
         if orang.id != akun.id:
             return balasan
         balasan.set_cookie(
-            NAMA_COOKIE, buat_token(akun.id, versi=orang.token_version or 1),
+            NAMA_COOKIE, (buat_token_bersama(orang.akun_id, versi=orang.token_version or 1)
+                          if orang.tertaut else buat_token(akun.id, versi=orang.token_version or 1)),
             max_age=tsettings.sesi_hari * 24 * 3600,
             httponly=True, samesite="lax",
             secure=request.url.scheme == "https", path=PREFIX,

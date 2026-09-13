@@ -13,13 +13,11 @@ from __future__ import annotations
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import DateTime, func
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from app.config import settings
 
@@ -86,22 +84,15 @@ def now_local() -> datetime:
     return datetime.now(ZoneInfo(settings.app_timezone))
 
 
-class Base(DeclarativeBase):
-    """Base untuk semua model."""
-
-
-class TimestampMixin:
-    """Kolom created_at / updated_at otomatis."""
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        onupdate=func.now(),
-        nullable=False,
-    )
+# ── Base & TimestampMixin dari paket bersama `hmu_core` ──
+#
+# Sejak Tahap 2 rancang ulang (13 September 2026) pos timbang memakai
+# identitas bersama: tabel `users` dan `produksi_akun` dipetakan model
+# `hmu_core.User` dan `hmu_identitas.model.Akun`, dan foreign key
+# `timbangan_akun.akun_id` menunjuk ke sana. Semua itu hanya bisa hidup di
+# SATU metadata, jadi Base-nya harus satu — yang dulu di sini adalah salinan
+# kata demi kata, kini diimpor. Isinya tak berubah.
+from hmu_core import Base, TimestampMixin  # noqa: E402,F401
 
 
 async def get_session() -> AsyncSession:

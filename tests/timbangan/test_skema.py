@@ -39,6 +39,7 @@ MIGRASI = (
     AKAR / "migrations" / "versions" / "0034_sesi_versi.py",
     AKAR / "migrations" / "versions" / "0035_indeks_tiket.py",
     AKAR / "migrations" / "versions" / "0036_indeks_duplikat.py",
+    AKAR / "migrations" / "versions" / "0037_identitas_bersama.py",
 )
 
 # Daftar di atas DITULIS TANGAN, dan karena itu ia basi tiap kali ada migrasi
@@ -84,7 +85,8 @@ def kolom_migrasi() -> dict[str, set[str]]:
 
     mesin = sa.create_engine("sqlite://")
     with mesin.begin() as conn:
-        for induk in ("users", "suppliers", "purchase_batches", "pk_purchase_batches"):
+        for induk in ("users", "suppliers", "purchase_batches", "pk_purchase_batches",
+                      "produksi_akun"):
             conn.exec_driver_sql(f"CREATE TABLE {induk} (id INTEGER PRIMARY KEY)")
 
         with Operations.context(MigrationContext.configure(conn)):

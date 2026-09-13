@@ -650,6 +650,24 @@ async def test_perubahan_setelan_tercatat_di_audit(klien, app_uji):
 # paling dekat ke Admin, dan paling mungkin keliru diberi akses saat kode
 # disalin-tempel di kemudian hari.
 
+async def akun_bersama_uji(username: str, nama: str, role: str = "operator") -> int:
+    """Akun BERSAMA (users + produksi_akun) — dibuat Super Admin di Pos
+    Produksi / Meja; di pos timbang tinggal ditautkan dengan kode perangkat."""
+    from app import database
+    from hmu_core import User
+    from hmu_identitas.model import Akun
+
+    async with database.SessionLocal() as db:
+        u = User(nama=nama, role=role, status="aktif")
+        db.add(u)
+        await db.flush()
+        a = Akun(user_id=u.id, username=username.lower(), password_hash=hash_sandi(SANDI),
+                 status="aktif")
+        db.add(a)
+        await db.commit()
+        return a.id
+
+
 async def jumlah_akun(app_uji) -> int:
     from sqlalchemy import func, select
     from app import database
@@ -672,9 +690,9 @@ async def test_bukan_admin_tidak_bisa_membuat_akun(klien, app_uji, siapa):
     sebelum = await jumlah_akun(app_uji)
     await login(klien, siapa)
 
+    await akun_bersama_uji("penyusup", "Penyusup", "admin")
     r = await klien.post(f"{PREFIX}/pengguna", data={
-        "username": "penyusup", "nama": "Penyusup", "role": ROLE_ADMIN,
-        "sandi": "rahasia123", "perangkat_kode": "PX",
+        "username": "penyusup", "perangkat_kode": "PX",
     })
     assert r.status_code == 403
     assert await jumlah_akun(app_uji) == sebelum
@@ -708,13 +726,14 @@ async def test_pengaturan_tidak_menawarkan_pintu_pengguna(klien, siapa):
 async def test_admin_bisa_membuat_akun(klien, app_uji):
     """Sisi lain dari aturan yang sama — Admin memang harus bisa."""
     sebelum = await jumlah_akun(app_uji)
+    await akun_bersama_uji("sari", "Sari")
     await login(klien, "wahid")
 
+    # Akunnya sudah ada (dibuat di Pos Produksi); di sini ditautkan.
     r = await klien.post(f"{PREFIX}/pengguna", data={
-        "username": "SARI", "nama": "Sari", "role": ROLE_PETUGAS,
-        "sandi": "rahasia123", "perangkat_kode": "p2",
+        "username": "SARI", "perangkat_kode": "p2",
     })
-    assert "Akun Sari dibuat" in r.text
+    assert "Sari ditautkan" in r.text
     assert await jumlah_akun(app_uji) == sebelum + 1
     # Nama pengguna dijadikan huruf kecil, kode perangkat huruf besar.
     assert "sari" in r.text and "P2" in r.text
@@ -1237,11 +1256,13 @@ async def test_admin_terakhir_tidak_bisa_menurunkan_perannya(klien, app_uji):
 
 
 async def test_boleh_turun_peran_setelah_ada_admin_lain(klien, app_uji):
+    from app import database
+
+    async with database.SessionLocal() as db:
+        db.add(TimbanganAkun(username="admin2", nama="Admin Dua", role=ROLE_ADMIN,
+                             password_hash=hash_sandi(SANDI), perangkat_kode="P8"))
+        await db.commit()
     await login(klien, "wahid")
-    await klien.post(f"{PREFIX}/pengguna", data={
-        "username": "admin2", "nama": "Admin Dua", "role": ROLE_ADMIN,
-        "sandi": "rahasia123", "perangkat_kode": "P8",
-    })
     wahid = await akun_oleh(app_uji, "wahid")
     r = await klien.post(f"{PREFIX}/pengguna/{wahid.id}", data={
         "nama": "Wahid", "username": "wahid", "role": ROLE_PETUGAS,
@@ -1446,11 +1467,9 @@ async def test_akun_belum_terpakai_bisa_dihapus(klien, app_uji):
 
     from app import database
 
+    await akun_bersama_uji("salahketik", "Salah Ketik")
     await login(klien, "wahid")
-    await klien.post(f"{PREFIX}/pengguna", data={
-        "username": "salahketik", "nama": "Salah Ketik", "role": ROLE_PETUGAS,
-        "sandi": "rahasia123", "perangkat_kode": "P8",
-    })
+    await klien.post(f"{PREFIX}/pengguna", data={"username": "salahketik", "perangkat_kode": "P8"})
     orang = await akun_oleh(app_uji, "salahketik")
 
     r = await klien.post(f"{PREFIX}/pengguna/{orang.id}/hapus",
@@ -1466,11 +1485,9 @@ async def test_akun_belum_terpakai_bisa_dihapus(klien, app_uji):
 
 async def test_menghapus_menuntut_nama_penggunanya_diketik(klien, app_uji):
     """Kotak "yakin?" dijawab refleks; mengetik nama tidak bisa."""
+    await akun_bersama_uji("coba", "Coba")
     await login(klien, "wahid")
-    await klien.post(f"{PREFIX}/pengguna", data={
-        "username": "coba", "nama": "Coba", "role": ROLE_PETUGAS,
-        "sandi": "rahasia123", "perangkat_kode": "PA",
-    })
+    await klien.post(f"{PREFIX}/pengguna", data={"username": "coba", "perangkat_kode": "PA"})
     orang = await akun_oleh(app_uji, "coba")
 
     for salah in ("", "cob", "Coba Salah"):
@@ -1502,11 +1519,9 @@ async def test_jejak_audit_tetap_terbaca_setelah_akunnya_dihapus(klien, app_uji)
     from app import database
     from app.timbangan.models import TimbanganAudit
 
+    await akun_bersama_uji("sebentar", "Sebentar Saja")
     await login(klien, "wahid")
-    await klien.post(f"{PREFIX}/pengguna", data={
-        "username": "sebentar", "nama": "Sebentar Saja", "role": ROLE_PETUGAS,
-        "sandi": "rahasia123", "perangkat_kode": "PB",
-    })
+    await klien.post(f"{PREFIX}/pengguna", data={"username": "sebentar", "perangkat_kode": "PB"})
     orang = await akun_oleh(app_uji, "sebentar")
     orang_id = orang.id
     await klien.post(f"{PREFIX}/pengguna/{orang_id}/hapus",
@@ -1892,13 +1907,20 @@ async def test_admin_tidak_bisa_membuat_super_admin_baru_lewat_pintu_lain(
             TimbanganAkun.username == "pintubelakang"))).scalars().first() is None
 
 
-async def test_peran_karangan_ditolak_saat_membuat_akun(klien, app_uji):
+async def test_akun_yang_belum_ada_tak_bisa_ditautkan(klien, app_uji):
+    """Pos timbang tak lagi membuat akun; yang tak ada di identitas bersama
+    diarahkan ke Pos Produksi / Meja — bukan dibuatkan diam-diam."""
     await login(klien, "wahid")
-    r = await klien.post(f"{PREFIX}/pengguna", data={
+    r = await klien.post(f"{PREFIX}/pengguna", data={"username": "aneh", "perangkat_kode": "PD"})
+    assert "Pos Produksi" in r.text and "Meja" in r.text
+    assert (await klien.post(f"{PREFIX}/pengguna", data={
         "username": "aneh", "nama": "Aneh", "role": "DEWA",
-        "sandi": "rahasia123", "perangkat_kode": "PD",
-    })
-    assert "tidak dikenal" in r.text
+        "sandi": "rahasia123", "perangkat_kode": "PD"})).status_code == 200
+    from sqlalchemy import select
+    from app import database
+    async with database.SessionLocal() as db:
+        assert (await db.execute(select(TimbanganAkun).where(TimbanganAkun.username == "aneh"))
+                ).scalars().first() is None
 
 
 async def test_super_admin_menghapus_akun_tanpa_menghapus_catatannya(

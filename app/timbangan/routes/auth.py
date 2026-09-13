@@ -20,11 +20,13 @@ from app.timbangan.security import (
     NAMA_COOKIE,
     akun_opsional,
     buat_token,
+    buat_token_bersama,
     butuh_akun,
     cek_sandi,
     tujuan_aman,
 )
 from app.timbangan.web import BASE_DIR, PREFIX, redirect, render
+from hmu_identitas import masuk as identitas
 
 router = APIRouter(prefix=PREFIX)
 
@@ -83,19 +85,30 @@ async def proses_masuk(
         await db.commit()
         return render(request, "masuk.html", tujuan=tujuan, pesan_err=pesan)
 
-    # Pesan yang sama untuk pengguna tidak dikenal maupun sandi salah — jangan
-    # memberi tahu penebak mana dari keduanya yang benar.
-    if akun is None or not cek_sandi(sandi, akun.password_hash):
-        return await _tolak("Nama pengguna atau kata sandi salah.")
-    if akun.status != "aktif":
-        return await _tolak("Akun ini sedang dinonaktifkan. Hubungi Admin.")
-    # Dinonaktifkan di MASTER berarti tak lagi bekerja di sini sama sekali.
-    if akun.user_id:
-        from app.models import User as _User
-
-        orang = await db.get(_User, akun.user_id)
-        if orang is not None and (orang.status or "").lower() != "aktif":
+    # ── Akun BERSAMA dulu (identitas satu untuk semua aplikasi) ──
+    #
+    # Kredensial diperiksa paket: waktu jawab sama untuk nama yang tak ada,
+    # status akun DAN orangnya di master, pintu pos timbang (operator & admin
+    # ke atas). Profil pos timbang dibuat bila belum ada. Yang tak dikenal
+    # sebagai akun bersama jatuh ke akun LAMA di bawah — selama belum
+    # ditautkan, sandinya sendiri masih berlaku (tak ada hari tanpa sistem).
+    bersama = None
+    try:
+        bersama, akun = await service.masuk_bersama(db, uname, sandi)
+    except identitas.Tolak as e:
+        if e.kode != 401:
+            return await _tolak(e.pesan)
+        if akun is None or akun.tertaut or not cek_sandi(sandi, akun.password_hash):
+            return await _tolak("Nama pengguna atau kata sandi salah.")
+        if akun.status != "aktif":
             return await _tolak("Akun ini sedang dinonaktifkan. Hubungi Admin.")
+        # Dinonaktifkan di MASTER berarti tak lagi bekerja di sini sama sekali.
+        if akun.user_id:
+            from app.models import User as _User
+
+            orang = await db.get(_User, akun.user_id)
+            if orang is not None and (orang.status or "").lower() != "aktif":
+                return await _tolak("Akun ini sedang dinonaktifkan. Hubungi Admin.")
 
     gerbang.catat_berhasil(uname, ip or "")
 
@@ -115,9 +128,15 @@ async def proses_masuk(
 
     aman = request.url.scheme == "https"
     balasan = RedirectResponse(tujuan or f"{PREFIX}/", status_code=303)
+    # Sesi akun bersama membawa nomor & versi akun BERSAMA: keluar-semua,
+    # ganti sandi, reset, dan penonaktifan di Pos Produksi memutusnya di sini.
+    if bersama is not None:
+        token = buat_token_bersama(bersama.id, versi=bersama.token_version or 1)
+        await identitas.catat_login(db, bersama)
+    else:
+        token = buat_token(akun.id, versi=akun.token_version or 1)
     balasan.set_cookie(
-        NAMA_COOKIE, buat_token(akun.id, versi=akun.token_version or 1),
-        max_age=tsettings.sesi_hari * 24 * 3600,
+        NAMA_COOKIE, token, max_age=tsettings.sesi_hari * 24 * 3600,
         httponly=True, samesite="lax", secure=aman, path=PREFIX,
     )
     return balasan
@@ -136,6 +155,9 @@ async def proses_keluar(
     # dan kadang tertinggal di mana saja; "Keluar" yang tak benar-benar
     # mengeluarkan adalah janji yang tak ditepati. Temuan QA T-19.
     akun.token_version = (akun.token_version or 1) + 1
+    if akun.tertaut:
+        # Akun bersama: versinya naik di paket → putus di semua aplikasi.
+        await identitas.naikkan_versi(db, akun.akun_id)
     await service.catat_audit(
         db, akun=akun, aksi="LOGOUT", entitas="akun", entitas_id=akun.id,
         ringkasan="keluar dari semua perangkat",

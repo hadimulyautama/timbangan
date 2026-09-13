@@ -36,6 +36,25 @@ kaidahnya dibaca dari basis data supaya berubah tanpa rilis. Menambah
 `if jenis == "..."` di kode berarti mengembalikan aturan ke tempat yang cuma
 bisa diubah lewat deploy.
 
+## Identitas bersama (sejak 13 September 2026, Tahap 2 rancang ulang)
+
+Sandi, sesi, peran, status, dan "boleh masuk?" milik paket `hmu_identitas`
+(repo `core/`, di-vendor ke `hmu_identitas/` bersama `hmu_core/` oleh
+`core/scripts/sinkron.py`; jangan sunting keduanya di sini). `Base`
+SQLAlchemy modul ini = `hmu_core.Base`, dan `users`/`suppliers`/`pelanggan`
+dipetakan model hmu_core yang lengkap.
+
+`timbangan_akun` punya dua rupa: **tertaut** (`akun_id` → `produksi_akun`;
+kredensial/peran/status/nama milik akun bersama, kolomnya di sini hanya
+cermin yang disinkronkan tiap masuk; di sini tinggal kode perangkat) dan
+**lama** (`akun_id` kosong; masih masuk dengan sandinya sendiri). Token lama
+tetap diterima untuk profil yang baru ditautkan sampai orangnya masuk lagi.
+Penautan: `scripts/identitas_tautkan.py` (rencana → `--terapkan` →
+`--lepas` untuk mundur). Pos timbang TIDAK lagi membuat akun; layar Pengguna
+hanya menautkan akun bersama + kode perangkat. Pintu: operator, admin,
+superadmin (`pintu.TIMBANGAN`). Uji: `tests/timbangan/test_identitas*.py`,
+`tests/pg/`, `tests/test_identitas_paket.py` (AST peran harfiah).
+
 ## Hubungan dengan produksi
 
 Timbangan adalah **otoritas berat**. Sistem produksi MENAUT ke tiket timbang

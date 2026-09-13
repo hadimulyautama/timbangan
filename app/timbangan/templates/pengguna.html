@@ -9,28 +9,22 @@
 {% block isi %}
   <details class="kartu">
     <summary style="cursor:pointer;font-weight:700;font-size:15px">
-      Tambah pengguna
+      Tautkan akun ke pos timbang
     </summary>
+    <div class="bantu" style="margin-top:10px">
+      Akun (nama, sandi, peran) dibuat Super Admin di <b>Pos Produksi</b> atau
+      <b>Meja</b> — satu akun untuk semua aplikasi. Di sini cukup sebutkan nama
+      penggunanya dan kode perangkat yang ia pegang.
+    </div>
     <form method="post" action="{{ PREFIX }}/pengguna"
           style="margin-top:14px;display:flex;flex-direction:column;gap:14px">
-      {{ isian('nama', 'Nama lengkap', '', '', 'text', '', true, true) }}
-      {{ isian('username', 'Nama pengguna', '', '', 'text',
-               'Huruf kecil tanpa spasi', true, true,
+      {{ isian('username', 'Nama pengguna akun bersama', '', '', 'text',
+               'Persis seperti di Pos Produksi / Meja', true, true,
                'autocapitalize="none"') }}
-      {{ isian('sandi', 'Kata sandi', '', '', 'password',
-               'Minimal 6 karakter', true, true) }}
-      <div class="grup">
-        <div class="lbl">Peran</div>
-        <select class="fld" name="role" required>
-          {% for r in ROLES %}
-            <option value="{{ r }}">{{ ROLE_LABEL[r] }}</option>
-          {% endfor %}
-        </select>
-      </div>
       {{ isian('perangkat_kode', 'Kode perangkat', '', '', 'text',
-               'P1, P2, dan seterusnya', false, false,
+               'P1, P2, dan seterusnya — masuk ke nomor tiket', true, false,
                'maxlength="8" autocapitalize="characters"') }}
-      <button type="submit" class="tbl blok">Buat akun</button>
+      <button type="submit" class="tbl blok">Tautkan</button>
     </form>
   </details>
 
@@ -71,7 +65,8 @@
         <tbody>
           {% for p in baris %}
             <tr data-buka="{{ PREFIX }}/pengguna/{{ p.id }}">
-              <td>{{ p.nama }}</td>
+              <td>{{ p.nama }}{% if not p.tertaut %}
+                <small class="redup" title="Belum ditautkan ke akun bersama — masih memakai sandi pos timbang sendiri"> · lama</small>{% endif %}</td>
               <td>{{ p.username }}</td>
               <td>{{ p.role_label }}</td>
               <td>{{ p.perangkat_kode or '—' }}</td>

@@ -27,72 +27,25 @@ dilengkapi. Sampai 11 September 2026 daftarnya: `purchase_batches` dan
 """
 from __future__ import annotations
 
-from datetime import datetime
-
-from sqlalchemy import BigInteger, String, Text
+from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base, TimestampMixin
 
-__all__ = ["Base", "Pelanggan", "PkPurchaseBatch", "PurchaseBatch",
+__all__ = ["Akun", "Base", "Pelanggan", "PkPurchaseBatch", "PurchaseBatch",
            "Supplier", "User"]
 
 
-class User(Base, TimestampMixin):
-    """Pengguna sistem penggilingan. Sasaran `timbangan_akun.user_id`.
-
-    **Sengaja tidak lengkap.** Yang dipetakan hanya kolom yang membuatnya
-    menjadi sasaran foreign key yang sah; modul ini tidak pernah membaca
-    apalagi menulis baris `users`. Kolom lain di tabel aslinya —
-    `whatsapp_number`, `telegram_user_id`, `default_warehouse_id`, dan
-    seterusnya — sengaja dibiarkan di luar, karena membawanya berarti ikut
-    membawa `warehouses` dan seterusnya sampai separuh skema penggilingan
-    pindah ke sini.
-
-    Autogenerate Alembic tidak akan pernah menyentuh tabel ini: `env.py`
-    membatasi pandangannya pada tabel berawalan `timbangan_`.
-    """
-
-    __tablename__ = "users"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    nama: Mapped[str] = mapped_column(String(100), nullable=False)
-    role: Mapped[str] = mapped_column(String(20), nullable=False)
-    status: Mapped[str] = mapped_column(String(20), default="aktif")
-
-
-class Pelanggan(Base, TimestampMixin):
-    """Pembeli beras dan hasil samping. Disinkron dari kontak Kledo tipe 3.
-
-    Dipakai pada arah KELUAR, sebagaimana `Supplier` dipakai pada arah MASUK.
-    Sengaja dua tabel, bukan satu tabel berpenanda: di Kledo satu kontak boleh
-    sekaligus vendor dan pelanggan — 24 kontak memang begitu — tetapi yang
-    menentukan di sini adalah perannya pada transaksi ini.
-    """
-
-    __tablename__ = "pelanggan"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    nama_pelanggan: Mapped[str] = mapped_column(String(150), nullable=False)
-    no_telfon: Mapped[str | None] = mapped_column(String(30))
-    alamat: Mapped[str | None] = mapped_column(Text)
-    status: Mapped[str] = mapped_column(String(20), default="aktif")
-    deleted_at: Mapped[datetime | None] = mapped_column()
-    kledo_contact_id: Mapped[int | None] = mapped_column(BigInteger, index=True)
-
-
-class Supplier(Base, TimestampMixin):
-    """Supplier gabah dan beras PK (bisa sama). Soft delete via deleted_at."""
-
-    __tablename__ = "suppliers"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    nama_supplier: Mapped[str] = mapped_column(String(150), nullable=False)
-    no_telfon: Mapped[str | None] = mapped_column(String(30))
-    alamat: Mapped[str | None] = mapped_column(Text)
-    status: Mapped[str] = mapped_column(String(20), default="aktif")
-    deleted_at: Mapped[datetime | None] = mapped_column()
-    kledo_contact_id: Mapped[int | None] = mapped_column(BigInteger, index=True)
+# ── users, suppliers, pelanggan: model LENGKAP dari paket bersama ──
+#
+# Dulu ketiganya dipetakan "seperlunya" di sini sebagai sasaran foreign key.
+# Sejak identitas bersama (Tahap 2, 13 Sep 2026) pos timbang membaca
+# `users.role`/`users.status` dan menunjuk `produksi_akun`, jadi modelnya
+# harus yang sesungguhnya — dan hanya boleh ada SATU pemetaan per tabel dalam
+# satu metadata. Kontraknya tetap: tabel-tabel ini dimiliki chain lain
+# (`core`), repo ini tidak pernah memigrasikannya.
+from hmu_core import Pelanggan, Supplier, User  # noqa: E402,F401
+from hmu_identitas.model import Akun  # noqa: E402,F401  (sasaran timbangan_akun.akun_id)
 
 
 class PurchaseBatch(Base, TimestampMixin):

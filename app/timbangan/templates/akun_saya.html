@@ -10,12 +10,22 @@
   <form method="post" action="{{ PREFIX }}/akun"
         style="display:flex;flex-direction:column;gap:14px">
 
+    {% if orang.tertaut %}
+      <div class="baris"><span>Nama</span><b>{{ orang.nama }}</b></div>
+      <div class="baris"><span>Nama pengguna</span><b>{{ orang.username }}</b></div>
+      <div class="bantu">
+        Akun Anda <b>akun bersama</b> — sama di Pos Produksi dan aplikasi lain.
+        Nama diubah di Pos Produksi (Pengaturan); sandi yang diganti di sini
+        berlaku di semua aplikasi.
+      </div>
+    {% else %}
     {{ isian('nama', 'Nama lengkap', orang.nama, '', 'text',
              'Nama ini yang muncul di catatan timbang dan bukti cetak.',
              true, true) }}
     {{ isian('username', 'Nama pengguna', orang.username, '', 'text',
              'Huruf kecil tanpa spasi. Mengubahnya mengubah cara Anda masuk '
              'lain kali.', true, true, 'autocapitalize="none"') }}
+    {% endif %}
 
     <div class="kartu">
       <div class="kartu__judul">Ganti sandi</div>

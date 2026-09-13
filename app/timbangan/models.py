@@ -171,7 +171,23 @@ class TimbanganConfig(Base, TimestampMixin):
 # ══════════════════════════════════════════════════════════════════════════
 
 class TimbanganAkun(Base, TimestampMixin):
-    """Akun login webapp. Ditautkan ke `users` bila orangnya sudah terdaftar."""
+    """Akun pos timbang — dan, sejak identitas bersama, PROFIL pos timbang.
+
+    Dua rupa hidup berdampingan di satu tabel (Tahap 2 rancang ulang, 13 Sep
+    2026), supaya penyatuan akun bisa per orang dan bisa dibalik:
+
+      · **Tertaut** (`akun_id` terisi): kredensial, peran, status, dan nama
+        milik akun bersama (`produksi_akun` + `users`). Kolom `role`, `nama`,
+        `status` di sini hanya CERMIN yang disinkronkan tiap kali masuk —
+        dipertahankan karena kueri dan catatan lama membacanya.
+        `password_hash` boleh kosong.
+      · **Lama** (`akun_id` kosong): seperti sebelumnya — sandi dan peran
+        sendiri. Masih bisa masuk, supaya tak ada hari tanpa sistem yang
+        jalan; ditautkan lewat `scripts/identitas_tautkan.py`.
+
+    Foreign key dari catatan timbang (`petugas_id`, `dibuat_oleh_id`, …)
+    tetap menunjuk ke SINI, bukan ke akun bersama: riwayat tak ditulis ulang.
+    """
 
     __tablename__ = "timbangan_akun"
 
@@ -179,6 +195,10 @@ class TimbanganAkun(Base, TimestampMixin):
     username: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     nama: Mapped[str] = mapped_column(String(100), nullable=False)
     role: Mapped[str] = mapped_column(String(20), nullable=False, default=ROLE_PETUGAS)
+    #: Akun bersama (`produksi_akun.id`). Terisi = tertaut.
+    akun_id: Mapped[int | None] = mapped_column(
+        ForeignKey("produksi_akun.id"), unique=True
+    )
 
     # ── Versi sesi ──
     #
@@ -190,7 +210,8 @@ class TimbanganAkun(Base, TimestampMixin):
     token_version: Mapped[int] = mapped_column(
         Integer, nullable=False, default=1, server_default="1"
     )
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    #: Kosong untuk profil tertaut — sandinya di akun bersama.
+    password_hash: Mapped[str | None] = mapped_column(String(255))
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="aktif")
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
 
@@ -198,6 +219,12 @@ class TimbanganAkun(Base, TimestampMixin):
     # transaksi di perangkat (MSK-20260904-P1-007) agar tidak bentrok.
     perangkat_kode: Mapped[str | None] = mapped_column(String(8))
     terakhir_login: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    akun = relationship("Akun", lazy="joined")
+
+    @property
+    def tertaut(self) -> bool:
+        return self.akun_id is not None
 
     @property
     def role_label(self) -> str:

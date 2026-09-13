@@ -66,8 +66,10 @@ def test_token_lama_tanpa_versi_dianggap_versi_satu():
     import hmac as _hmac
     import json
 
-    muatan = sec._b64e(json.dumps({"sub": 9, "exp": 9_999_999_999}).encode())
-    tanda = sec._b64e(_hmac.new(sec._kunci(), muatan.encode(), hashlib.sha256).digest())
+    from hmu_identitas.token import _b64e
+
+    muatan = _b64e(json.dumps({"sub": 9, "exp": 9_999_999_999}).encode())
+    tanda = _b64e(_hmac.new(sec._kunci(), muatan.encode(), hashlib.sha256).digest())
     assert sec.baca_token(f"{muatan}.{tanda}") == (9, 1)
 
 

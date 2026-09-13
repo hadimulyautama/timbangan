@@ -202,13 +202,15 @@ def test_kode_perangkat_wajib_dan_unik_untuk_akun_baru():
     """
     import inspect
 
-    from app.timbangan.routes import master
+    from app.timbangan import service
 
-    sumber = inspect.getsource(master.simpan_pengguna)
+    # Sejak identitas bersama, penautan akun ke pos timbang ada di
+    # `service.buat_profil` — aturan kodenya ikut pindah ke sana.
+    sumber = inspect.getsource(service.buat_profil)
     assert "Kode perangkat wajib diisi" in sumber
     assert "sudah dipakai" in sumber
-    # Diperiksa SEBELUM akunnya dibuat, bukan sesudah.
-    assert sumber.index("Kode perangkat wajib") < sumber.index("db.add(baru)")
+    # Diperiksa SEBELUM profilnya dibuat, bukan sesudah.
+    assert sumber.index("Kode perangkat wajib") < sumber.index("profil_untuk(db, bersama, perangkat_kode")
 
 
 def test_akun_lama_tanpa_kode_tidak_diisi_otomatis():
