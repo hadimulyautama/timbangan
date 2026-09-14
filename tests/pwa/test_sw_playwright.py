@@ -78,7 +78,9 @@ def server():
 def page():
     with pw.sync_playwright() as p:
         b = p.chromium.launch()
-        ctx = b.new_context(viewport={"width": 390, "height": 800})
+        # "kurangi gerakan": transisi lintas dokumen tak selesai di peramban tanpa
+        # layar dan lapisannya menelan ketukan pada pil.
+        ctx = b.new_context(viewport={"width": 390, "height": 800}, reduced_motion="reduce")
         yield ctx.new_page()
         ctx.close()
         b.close()
@@ -127,8 +129,13 @@ def test_versi_baru_ditawarkan_lewat_pil_tanpa_muat_ulang(server, page):
     pil.wait_for(state="visible", timeout=20000)   # denyut penanda di beranda
     assert "Versi baru" in pil.inner_text()
     assert page.evaluate("window.__tanda") == 7
+    # Ketukan sungguhan pada koordinat pil (bukan pemeriksaan sasaran milik
+    # Playwright, yang di peramban tanpa layar tersesat oleh lapisan
+    # ::view-transition). Kalau pilnya tertutup, reload tak terjadi dan
+    # `__tanda` tetap 7.
+    kotak = pil.bounding_box()
     with page.expect_navigation():
-        pil.click()
+        page.mouse.click(kotak["x"] + kotak["width"] / 2, kotak["y"] + kotak["height"] / 2)
     assert page.evaluate("window.__tanda") is None
 
 

@@ -86,7 +86,7 @@
                ('Kosongkan bila muatannya curah' if transfer else
                 'Dihitung saat bongkar, bukan disalin dari nota.' if masuk else
                 'Dihitung saat muat, bukan disalin dari surat jalan.'),
-               masuk, false, 'inputmode="numeric"') }}
+               masuk, false, 'inputmode="numeric" enterkeyhint="next"') }}
       {{ isian('tara_per_karung_kg', 'Tara per karung',
                '%.3f'|format(m.tara_per_karung_kg)
                  if m and m.tara_per_karung_kg
@@ -94,7 +94,7 @@
                'kg', 'text',
                ('Dari sampling ' ~ (asal_tara.berlaku_mulai|tgl(true)))
                  if asal_tara else 'Nilai bawaan aturan komoditas',
-               false, false, 'inputmode="decimal" data-berat') }}
+               false, false, 'inputmode="decimal" enterkeyhint="done" data-berat') }}
     </div>
   </div>
 

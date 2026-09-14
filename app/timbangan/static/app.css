@@ -37,7 +37,29 @@
 
 * { box-sizing: border-box; }
 
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; background: var(--kertas); }
+
+/* Perpindahan halaman LINTAS dokumen (pos timbang tak memakai pindah.js):
+   tiga baris ini yang membuat pergantian halaman memudar, bukan berkedip.
+   Dihormati pilihan "kurangi gerakan" sistem — dan di peramban tanpa layar
+   (uji Playwright) transisi lintas dokumen tak pernah selesai, menyisakan
+   lapisan ::view-transition yang menelan ketukan. */
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition { navigation: auto; }
+}
+
+/* Rasa sentuh: sorotan ketuk bawaan dimatikan DAN diganti :active yang
+   digambar sendiri; touch-action: manipulation membuang jeda double-tap.
+   Teks data tetap bisa disalin — tak ada user-select: none di angka. */
+.tbl, button, a, label, select, summary, [role="button"], .baris, tr[data-buka] {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+/* `scale`, BUKAN `transform: scale()`: yang kedua menimpa translateX milik
+   pil/kabar yang berpusat, tombolnya melompat saat ditekan dan lepasan jari
+   jatuh di luar — ketukan tak pernah jadi. Ketahuan di uji Playwright. */
+.tbl:active, button:active { scale: .985; filter: brightness(.92); }
+a:active, .baris:active, tr[data-buka]:active { background: var(--kertas-2); }
 
 body {
   margin: 0;
@@ -553,7 +575,9 @@ body.luring .luring { display: flex; }
 /* ── Pil versi baru ── mencolok di atas, tetap sampai diketuk. */
 .pil-versi {
   position: fixed; left: 50%; transform: translateX(-50%);
-  top: calc(10px + env(safe-area-inset-top)); z-index: 60;
+  /* Di atas bilah kepala yang lengket — tanpa ini bilah itu menutup pilnya
+     dan ketukan tak pernah sampai (ketahuan di uji Playwright). */
+  top: calc(10px + env(safe-area-inset-top)); z-index: 1000;
   background: #0f5c8c; color: #fff; border: 0; border-radius: 999px;
   padding: 10px 18px; font: inherit; font-size: 14px; font-weight: 600;
   box-shadow: 0 10px 30px rgba(0, 0, 0, .35); cursor: pointer;
