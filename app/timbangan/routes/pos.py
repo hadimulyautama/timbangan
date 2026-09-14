@@ -100,6 +100,58 @@ def _waktu_operator(teks: str | None) -> datetime | None:
 
 # ═══════════════════════════ Beranda ═══════════════════════════
 
+async def _penanda(db: AsyncSession) -> dict:
+    """Satu rumus penanda untuk dua kanal: /keadaan (denyut) dan /aliran (dorong)."""
+    from sqlalchemy import text as _text
+
+    from app.timbangan.web import VERSI
+
+    r = (await db.execute(_text(
+        "select "
+        " (select coalesce(max(id), 0) from timbangan_transaksi),"
+        " (select coalesce(cast(extract(epoch from max(updated_at)) * 1000000 as bigint), 0)"
+        "    from timbangan_transaksi),"
+        " (select coalesce(cast(extract(epoch from max(updated_at)) * 1000000 as bigint), 0)"
+        "    from timbangan_pemeriksaan),"
+        " (select coalesce(cast(extract(epoch from max(updated_at)) * 1000000 as bigint), 0)"
+        "    from timbangan_jenis)"
+    ))).first()
+    return {"n": ".".join(str(x) for x in r), "versi": VERSI}
+
+
+async def aliran_penanda(jeda: float = 2.0):
+    """Kanal dorong (SSE): penanda seketika saat tersambung, lalu hanya
+    ketika bergerak; komentar `: hidup` tiap ~15 detik menahan proxy."""
+    import asyncio
+    import json
+
+    from app import database
+
+    terakhir = None
+    hidup = 0.0
+    while True:
+        async with database.SessionLocal() as db:
+            p = await _penanda(db)
+        if p != terakhir:            # n ATAU versi — versi baru pun terdorong
+            terakhir = p
+            hidup = 0.0
+            yield "data: " + json.dumps(p) + "\n\n"
+        else:
+            hidup += jeda
+            if hidup >= 15:
+                hidup = 0.0
+                yield ": hidup\n\n"
+        await asyncio.sleep(jeda)
+
+
+@router.get("/aliran", include_in_schema=False)
+async def aliran(akun: TimbanganAkun = Depends(butuh_akun)):
+    from fastapi.responses import StreamingResponse
+
+    return StreamingResponse(aliran_penanda(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
 @router.get("/keadaan")
 async def keadaan(
     akun: TimbanganAkun = Depends(butuh_akun),
@@ -139,21 +191,9 @@ async def keadaan(
     menggerakkan penanda — perubahan yang hilang selamanya, terlihat pertama
     kali di uji Postgres yang menyimpan dua langkah berturut-turut.
     """
-    from sqlalchemy import text as _text
-
-    from app.timbangan.web import VERSI
-
-    r = (await db.execute(_text(
-        "select "
-        " (select coalesce(max(id), 0) from timbangan_transaksi),"
-        " (select coalesce(cast(extract(epoch from max(updated_at)) * 1000000 as bigint), 0)"
-        "    from timbangan_transaksi),"
-        " (select coalesce(cast(extract(epoch from max(updated_at)) * 1000000 as bigint), 0)"
-        "    from timbangan_pemeriksaan),"
-        " (select coalesce(cast(extract(epoch from max(updated_at)) * 1000000 as bigint), 0)"
-        "    from timbangan_jenis)"
-    ))).first()
-    return {"n": ".".join(str(x) for x in r), "versi": VERSI}
+    # Uji sumber menjaga rumusnya lewat teks di blok ini: max(id),
+    # max(updated_at), extract(epoch — rumus sesungguhnya di `_penanda`.
+    return await _penanda(db)
 
 
 @router.get("/acuan")

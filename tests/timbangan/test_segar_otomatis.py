@@ -36,7 +36,8 @@ def test_ada_pemicu_penyegaran():
     """Tiga pemicu, dan ketiganya perlu."""
     assert "addEventListener('visibilitychange'" in JS, "kembali ke depan"
     assert "addEventListener('pageshow'" in JS, "simpanan maju-mundur peramban"
-    assert "setInterval(periksa" in JS, "denyut untuk layar yang tergeletak"
+    # Denyut kini jalur kedua: hanya bertanya bila kanal dorong tak hidup.
+    assert "setInterval(function () { if (jalur !== 'sse') { periksa(); } }" in JS, "denyut untuk layar yang tergeletak"
 
 
 def test_denyut_hanya_saat_terlihat():

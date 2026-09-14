@@ -38,8 +38,27 @@ async def _siapkan() -> None:
 from contextlib import asynccontextmanager
 
 
+async def _kosongkan() -> None:
+    from sqlalchemy import text
+    async with mesin.begin() as conn:
+        await conn.execute(text("""
+            DO $$ DECLARE t text;
+            BEGIN
+              FOR t IN SELECT tablename FROM pg_tables WHERE schemaname = 'public'
+                        AND tablename NOT LIKE 'alembic\\_version%' ESCAPE '\\'
+              LOOP EXECUTE format('TRUNCATE TABLE %I RESTART IDENTITY CASCADE', t); END LOOP;
+            END $$;"""))
+
+
 @asynccontextmanager
 async def _hidup(_: FastAPI):
+    # Dikosongkan SAAT MULAI, bukan hanya saat berhenti: server uji dibunuh
+    # (sambungan SSE menahannya), jadi pembersihan saat berhenti tak pernah
+    # sempat berjalan dan benih akun berikutnya bertabrakan.
+    import app.models  # noqa: F401
+    async with mesin.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    await _kosongkan()
     await _siapkan()
     yield
     from sqlalchemy import text

@@ -1059,14 +1059,82 @@
       document.body.appendChild(pil);
     }
 
+    /* ── Pil "perubahan baru" ──
+       Layar TIDAK memuat ulang sendiri di bawah jari petugas (dulu:
+       location.reload() diam-diam — baris bergeser tepat saat ditekan). Pil
+       ini yang muncul; ketukannya yang memuat ulang. Kecuali layar tanpa
+       sasaran ketukan (`data-segar-sendiri`). */
+    var jumlahPerubahan = 0;
+
+    function tawarkanPerubahan() {
+      var pil = document.querySelector('.pil-perubahan');
+      if (!pil) {
+        pil = document.createElement('button');
+        pil.type = 'button';
+        pil.className = 'pil pil-perubahan';
+        pil.setAttribute('data-pil', 'perubahan');
+        pil.setAttribute('role', 'status');
+        pil.addEventListener('click', function () { location.reload(); });
+        document.body.appendChild(pil);
+      }
+      pil.textContent = jumlahPerubahan + ' perubahan baru — ketuk untuk muat';
+    }
+
+    function adaPerubahan() {
+      if (document.querySelector('[data-segar-sendiri]') && bolehSegar()) { location.reload(); return; }
+      jumlahPerubahan++;
+      tawarkanPerubahan();
+    }
+
     function periksa() {
       if (!bolehSegar()) { return; }
+      statistik.tanya++;
       tanyaPenanda().then(function (p) {
         var sama = (p !== null && penanda !== null && p === penanda);
         if (p !== null) { penanda = p; }
         if (!sama) { periksaIsi(); }   // tak sama: baru halamannya diambil
       });
     }
+
+    /* ── Kanal dorong (SSE) — jalur pertama; denyut jadi jalur kedua ── */
+    var jalur = 'denyut';
+    var aliran = null;
+    var jedaSambung = 1000;
+    var sambungUlang = null;
+    var statistik = { tanya: 0, dorongan: 0 };
+
+    function sambungAliran() {
+      if (aliran || !window.EventSource || document.visibilityState !== 'visible') { return; }
+      var es = new EventSource(PREFIX + '/aliran');
+      aliran = es;
+      es.onmessage = function (e) {
+        var j = null;
+        try { j = JSON.parse(e.data); } catch (x) { j = null; }
+        if (!j || !j.n) { return; }
+        jalur = 'sse';
+        jedaSambung = 1000;
+        statistik.dorongan++;
+        if (j.versi && VERSI_JALAN && String(j.versi) !== VERSI_JALAN) { tawarkanVersi(); }
+        var p = String(j.n);
+        if (penanda !== null && p !== penanda) { adaPerubahan(); }
+        penanda = p;
+      };
+      es.onerror = function () {
+        es.close();
+        if (aliran === es) { aliran = null; }
+        jalur = 'denyut';
+        if (sambungUlang) { return; }
+        sambungUlang = setTimeout(function () { sambungUlang = null; sambungAliran(); }, jedaSambung);
+        jedaSambung = Math.min(jedaSambung * 2, 30000);
+      };
+    }
+
+    function putuskanAliran() {
+      if (aliran) { aliran.close(); aliran = null; }
+      jalur = 'denyut';
+    }
+    window.timbangan.jalur = function () { return jalur; };
+    window.timbangan.statistik = function () { return { tanya: statistik.tanya, dorongan: statistik.dorongan }; };
 
     function periksaIsi() {
       if (!bolehSegar()) { return; }
@@ -1084,14 +1152,14 @@
           var doc = new DOMParser().parseFromString(teks, 'text/html');
           var baru = doc.querySelector('.bingkai');
           if (!baru || baru.innerHTML === lama) { return; }
-          location.reload();
+          adaPerubahan();   // bukan location.reload(): pil dulu, orangnya yang memutuskan
         })
         .catch(function () { /* jaringan buruk: diamkan, denyut berikutnya mencoba lagi */ });
     }
 
     function mulaiDenyut() {
       if (denyut) { return; }
-      denyut = setInterval(periksa, DENYUT);
+      denyut = setInterval(function () { if (jalur !== 'sse') { periksa(); } }, DENYUT);
     }
 
     function hentikanDenyut() {
@@ -1102,8 +1170,8 @@
        dikeluarkan lagi, dan yang pertama dilihat orang harus keadaan
        sekarang, bukan keadaan saat ia mengantonginya. */
     document.addEventListener('visibilitychange', function () {
-      if (document.visibilityState === 'visible') { periksa(); mulaiDenyut(); }
-      else { hentikanDenyut(); }
+      if (document.visibilityState === 'visible') { periksa(); mulaiDenyut(); jedaSambung = 1000; sambungAliran(); }
+      else { hentikanDenyut(); putuskanAliran(); }
     });
 
     /* Sebagian peramban mengembalikan halaman dari simpanan maju-mundurnya
@@ -1112,7 +1180,7 @@
       if (e.persisted) { kotor = false; periksa(); }
     });
 
-    if (document.visibilityState === 'visible') { mulaiDenyut(); }
+    if (document.visibilityState === 'visible') { mulaiDenyut(); sambungAliran(); }
   })();
 
 })();
