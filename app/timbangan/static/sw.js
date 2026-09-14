@@ -5,17 +5,24 @@
  * timbangan basi di pos timbang lebih berbahaya daripada menampilkan
  * pesan "tidak ada jaringan".
  */
-var VERSI = 'timbangan-v29';
+/* VERSI datang dari alamat pendaftaran (`/timbangan/sw.js?v=40`), yaitu
+ * `web.VERSI` server — bukan angka yang ditulis tangan di sini. Dulu
+ * 'timbangan-v29' berdiri sendiri dan bisa menyimpang dari VERSI server:
+ * dua sumber kebenaran untuk satu hal. */
+var VERSI = 'timbangan-v' + (new URL(self.location.href).searchParams.get('v') || '0');
 var PREFIX = '/timbangan';
+var V = '?v=' + VERSI.slice('timbangan-v'.length);
 
+// Alamatnya bercap versi, persis seperti yang diminta halaman — tanpa cap,
+// simpanan awal tak pernah cocok dengan permintaan mana pun.
 var RANGKA = [
-  PREFIX + '/static/app.css',
-  PREFIX + '/static/app.js',
-  PREFIX + '/static/ikon.svg',
-  PREFIX + '/static/ikon-180.png',
-  PREFIX + '/static/ikon-192.png',
-  PREFIX + '/static/ikon-512.png',
-  PREFIX + '/static/manifest.json',
+  PREFIX + '/static/app.css' + V,
+  PREFIX + '/static/app.js' + V,
+  PREFIX + '/static/ikon.svg' + V,
+  PREFIX + '/static/ikon-180.png' + V,
+  PREFIX + '/static/ikon-192.png' + V,
+  PREFIX + '/static/ikon-512.png' + V,
+  PREFIX + '/static/manifest.json' + V,
   PREFIX + '/luring'
 ];
 

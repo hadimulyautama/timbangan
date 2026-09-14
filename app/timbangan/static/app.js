@@ -13,6 +13,8 @@
   'use strict';
 
   var PREFIX = '/timbangan';
+  // VERSI yang sedang berjalan — ditulis server saat halaman utuh dimuat.
+  var VERSI_JALAN = document.documentElement.getAttribute('data-versi') || '';
   var GUDANG = 'timbangan-antrean';   // localStorage: kiriman menunggu jaringan
 
   // ── Sopir menyusul nomor polisi ───────────────────────────────────
@@ -410,7 +412,9 @@
   tampilkanJumlah();
 
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register(PREFIX + '/sw.js', { scope: PREFIX + '/' })
+    // `?v=` = VERSI server: deploy mengubah alamatnya, worker baru terpasang,
+    // cache lama dibuang. Satu sumber kebenaran, bukan angka di dalam sw.js.
+    navigator.serviceWorker.register(PREFIX + '/sw.js?v=' + VERSI_JALAN, { scope: PREFIX + '/' })
       .catch(function () { /* tanpa service worker aplikasi tetap jalan */ });
   }
 
@@ -981,8 +985,25 @@
     function tanyaPenanda() {
       return fetch(PREFIX + '/keadaan', { credentials: 'same-origin', cache: 'no-store' })
         .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (j) { return (j && j.n) ? String(j.n) : null; })
+        .then(function (j) {
+          if (!j || !j.n) { return null; }
+          if (j.versi && VERSI_JALAN && String(j.versi) !== VERSI_JALAN) { tawarkanVersi(); }
+          return String(j.n);
+        })
         .catch(function () { return null; });
+    }
+
+    /* Pil versi baru: server sudah memegang berkas lain. Satu ketukan yang
+       memuat ulang — TIDAK sendiri: petugas yang sedang mengisi timbang
+       akan kehilangan isiannya. */
+    function tawarkanVersi() {
+      if (document.querySelector('.pil-versi')) { return; }
+      var pil = document.createElement('button');
+      pil.type = 'button';
+      pil.className = 'pil-versi';
+      pil.textContent = 'Versi baru — ketuk untuk muat ulang';
+      pil.addEventListener('click', function () { location.reload(); });
+      document.body.appendChild(pil);
     }
 
     function periksa() {

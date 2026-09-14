@@ -549,3 +549,12 @@ body.luring .luring { display: flex; }
   .pembuka__tunggu { opacity: .75; }
 }
 
+
+/* ── Pil versi baru ── mencolok di atas, tetap sampai diketuk. */
+.pil-versi {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  top: calc(10px + env(safe-area-inset-top)); z-index: 60;
+  background: #0f5c8c; color: #fff; border: 0; border-radius: 999px;
+  padding: 10px 18px; font: inherit; font-size: 14px; font-weight: 600;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .35); cursor: pointer;
+}
