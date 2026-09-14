@@ -148,6 +148,54 @@
     }).catch(function () { /* masih tanpa jaringan — coba lagi nanti */ });
   }
 
+  // ── Data acuan untuk saat sinyal hilang ────────────────────────────
+  //
+  // HANYA daftar yang berubah mingguan — pemasok, pelanggan, jenis barang,
+  // kendaraan — nama saja, dari /timbangan/acuan. Disimpan selagi jaringan
+  // ada; /luring menampilkannya di bawah baris cap waktu selebar layar.
+  // Tiket dan angka timbang tak pernah: yang basi di pos timbang lebih
+  // berbahaya daripada yang tak ada. Persetujuan pemilik 14 Sep 2026.
+  var KUNCI_ACUAN = 'timbangan-acuan';
+
+  function simpanAcuan() {
+    if (!navigator.onLine) { return; }
+    fetch(PREFIX + '/acuan', { credentials: 'same-origin', cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        if (!j || !j.daftar) { return; }
+        try { localStorage.setItem(KUNCI_ACUAN, JSON.stringify(j)); } catch (e) { /* penuh */ }
+      })
+      .catch(function () { /* nanti lagi */ });
+  }
+
+  function teksAman(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+
+  function gambarAcuan() {
+    var wadah = document.querySelector('[data-acuan]');
+    if (!wadah) { return; }
+    var j = null;
+    try { j = JSON.parse(localStorage.getItem(KUNCI_ACUAN) || 'null'); } catch (e) { j = null; }
+    var bar = document.createElement('div');
+    bar.className = 'putus';
+    bar.textContent = 'Data pukul ' + (j && j.pukul ? j.pukul : '?') + ' · sedang offline';
+    document.body.appendChild(bar);
+    if (!j) {
+      wadah.innerHTML = '<p class="redup">Belum ada daftar acuan tersimpan di ponsel ini.</p>';
+      return;
+    }
+    var html = '<div class="acuan">';
+    j.daftar.forEach(function (d) {
+      if (!d.isi || !d.isi.length) { return; }
+      html += '<h3>' + teksAman(d.judul) + '</h3><ul>' +
+        d.isi.map(function (x) { return '<li>' + teksAman(x) + '</li>'; }).join('') + '</ul>';
+    });
+    wadah.innerHTML = html + '</div>';
+  }
+
   // ── Penanda luring ─────────────────────────────────────────────────
 
   function perbaruiStatusJaringan() {
@@ -410,6 +458,11 @@
 
   perbaruiStatusJaringan();
   tampilkanJumlah();
+  gambarAcuan();
+  if (!document.querySelector('[data-acuan]')) {
+    simpanAcuan();
+    setInterval(simpanAcuan, 30 * 60 * 1000);
+  }
 
   if ('serviceWorker' in navigator) {
     // `?v=` = VERSI server: deploy mengubah alamatnya, worker baru terpasang,

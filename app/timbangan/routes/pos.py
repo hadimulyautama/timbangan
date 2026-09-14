@@ -156,6 +156,43 @@ async def keadaan(
     return {"n": ".".join(str(x) for x in r), "versi": VERSI}
 
 
+@router.get("/acuan")
+async def acuan(
+    akun: TimbanganAkun = Depends(butuh_akun),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Daftar acuan yang boleh dilihat ponsel saat sinyal hilang.
+
+    Disimpan app.js selagi jaringan ada, ditampilkan di /luring saat putus di
+    bawah baris cap waktu selebar layar. Persetujuan pemilik 14 Sep 2026:
+    HANYA yang berubah mingguan, nama saja — pemasok, pelanggan, jenis
+    barang, kendaraan. Tak ada tiket, antrean, atau angka timbang: yang basi
+    di pos timbang lebih berbahaya daripada yang tak ada.
+    """
+    from sqlalchemy import select as _select
+
+    from app.models import Pelanggan
+    from app.timbangan.models import TimbanganKendaraan
+
+    pemasok = [s.nama_supplier for s in await service.daftar_supplier(db)]
+    pelanggan = (await db.execute(
+        _select(Pelanggan.nama_pelanggan).where(Pelanggan.deleted_at.is_(None))
+        .order_by(Pelanggan.nama_pelanggan))).scalars().all()
+    jenis = [j.nama for j in await service.daftar_jenis(db)]
+    kendaraan = (await db.execute(
+        _select(TimbanganKendaraan.nomor_polisi).where(TimbanganKendaraan.status == "aktif")
+        .order_by(TimbanganKendaraan.nomor_polisi))).scalars().all()
+    return {
+        "pukul": sekarang().strftime("%H:%M"),
+        "daftar": [
+            {"judul": "Pemasok", "isi": pemasok},
+            {"judul": "Pelanggan", "isi": list(pelanggan)},
+            {"judul": "Jenis barang", "isi": jenis},
+            {"judul": "Kendaraan", "isi": list(kendaraan)},
+        ],
+    }
+
+
 @router.get("/")
 async def beranda(
     request: Request,

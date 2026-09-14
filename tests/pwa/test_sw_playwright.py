@@ -130,3 +130,18 @@ def test_versi_baru_ditawarkan_lewat_pil_tanpa_muat_ulang(server, page):
     with page.expect_navigation():
         pil.click()
     assert page.evaluate("window.__tanda") is None
+
+
+def test_luring_menampilkan_acuan_dengan_cap_waktu(server, page):
+    """Daftar acuan pos timbang (pemasok, jenis, kendaraan) tetap terbaca saat
+    putus, di bawah baris cap waktu selebar layar."""
+    _masuk(page, server.alamat)
+    _tunggu(page, "!!localStorage.getItem('timbangan-acuan')")
+    _tunggu(page, f"caches.match('{PREFIX}/luring').then(r => !!r)")
+    server.matikan()
+    page.goto(server.alamat + PREFIX + "/daftar")
+    bar = page.locator(".putus")
+    bar.wait_for(state="visible", timeout=5000)
+    assert "Data pukul" in bar.inner_text() and "sedang offline" in bar.inner_text()
+    assert bar.evaluate("e => e.getBoundingClientRect().width") >= page.evaluate("window.innerWidth") - 2
+    assert "Gabah" in page.content()   # jenis dari benih pastikan_jenis
