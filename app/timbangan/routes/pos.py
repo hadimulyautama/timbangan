@@ -120,15 +120,40 @@ async def keadaan(
 
     Yang dipakai nomor dan cap waktu dari basis data, bukan jam perangkat:
     jam yang bergeser sedikit bisa membuat satu perubahan terlewat selamanya.
+
+    **Sumbernya bukan hanya tiket.** Empat layar yang berdenyut (beranda,
+    daftar, laporan, monitoring) dibangun dari `timbangan_transaksi`, tetapi
+    laporan juga menampilkan status PEMERIKSAAN — yang dibuka dan ditutup
+    admin tanpa menyentuh baris tiketnya — dan beranda menyusun tombolnya
+    dari master JENIS yang bisa diubah di Pengaturan. Keduanya ikut lewat
+    `updated_at`-nya. Audit sengaja TIDAK ikut: tiap login menulis baris di
+    sana, dan itu bukan perubahan yang perlu dilihat layar mana pun.
+    Aplikasi lain tak menulis tabel-tabel ini (produksi hanya mengunci baris
+    tiket saat menaut), jadi tak ada sumber di luar pencatat sendiri.
+
+    `versi` (syarat N-A-03): ponsel yang memegang berkas lama tahu dari kanal
+    yang sama, tanpa menunggu navigasi penuh.
+
+    Cap waktunya MIKRODETIK, bukan detik. Dibulatkan ke detik, timbang kedua
+    yang jatuh pada detik yang sama dengan pembacaan sebelumnya tak pernah
+    menggerakkan penanda — perubahan yang hilang selamanya, terlihat pertama
+    kali di uji Postgres yang menyimpan dua langkah berturut-turut.
     """
     from sqlalchemy import text as _text
 
+    from app.timbangan.web import VERSI
+
     r = (await db.execute(_text(
-        "select coalesce(max(id), 0), "
-        "coalesce(cast(extract(epoch from max(updated_at)) as bigint), 0) "
-        "from timbangan_transaksi"
+        "select "
+        " (select coalesce(max(id), 0) from timbangan_transaksi),"
+        " (select coalesce(cast(extract(epoch from max(updated_at)) * 1000000 as bigint), 0)"
+        "    from timbangan_transaksi),"
+        " (select coalesce(cast(extract(epoch from max(updated_at)) * 1000000 as bigint), 0)"
+        "    from timbangan_pemeriksaan),"
+        " (select coalesce(cast(extract(epoch from max(updated_at)) * 1000000 as bigint), 0)"
+        "    from timbangan_jenis)"
     ))).first()
-    return {"n": f"{r[0]}.{r[1]}"}
+    return {"n": ".".join(str(x) for x in r), "versi": VERSI}
 
 
 @router.get("/")
