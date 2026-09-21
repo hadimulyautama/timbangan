@@ -21,6 +21,13 @@ COPY alembic.ini .
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+# Commit yang di-build ke image ini, supaya Pengaturan bisa menyebutnya
+# (app/timbangan/versi.py). Variabel build Railway hanya terlihat bila
+# dideklarasikan ARG. Kosong bila build tak dipicu GitHub; saat itu layar
+# menulis "commit ?", bukan mengarang.
+ARG RAILWAY_GIT_COMMIT_SHA
+RUN printf '%s' "${RAILWAY_GIT_COMMIT_SHA}" > /app/KOMIT
+
 # Railway mengganti CMD tetapi TIDAK mengganti ENTRYPOINT — penyelarasan
 # skema karenanya selalu berjalan lebih dulu. Bentuk `sh -c` dipakai supaya
 # ${PORT} benar-benar ter-ekspansi; Railway menjalankan perintah start

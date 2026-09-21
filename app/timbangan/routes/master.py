@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Supplier
 from app.timbangan import format as fmt
 from app.timbangan import service, setelan
+from app.timbangan import versi as _versi
 from app.timbangan.config import tsettings
 from app.timbangan.db import get_db, hari_ini
 from app.timbangan.models import (
@@ -137,6 +138,9 @@ async def pengaturan(
         bukti=_parameter_bukti(),
         sesi=_parameter_sesi(),
         sumber_label=SUMBER_LABEL,
+        # Versi kode yang sedang berjalan, di kaki halaman, untuk semua peran.
+        # Peringatan skema tertinggal hanya untuk Admin ke atas (di templat).
+        versi=await _versi.info(),
         kembali=f"{PREFIX}/",
     )
 

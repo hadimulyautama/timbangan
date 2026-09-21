@@ -21,6 +21,28 @@
 
 {% block isi %}
 
+  {# ── Skema tak selaras dengan kode ──
+     Mencolok, dan hanya untuk Admin ke atas: petugas tak bisa menjalankan
+     migrasi, jadi baginya kotak ini cuma peringatan yang tak bisa ia tutup.
+     Dua keadaan yang di layar lain tampak sama (galat yang tak menyebut
+     sebab) dibedakan di sini karena obatnya berlawanan: yang satu perlu
+     `alembic upgrade head`, yang lain perlu deploy ulang. #}
+  {% if akun.is_admin and versi and versi.keadaan == 'tertinggal' %}
+    <div class="pesan pesan--err" role="alert" data-uji="skema-tertinggal">
+      <b>Migrasi belum dijalankan — jalankan <code>alembic upgrade head</code>.</b>
+      Basis data masih di revisi {{ versi.revisi }}, kode ini sudah
+      {{ versi.head }}. Sampai selaras, sebagian pencatatan akan gagal dengan
+      galat yang tak menyebut sebabnya.
+    </div>
+  {% elif akun.is_admin and versi and versi.keadaan == 'kode_lama' %}
+    <div class="pesan pesan--err" role="alert" data-uji="kode-lama">
+      <b>Kode yang berjalan lebih lama dari basis datanya.</b>
+      Basis data di revisi {{ versi.revisi }} yang tak dikenal kode ini
+      ({{ versi.head }}) — deploy terbaru belum sampai ke sini, atau layanan
+      ini belum dimulai ulang.
+    </div>
+  {% endif %}
+
   {# ── Akun ini ── #}
   <div class="kartu">
     <div class="kartu__judul">Akun ini</div>
@@ -260,5 +282,18 @@
   <div class="bantu" style="text-align:center">
     Selama tidak menekan Keluar, perangkat ini tidak akan meminta sandi lagi.
   </div>
+
+  {# ── Versi yang sedang berjalan ──
+     Satu baris kecil, untuk semua peran (21 September 2026). Tiga angka
+     yang bersama-sama menjawab "apakah perbaikannya sudah sampai?": aset
+     yang dilihat peramban, commit yang dilihat server, revisi yang dilihat
+     skema — rantai migrasi pos timbang sendiri. #}
+  {% if versi %}
+    <div class="bantu" data-uji="baris-versi"
+         style="text-align:center;margin-top:20px;font-family:var(--mono);font-size:11px">
+      Versi {{ versi.versi }} · {{ versi.komit or 'commit ?' }} ·
+      migrasi {{ versi.revisi or '?' }}{% if versi.keadaan != 'selaras' %} (kode: {{ versi.head or '?' }}){% endif %}
+    </div>
+  {% endif %}
 
 {% endblock %}

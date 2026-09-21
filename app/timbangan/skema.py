@@ -19,13 +19,23 @@ log = logging.getLogger("timbangan.skema")
 TABEL_VERSI = "alembic_version_timbangan"
 
 
-def _head_dari_berkas() -> str | None:
+def revisi_berkas() -> list[str]:
+    """Seluruh revisi yang dikenal kode ini, urut dari yang tertua.
+
+    Dari nama berkas, bukan dengan memuat alembic. Namanya berawalan nomor
+    urut empat digit dan sama persis dengan `revision` di dalamnya, jadi
+    urutan abjad = urutan rantai.
+    """
     akar = pathlib.Path(__file__).resolve().parents[2] / "migrations" / "versions"
     try:
-        berkas = sorted(p.stem for p in akar.glob("00*.py"))
-        return berkas[-1] if berkas else None
+        return sorted(p.stem for p in akar.glob("00*.py"))
     except Exception:  # noqa: BLE001
-        return None
+        return []
+
+
+def _head_dari_berkas() -> str | None:
+    berkas = revisi_berkas()
+    return berkas[-1] if berkas else None
 
 
 async def keadaan() -> dict:
