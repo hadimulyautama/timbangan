@@ -585,7 +585,14 @@ class TimbanganPenimbangan(Base):
     # beratnya. "+70 kg" jadi 250 kg, bukan 180. Temuan QA T-10.
     #
     # Boleh kosong: baris yang dibuat sebelum kolom ini ada memang tak punya.
-    kunci_baris: Mapped[str | None] = mapped_column(String(36), unique=True, index=True)
+    #
+    # 64, bukan 36 (R-T-01, insiden 15 September 2026): kuncinya uuid4 dari
+    # borang (36) DITAMBAH '#' dan indeks baris dalam kiriman. Dengan 36,
+    # Postgres menolak tiap simpan partai — dan SQLite di suite uji tak
+    # pernah menolaknya, karena SQLite tak menegakkan panjang VARCHAR.
+    # Jangan menyelesaikannya dengan memotong kuncinya: kunci yang dipotong
+    # berhenti unik antar baris satu kiriman, dan T-10 hidup lagi.
+    kunci_baris: Mapped[str | None] = mapped_column(String(64), unique=True, index=True)
 
     transaksi: Mapped["TimbanganTransaksi"] = relationship(back_populates="penimbangan")
 

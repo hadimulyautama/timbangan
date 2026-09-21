@@ -13,6 +13,7 @@ import math
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Form, Request
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -25,7 +26,7 @@ from app.timbangan.models import (
     TimbanganAkun,
 )
 from app.timbangan.security import butuh_akun
-from app.timbangan.web import PREFIX, redirect, render
+from app.timbangan.web import PREFIX, galat_db, redirect, render
 
 router = APIRouter(prefix=PREFIX)
 
@@ -410,6 +411,10 @@ async def simpan_timbang_pertama(
         )
     except (service.LayananError, logic.ValidasiError) as e:
         return redirect(f"/timbang/{jenis_kode}", err=str(e))
+    except DBAPIError as e:
+        # R-T-01: galat basis data bukan layar hitam — kembali ke borang
+        # dengan kalimat yang menyebut bahwa timbangannya TIDAK tersimpan.
+        return redirect(f"/timbang/{jenis_kode}", err=await galat_db(db, e, "menyimpan timbangan"))
 
     if trx.selesai:
         return redirect(f"/transaksi/{trx.id}", ok="Timbangan tersimpan.")
@@ -507,6 +512,10 @@ async def buat_partai(
             trx = await service.selesaikan_partai(db, akun=akun, kode=trx.kode, ip=ip)
     except (service.LayananError, logic.ValidasiError) as e:
         return redirect(f"/partai/{jenis_kode}/baru", err=str(e))
+    except DBAPIError as e:
+        # R-T-01: galat basis data bukan layar hitam — kembali ke borang
+        # dengan kalimat yang menyebut bahwa timbangannya TIDAK tersimpan.
+        return redirect(f"/partai/{jenis_kode}/baru", err=await galat_db(db, e, "menyimpan timbangan partai"))
 
     if aksi == "selesai":
         return redirect(f"/transaksi/{trx.id}", ok="Timbangan selesai.")
@@ -564,6 +573,10 @@ async def lanjut_partai(
             await service.selesaikan_partai(db, akun=akun, kode=kode, ip=ip)
     except (service.LayananError, logic.ValidasiError) as e:
         return redirect(f"/partai/{transaksi_id}", err=str(e))
+    except DBAPIError as e:
+        # R-T-01: galat basis data bukan layar hitam — kembali ke borang
+        # dengan kalimat yang menyebut bahwa timbangannya TIDAK tersimpan.
+        return redirect(f"/partai/{transaksi_id}", err=await galat_db(db, e, "menambah karung"))
 
     if aksi == "selesai":
         return redirect(f"/transaksi/{transaksi_id}", ok="Timbangan selesai.")
@@ -590,6 +603,10 @@ async def hapus_penimbangan(
         )
     except (service.LayananError, logic.ValidasiError, ValueError) as e:
         return redirect(f"/partai/{transaksi_id}", err=str(e))
+    except DBAPIError as e:
+        # R-T-01: galat basis data bukan layar hitam — kembali ke borang
+        # dengan kalimat yang menyebut bahwa timbangannya TIDAK tersimpan.
+        return redirect(f"/partai/{transaksi_id}", err=await galat_db(db, e, "menghapus baris timbang"))
     return redirect(f"/partai/{transaksi_id}",
                     ok=f"Baris dihapus. Total {trx.timbang1_kg:g} kg.")
 
@@ -694,6 +711,10 @@ async def simpan_timbang_kedua(
         )
     except (service.LayananError, logic.ValidasiError) as e:
         return redirect(f"/tiket/{transaksi_id}", err=str(e))
+    except DBAPIError as e:
+        # R-T-01: galat basis data bukan layar hitam — kembali ke borang
+        # dengan kalimat yang menyebut bahwa timbangannya TIDAK tersimpan.
+        return redirect(f"/tiket/{transaksi_id}", err=await galat_db(db, e, "menyimpan timbang kedua"))
 
     if aksi == "sementara":
         return redirect(

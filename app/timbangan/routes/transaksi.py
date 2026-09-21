@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import Response
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.timbangan import epos, logic, pdf, service
@@ -20,7 +20,7 @@ from app.timbangan.security import (
     butuh_akun,
     butuh_super,
 )
-from app.timbangan.web import PREFIX, redirect, render
+from app.timbangan.web import galat_db, PREFIX, redirect, render
 
 router = APIRouter(prefix=PREFIX)
 
@@ -284,6 +284,9 @@ async def simpan_koreksi(
         )
     except (service.LayananError, logic.ValidasiError) as e:
         return redirect(f"/transaksi/{transaksi_id}/koreksi", err=str(e))
+    except DBAPIError as e:
+        # R-T-01: galat basis data bukan layar hitam.
+        return redirect(f"/transaksi/{transaksi_id}/koreksi", err=await galat_db(db, e, "menyimpan koreksi"))
 
     return redirect(
         f"/transaksi/{transaksi_id}",
@@ -531,6 +534,9 @@ async def ubah_jenis_transaksi(
         )
     except (service.LayananError, logic.ValidasiError) as e:
         return redirect(f"/transaksi/{transaksi_id}/koreksi", err=str(e))
+    except DBAPIError as e:
+        # R-T-01: galat basis data bukan layar hitam.
+        return redirect(f"/transaksi/{transaksi_id}/koreksi", err=await galat_db(db, e, "menyimpan koreksi"))
     if not pindah:
         return redirect(f"/transaksi/{transaksi_id}", ok="Jenis barang tidak berubah.")
     return redirect(
@@ -576,6 +582,9 @@ async def hapus_transaksi(
             err="Tiket ini masih ditunjuk catatan lain, jadi belum bisa "
                 "dihapus. Batalkan (VOID) saja bila memang keliru.",
         )
+    except DBAPIError as e:
+        return redirect(f"/transaksi/{transaksi_id}",
+                        err=await galat_db(db, e, "menghapus tiket"))
     return redirect("/transaksi", ok=f"{kode} dihapus permanen.")
 
 

@@ -10,6 +10,7 @@ import logging
 from pathlib import Path
 from urllib.parse import quote
 
+from sqlalchemy.exc import DBAPIError
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -164,6 +165,31 @@ def render(request: Request, nama: str, **konteks) -> HTMLResponse:
     return templates.TemplateResponse(request, nama, dasar)
 
 
+async def galat_db(db, exc: Exception, apa: str) -> str:
+    """Kalimat untuk petugas saat BASIS DATA menolak menyimpan (R-T-01).
+
+    Insiden 15 September 2026: `StringDataRightTruncationError` lolos dari
+    penangkap rute yang hanya mengenal LayananError/ValidasiError, dan yang
+    tampil adalah halaman hitam "internal server error". Petugas tak tahu
+    apakah timbangannya masuk — dan ketidaktahuan itu sendiri sumber
+    kesalahan data (dicatat dua kali, atau tak dicatat sama sekali).
+
+    Jadi tiga hal, selalu: transaksinya DIBATALKAN supaya tak tersimpan
+    separuh; yang lengkap masuk log; dan kalimatnya menyebut nasib
+    timbangannya. Kode galat ikut supaya admin bisa mencarinya di log
+    tanpa petugas harus mengeja pesan Postgres.
+    """
+    try:
+        await db.rollback()
+    except Exception:  # noqa: BLE001 — sesi yang sudah rusak tak boleh menutupi galat aslinya
+        pass
+    asli = getattr(exc, "orig", None)
+    kode = type(asli).__name__ if asli is not None else type(exc).__name__
+    log.exception("Basis data menolak %s (%s)", apa, kode)
+    return (f"Basis data menolak {apa}, jadi timbangan ini TIDAK tersimpan. "
+            f"Ulangi sekali lagi; bila terulang, sebutkan kode galat {kode} ke admin.")
+
+
 def redirect(path: str, *, ok: str | None = None, err: str | None = None):
     """Redirect POST-ke-GET (pola PRG) sambil membawa pesan kilat.
 
@@ -205,6 +231,26 @@ def pasang(app: FastAPI) -> None:
              "kembali": PREFIX + "/", "kode": 403, "judul": "Akses ditolak",
              "pesan": str(exc)},
             status_code=403,
+        )
+
+    # Jaring terakhir untuk galat basis data yang lolos dari rute mana pun
+    # (R-T-01). Rute simpan sudah menangkapnya sendiri dan kembali ke
+    # borangnya; yang sampai ke sini tetap tak boleh jadi halaman hitam tanpa
+    # penjelasan. Pesan Postgres-nya TIDAK ikut ke layar — ke log saja.
+    @app.exception_handler(DBAPIError)
+    async def _galat_basis_data(request: Request, exc: DBAPIError):
+        asli = getattr(exc, "orig", None)
+        kode = type(asli).__name__ if asli is not None else type(exc).__name__
+        log.exception("Galat basis data tak tertangkap pada %s %s (%s)",
+                      request.method, request.url.path, kode)
+        return templates.TemplateResponse(
+            request, "error.html",
+            {"akun": getattr(request.state, "akun", None),
+             "kembali": PREFIX + "/", "kode": 500, "judul": "Basis data menolak",
+             "pesan": ("Basis data menolak permintaan ini, jadi yang Anda kirim TIDAK "
+                       f"tersimpan. Ulangi sekali lagi; bila terulang, sebutkan kode "
+                       f"galat {kode} ke admin.")},
+            status_code=500,
         )
 
     log.info("Modul Timbangan terpasang di %s", PREFIX)
