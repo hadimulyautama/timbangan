@@ -122,3 +122,35 @@ def test_hanya_hash_commit_yang_dibaca_dari_lingkungan():
         'os.environ.get("RAILWAY_GIT_COMMIT_SHA"))']
     docker = (AKAR / "Dockerfile").read_text()
     assert "ARG RAILWAY_GIT_COMMIT_SHA" in docker and "> /app/KOMIT" in docker
+
+
+def test_pos_timbang_memang_tak_memakai_potongan_versi_paket():
+    """Kenapa baris versi di sini TIDAK datang dari `hmu_tampilan/_versi.html`.
+
+    Penyatuan templat 23 September 2026 memindahkan potongan baris versi ke
+    paket dan memanggilnya dari Pos Produksi, Meja, dan Gudang 2. Pos Timbang
+    tidak: ia tak mem-vendor `hmu_tampilan` sama sekali — `base.html`,
+    `app.css`, dan ikonnya sendiri, satu rupa terang saja, dan kelas yang
+    dipakai potongan itu (`.mono`, `.nota`, `.nota--buruk`) tak ada di CSS-nya.
+    Memanggil potongan paket dari sini akan menghasilkan kotak tanpa gaya.
+
+    Uji ini ada supaya keputusan itu tidak diperbaiki diam-diam oleh sesi yang
+    melihat "empat app, tiga memakai paket" dan menyeragamkannya. Menyatukan
+    Pos Timbang berarti mem-vendor paketnya dulu — pekerjaan sendiri, bukan
+    tambalan satu baris.
+    """
+    import re
+
+    css = (AKAR / "app/timbangan/static/app.css").read_text()
+    for kelas in ("mono", "nota"):
+        assert not re.search(r"\." + kelas + r"(?![\w-])", css), (
+            f".{kelas} kini ADA di CSS pos timbang — tinjau ulang apakah "
+            "potongan versi paket sudah bisa dipakai di sini")
+    assert not (AKAR / "hmu_tampilan").exists(), (
+        "pos timbang kini mem-vendor hmu_tampilan — pindahkan baris versinya "
+        "ke potongan paket dan hapus uji ini")
+    # Dan baris versinya tetap satu bentuk dengan yang lain: itulah yang
+    # dibacakan pemilik dari ponsel, jadi bentuknya tak boleh menyimpang.
+    html = (AKAR / "app/timbangan/templates/pengaturan.html").read_text()
+    assert 'data-uji="baris-versi"' in html
+    assert "Versi {{ versi.versi }} · {{ versi.komit or 'commit ?' }} ·" in html
