@@ -25,6 +25,7 @@ from app.timbangan.models import (
     PEMERIKSAAN_SELESAI,
     TIKET_DITUTUP_PAKSA,
     TIKET_SELESAI,
+    TIKET_SELESAI,
     TIKET_TERBUKA,
     TRX_VOID,
     TimbanganAudit,
@@ -373,7 +374,12 @@ async def test_void_menyimpan_data_dan_menuntut_alasan(db, petugas, admin2, supp
     data = masuk_gabah("TRX-20260830-P1-015", supplier.id, 13_600)
     trx = await service.simpan_timbang_pertama(db, akun=petugas, data=data)
 
-    with pytest.raises(service.LayananError, match="Admin"):
+    # Tiketnya diselesaikan lebih dulu: sejak 30 September 2026 petugas BOLEH
+    # membatalkan tiket yang masih terbuka (keputusan pemilik), dan yang
+    # dijaga di sini penolakan atas transaksi yang SUDAH LENGKAP — di situlah
+    # angkanya sudah jadi dasar keputusan orang lain.
+    trx.status_tiket = TIKET_SELESAI
+    with pytest.raises(service.LayananError, match="sudah ditimbang kedua"):
         await service.void_transaksi(db, akun=petugas, trx=trx, alasan="salah")
     with pytest.raises(service.LayananError, match="alasan"):
         await service.void_transaksi(db, akun=admin2, trx=trx, alasan="  ")

@@ -287,9 +287,15 @@
     {% endif %}
 
     {% if boleh_batal and trx.status_transaksi != 'VOID' %}
+      {# Kata yang dipakai mengikuti KEADAAN tiketnya, bukan peran orangnya.
+         Tiket yang belum ditimbang kedua belum punya netto dan belum masuk
+         pembukuan mana pun — yang dibatalkan cuma niat menimbang, dan
+         "Batalkan transaksi" terdengar jauh lebih berat daripada yang
+         sebenarnya terjadi. #}
       <details class="kartu">
         <summary style="cursor:pointer;font-weight:700;font-size:14px">
-          Batalkan transaksi
+          {{ "Hapus tiket ini" if trx.status_tiket == 'TERBUKA'
+             else "Batalkan transaksi" }}
         </summary>
         <form method="post" action="{{ PREFIX }}/transaksi/{{ trx.id }}/batal"
               style="margin-top:12px;display:flex;flex-direction:column;gap:10px">

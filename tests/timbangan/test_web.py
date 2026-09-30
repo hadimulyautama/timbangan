@@ -1417,10 +1417,23 @@ async def test_petugas_tetap_bisa_membuka_hasil_timbangannya_sendiri(klien):
 
 
 @pytest.mark.parametrize("siapa", ["sari", "miftah"])
-async def test_catatan_orang_lain_tertutup_meski_nomornya_ditebak(
+async def test_catatan_orang_lain_terbuka_bagi_petugas_mana_pun(
     klien, app_uji, siapa
 ):
-    """Menutup daftar saja tidak cukup: nomor transaksi di URL berurutan."""
+    """⚠ UJI INI DULU MENJAGA KEBALIKANNYA, dan batasnya digeser pemilik.
+
+    Kalimat lamanya: "Menutup daftar saja tidak cukup: nomor transaksi di URL
+    berurutan." Benar pada zamannya — daftar catatan memang tertutup untuk
+    selain Admin. Daftar itu dibuka 29 September, dan sekatnya dicabut 30
+    September atas keputusan pemilik: "operator tidak bisa melihat catatan
+    selain input dari dirinya sendiri. sekarang harus bisa lihat semua
+    catatan."
+
+    Diuji dengan DUA petugas yang berbeda, seperti sebelumnya, supaya yang
+    diperiksa perannya — bukan kebetulan satu nama pengguna tertentu. Dan
+    jalur cetaknya ikut, sebab "bisa akses catatan dan bisa print" tak ada
+    artinya kalau notanya menolak.
+    """
     from app import database
     from app.timbangan.models import ROLE_PETUGAS, TimbanganAkun
     from app.timbangan.security import hash_sandi
@@ -1444,8 +1457,8 @@ async def test_catatan_orang_lain_tertutup_meski_nomornya_ditebak(
         f"/transaksi/{trx_id}/cetak/80mm",
     ):
         r = await klien.get(PREFIX + jalur)
-        assert r.status_code == 403, jalur
-        assert "bukan hasil timbangan Anda" in r.text
+        assert r.status_code == 200, f"{jalur} → {r.status_code}"
+        assert "bukan hasil timbangan Anda" not in r.text
 
 
 async def test_admin_tetap_bisa_membuka_catatan_siapa_pun(klien):
@@ -1458,16 +1471,29 @@ async def test_admin_tetap_bisa_membuka_catatan_siapa_pun(klien):
     assert (await klien.get(f"{PREFIX}/transaksi")).status_code == 200
 
 
-async def test_beranda_petugas_hanya_memuat_timbangannya_sendiri(klien, app_uji):
-    """Kalau tidak, berandanya penuh tautan yang berujung 'akses ditolak'."""
+async def test_beranda_memuat_seluruh_pos_bukan_cuma_pekerjaan_sendiri(
+    klien, app_uji
+):
+    """⚠ UJI INI DULU MENJAGA KEBALIKANNYA, dan alasannya sudah tidak ada.
+
+    Kalimat lamanya: "Kalau tidak, berandanya penuh tautan yang berujung
+    'akses ditolak'." Tautan itu memang berujung ke sana — sampai sekatnya
+    dicabut 30 September 2026 atas keputusan pemilik. Sesudah itu penyempitan
+    ini justru yang menyesatkan: daftar "hari ini" terlihat lengkap padahal
+    separuh pekerjaan pos tak tergambar, dan shift pengganti tak punya cara
+    tahu apa yang sudah ditimbang rekannya.
+    """
     await login(klien, "budi")
     kode_budi = await _selesaikan(klien, "GABAH_BASAH")
     await klien.post(f"{PREFIX}/keluar")
 
     await login(klien, "miftah")
     beranda = (await klien.get(f"{PREFIX}/")).text
-    assert f"/transaksi/{kode_budi}" not in beranda
-    assert "Timbangan saya hari ini" in beranda
+    assert f"/transaksi/{kode_budi}" in beranda, \
+        "pekerjaan rekannya tak tergambar — beranda berbohong tentang hari ini"
+    # Judulnya ikut jujur: "Timbangan saya" atas daftar berisi pekerjaan
+    # orang lain adalah label yang salah, bukan sekadar kurang rapi.
+    assert "Timbangan saya hari ini" not in beranda
 
     await klien.post(f"{PREFIX}/keluar")
     await login(klien, "wahid")
@@ -3761,10 +3787,14 @@ async def test_petugas_tak_bisa_mengubah_catatan_yang_sudah_tersimpan(klien, app
     await login(klien, "budi")
     trx_id = await _mulai_masuk(klien)
 
-    batal = await klien.post(f"{PREFIX}/transaksi/{trx_id}/batal",
-                             data={"alasan": "coba-coba"})
-    assert "hanya untuk Admin" in batal.text, batal.status_code
-
+    # ⚠ PEMBATALAN KELUAR DARI DAFTAR INI 30 September 2026, sehari sesudah
+    # ditulis: pemilik memberi petugas wewenang membatalkan tiket yang MASIH
+    # TERBUKA ("jika masih timbang pertama dan harus timbang kedua. harus ada
+    # pilihan hapus"). Batasnya timbang kedua, dan sisi baliknya dijaga
+    # `test_petugas_tak_bisa_menghapus_yang_sudah_ditimbang_kedua`.
+    #
+    # Yang di bawah ini TIDAK ikut bergeser, dan sebabnya tak berubah: ia
+    # mengubah catatan yang sudah tersimpan, bahkan seluruh hasil kontrolnya.
     jenis = await klien.post(f"{PREFIX}/transaksi/{trx_id}/jenis",
                              data={"jenis_kode": "BERAS", "alasan": "coba"})
     assert "hanya untuk Admin" in jenis.text, jenis.status_code
@@ -3773,3 +3803,85 @@ async def test_petugas_tak_bisa_mengubah_catatan_yang_sudah_tersimpan(klien, app
     # satu catatan — dan tombolnya memang tak digambar untuk petugas.
     daftar = await klien.get(f"{PREFIX}/transaksi")
     assert "Unduh CSV" not in daftar.text
+
+
+async def test_petugas_melihat_catatan_orang_lain(klien, app_uji):
+    """Keputusan pemilik 30 September 2026: "operator tidak bisa melihat catatan
+    selain input dari dirinya sendiri. sekarang harus bisa lihat semua catatan."
+
+    Membuka daftarnya saja tidak cukup — dan itu yang terjadi sehari sebelumnya:
+    barisnya terlihat, lalu MENOLAK saat ditekan. Shift malam yang menimbang
+    truk masuk dan shift pagi yang menimbangnya keluar adalah dua orang
+    berbeda; yang kedua memang perlu membuka pekerjaan yang pertama.
+    """
+    await login(klien, "budi")
+    trx_id = await _mulai_masuk(klien)
+    await klien.post(f"{PREFIX}/keluar")
+
+    await login(klien, "miftah")                    # petugas LAIN
+    r = await klien.get(f"{PREFIX}/transaksi/{trx_id}")
+    assert r.status_code == 200, r.status_code
+    assert "bukan hasil timbangan Anda" not in r.text
+
+    # Dan daftar hari ini di beranda tak lagi dipersempit ke pekerjaannya
+    # sendiri — daftar yang terlihat lengkap padahal separuh pos tak tergambar
+    # adalah cara paling halus membuat shift pengganti salah mengira.
+    beranda = await klien.get(f"{PREFIX}/")
+    assert beranda.status_code == 200
+
+
+async def test_petugas_menghapus_tiket_yang_belum_ditimbang_kedua(klien, app_uji):
+    """Keputusan pemilik 30 September 2026: "jika masih timbang pertama dan
+    harus timbang kedua. harus ada pilihan hapus dan jika dihapus hilang dari
+    tiket terbuka."
+
+    Batasnya timbang kedua, dan itu garis yang tepat: sebelumnya belum ada
+    netto dan belum ada angka yang masuk pembukuan mana pun — yang dibatalkan
+    cuma niat menimbang.
+    """
+    await login(klien, "budi")
+    trx_id = await _mulai_masuk(klien)
+
+    # Pilihannya HARUS TERLIHAT di layar tempat petugas berdiri.
+    tiket = await klien.get(f"{PREFIX}/tiket/{trx_id}")
+    assert "Hapus tiket" in tiket.text, "pilihan hapus tak ada di layar timbang kedua"
+
+    beranda = await klien.get(f"{PREFIX}/")
+    assert str(trx_id) in beranda.text
+
+    r = await klien.post(f"{PREFIX}/transaksi/{trx_id}/batal",
+                         data={"alasan": "truk batal masuk"})
+    assert "hanya untuk Admin" not in r.text and "wewenang" not in r.text, r.text[:400]
+
+    # HILANG dari tiket terbuka — itu yang diminta.
+    beranda = await klien.get(f"{PREFIX}/")
+    assert f"/tiket/{trx_id}" not in beranda.text, \
+        "tiket yang dihapus masih menagih di daftar menunggu timbang kedua"
+
+    # Tetapi barisnya TIDAK lenyap: truk yang sudah naik jembatan memang
+    # pernah datang, dan catatan yang rapi dengan cara menghapus adalah
+    # catatan yang tak bisa dipercaya.
+    rincian = await klien.get(f"{PREFIX}/transaksi/{trx_id}")
+    assert "Dibatalkan" in rincian.text and "truk batal masuk" in rincian.text
+
+
+async def test_petugas_tak_bisa_menghapus_yang_sudah_ditimbang_kedua(klien, app_uji):
+    """Sesudah timbang kedua angkanya sudah jadi dasar keputusan orang lain —
+    dan pembatalannya kembali jadi pekerjaan Admin.
+
+    Penolakannya menyebut SEBABNYA, bukan sekadar perannya: yang ditolak
+    sedang memegang tiket yang sudah lengkap, dan itu yang perlu ia tahu.
+    """
+    await login(klien, "budi")
+    trx_id = await _mulai_masuk(klien)
+    await klien.post(f"{PREFIX}/tiket/{trx_id}", data={
+        "berat_kg": "3570", "jumlah_karung": "", "tara_per_karung_kg": "",
+        "berat_acuan_kg": "", "nomor_acuan": "", "waktu": "", "catatan": "",
+    })
+
+    r = await klien.post(f"{PREFIX}/transaksi/{trx_id}/batal",
+                         data={"alasan": "coba-coba"})
+    assert "sudah ditimbang kedua" in r.text, r.text[:400]
+
+    rincian = await klien.get(f"{PREFIX}/transaksi/{trx_id}")
+    assert "Dibatalkan." not in rincian.text, "terlanjur dibatalkan petugas"

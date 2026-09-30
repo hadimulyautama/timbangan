@@ -185,7 +185,11 @@
 
   <div>
     <div class="lbl" style="margin-bottom:8px">
-      {{ 'Hari ini' if akun.is_admin else 'Timbangan saya hari ini' }}
+      {# "Timbangan saya" sampai 30 September 2026, ketika daftarnya memang
+         dipersempit ke orangnya sendiri. Sekarang seluruh pos tergambar untuk
+         siapa pun (keputusan pemilik), jadi judul lama akan berbohong —
+         dan judul yang berbohong lebih buruk daripada daftar yang kosong. #}
+      Hari ini
     </div>
     {% if hari_ini_daftar %}
       {% for b in hari_ini_daftar %}

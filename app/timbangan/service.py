@@ -572,8 +572,34 @@ def boleh_mengubah(
     return True, ""
 
 
-def boleh_membatalkan(akun: TimbanganAkun) -> bool:
-    return akun.is_admin
+def boleh_membatalkan(akun: TimbanganAkun,
+                      trx: TimbanganTransaksi | None = None) -> bool:
+    """Admin selalu. Petugas HANYA tiket yang masih terbuka.
+
+    Keputusan pemilik 30 September 2026: "jika masih timbang pertama dan harus
+    timbang kedua. harus ada pilihan hapus dan jika dihapus hilang dari tiket
+    terbuka."
+
+    Batasnya TIMBANG KEDUA, dan itu garis yang tepat: sebelum timbang kedua
+    belum ada netto, belum ada angka yang masuk ke pembukuan mana pun, dan
+    yang dibatalkan cuma niat menimbang. Sesudahnya angkanya sudah jadi dasar
+    keputusan orang lain — dan membatalkannya kembali jadi pekerjaan Admin.
+
+    Truk yang salah dimulai, dipilih jenisnya keliru, atau batal bongkar
+    sebelum kembali naik jembatan adalah keadaan sehari-hari di pos timbang.
+    Sampai hari ini satu-satunya jalannya menunggu Admin — dan tiket yang
+    menunggu itu berdiri di daftar "menunggu timbang kedua" sepanjang hari,
+    membuat daftar yang seharusnya jadi pekerjaan mendesak berhenti dibaca.
+
+    `trx` boleh kosong hanya untuk pertanyaan umum "apakah orang ini pernah
+    boleh membatalkan"; yang menentukan keputusan sungguhan wajib membawanya.
+    """
+    if akun.is_admin:
+        return True
+    if trx is None:
+        return False
+    return (trx.status_tiket == TIKET_TERBUKA
+            and trx.status_transaksi == TRX_AKTIF)
 
 
 # ═══════════════════════════ Simpan transaksi ═══════════════════════════
@@ -2232,8 +2258,15 @@ async def void_transaksi(
     ip: str | None = None,
 ) -> TimbanganTransaksi:
     """Batalkan transaksi. Data TIDAK pernah dihapus — hanya ditandai."""
-    if not boleh_membatalkan(akun):
-        raise LayananError("Hanya Admin yang boleh membatalkan.")
+    if not boleh_membatalkan(akun, trx):
+        # Kalimatnya menyebut SEBABNYA, bukan sekadar perannya: petugas yang
+        # ditolak di sini hampir selalu sedang memegang tiket yang sudah
+        # ditimbang kedua, dan yang ia perlu tahu adalah itu — bukan bahwa ia
+        # bukan Admin.
+        raise LayananError(
+            "Tiket ini sudah ditimbang kedua — pembatalannya jadi wewenang "
+            "Admin. Yang masih menunggu timbang kedua boleh Anda batalkan "
+            "sendiri.")
     if not (alasan or "").strip():
         raise LayananError("Pembatalan harus disertai alasan.")
     if trx.status_transaksi == TRX_VOID:

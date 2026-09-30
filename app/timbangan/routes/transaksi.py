@@ -15,7 +15,6 @@ from app.timbangan.db import get_db, hari_ini
 from app.timbangan.models import TimbanganAkun, TimbanganCetak
 from app.timbangan.routes.pos import _angka
 from app.timbangan.security import (
-    AksesDitolak,
     butuh_admin,
     butuh_akun,
     butuh_super,
@@ -38,26 +37,29 @@ KATEGORI_HASIL = {
 
 
 async def _ambil(db: AsyncSession, transaksi_id: int, akun: TimbanganAkun):
-    """Ambil satu transaksi, sekaligus memastikan orang ini berhak melihatnya.
+    """Ambil satu transaksi.
 
-    Daftar catatan sudah tertutup untuk selain Admin, tapi menutup daftar
-    saja tidak cukup: nomor transaksi di URL berurutan, jadi siapa pun bisa
-    menebaknya. Sebaliknya rincian TIDAK boleh ditutup rapat — petugas
-    dikembalikan ke halaman inilah begitu selesai menimbang, dan dari sini
-    pula notanya dicetak. Jalan tengahnya: pekerjaan sendiri, bukan
-    pekerjaan orang lain.
+    ⚠ SEKAT "PEKERJAAN SENDIRI" DICABUT 30 September 2026, atas keputusan
+    pemilik: "operator tidak bisa melihat catatan selain input dari dirinya
+    sendiri. sekarang harus bisa lihat semua catatan."
+
+    Kalimat lama di sini berbunyi: "Daftar catatan sudah tertutup untuk selain
+    Admin, tapi menutup daftar saja tidak cukup: nomor transaksi di URL
+    berurutan, jadi siapa pun bisa menebaknya." Premis kalimat itu SUDAH TIDAK
+    ADA — daftarnya dibuka sehari sebelumnya, juga atas keputusan pemilik.
+    Sekat yang tertinggal jadi lebih buruk daripada tak ada sama sekali:
+    barisnya terlihat di daftar, lalu menolak saat ditekan.
+
+    Shift malam yang menimbang truk masuk dan shift pagi yang menimbangnya
+    keluar adalah dua orang berbeda; yang kedua memang perlu membuka pekerjaan
+    yang pertama. Itu keadaan sehari-hari, bukan kasus tepi.
+
+    Yang MENGUBAH catatan tetap tertutup, dan sekatnya berdiri di rutenya
+    masing-masing — bukan di sini.
     """
     baris = await service.ambil_transaksi(db, transaksi_id)
     if baris is None:
         raise service.LayananError("Transaksi tidak ditemukan.")
-    boleh = akun.is_admin or akun.id in (
-        baris.trx.timbang1_petugas_id, baris.trx.timbang2_petugas_id
-    )
-    if not boleh:
-        raise AksesDitolak(
-            "Catatan ini bukan hasil timbangan Anda. Hanya Admin yang bisa "
-            "membuka catatan orang lain."
-        )
     return baris
 
 
@@ -167,7 +169,7 @@ async def rincian(
         pemeriksaan=await service.pemeriksaan_transaksi(db, b.trx.id),
         cetak=cetak,
         boleh_ubah=boleh_ubah, sebab_terkunci=sebab,
-        boleh_batal=service.boleh_membatalkan(akun),
+        boleh_batal=service.boleh_membatalkan(akun, b.trx),
         kategori_hasil=KATEGORI_HASIL,
         kembali=f"{PREFIX}/",
     )
@@ -324,9 +326,18 @@ async def batalkan(
     transaksi_id: int,
     request: Request,
     alasan: str = Form(...),
-    akun: TimbanganAkun = Depends(butuh_admin),
+    akun: TimbanganAkun = Depends(butuh_akun),
     db: AsyncSession = Depends(get_db),
 ):
+    """Batalkan tiket. SIAPA yang boleh diputuskan `service.boleh_membatalkan`.
+
+    Gerbangnya pindah dari rute ke layanan 30 September 2026, sebab syaratnya
+    tak lagi soal peran saja: petugas boleh membatalkan tiket yang MASIH
+    TERBUKA — timbang pertama sudah, kedua belum — dan tidak boleh menyentuh
+    transaksi yang sudah selesai. Syarat yang bergantung pada keadaan barisnya
+    tak bisa ditulis sebagai `Depends`, dan menuliskannya dua kali di rute dan
+    layanan berarti dua-duanya akan berbeda pada perubahan berikutnya.
+    """
     try:
         b = await _ambil(db, transaksi_id, akun)
         await service.void_transaksi(

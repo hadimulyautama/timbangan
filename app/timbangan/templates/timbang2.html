@@ -121,6 +121,44 @@
   {% endif %}
 </form>
 
+  {# ── HAPUS TIKET YANG BELUM DITIMBANG KEDUA ──
+     Keputusan pemilik 30 September 2026: "jika masih timbang pertama dan
+     harus timbang kedua. harus ada pilihan hapus dan jika dihapus hilang dari
+     tiket terbuka."
+
+     DI SINI letaknya, bukan di halaman rincian: inilah layar yang dibuka
+     petugas ketika ia berdiri memegang tiket yang truknya tak jadi kembali.
+     Tombol yang benar di halaman yang salah tak pernah ditekan siapa pun.
+
+     BARISNYA TIDAK LENYAP, dan itu bukan pengingkaran atas kata "hapus":
+     yang diminta pemilik "hilang dari tiket terbuka", dan itu persis yang
+     terjadi. Truk yang sudah naik jembatan MEMANG pernah datang; barisnya
+     tinggal bertanda Batal di catatan, tidak dihitung ringkasan, dan tidak
+     lagi menagih siapa pun. Penghapusan permanen tetap milik Super Admin,
+     terkunci di balik nomor transaksi yang harus diketik. #}
+  {% if b.trx.status_tiket == 'TERBUKA' %}
+    <details class="kartu tanpa-cetak">
+      <summary style="cursor:pointer;font-weight:700;font-size:14px">
+        Hapus tiket ini
+      </summary>
+      <div class="bantu" style="margin-top:10px">
+        Untuk tiket yang <b>tak jadi ditimbang kedua</b> — truknya batal
+        masuk, salah pilih jenis di awal, atau tiketnya terbuka dua kali.
+        Tiketnya hilang dari daftar "menunggu timbang kedua"; barisnya tetap
+        tersimpan bertanda <b>Batal</b> dan tidak dihitung di ringkasan.
+      </div>
+      <form method="post" action="{{ PREFIX }}/transaksi/{{ b.trx.id }}/batal"
+            style="margin-top:12px;display:flex;flex-direction:column;gap:10px">
+        <div class="grup">
+          <div class="lbl">Alasan</div>
+          <textarea class="fld" name="alasan" rows="2" required
+                    placeholder="mis. truk batal masuk"></textarea>
+        </div>
+        <button type="submit" class="tbl bahaya">Hapus tiket</button>
+      </form>
+    </details>
+  {% endif %}
+
   {# Truk yang batal bongkar tetap meninggalkan jejak — tiketnya ditutup
      dengan alasan, bukan dihapus agar daftar terlihat rapi.
 

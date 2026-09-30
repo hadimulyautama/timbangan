@@ -242,16 +242,20 @@ async def beranda(
 ):
     """Satu layar: apa yang sedang berjalan, dan apa yang bisa dimulai."""
     terbuka = await service.tiket_terbuka(db)
-    # Selain Admin, daftar hari ini dipersempit ke timbangan orang ini
-    # sendiri. Bukan sekadar kerapian: rinciannya memang tidak boleh dibuka
-    # olehnya, jadi menampilkannya hanya menyodorkan tautan yang berujung
-    # "akses ditolak".
+    # ⚠ DIPERSEMPIT KE ORANGNYA SENDIRI SAMPAI 30 September 2026, dan
+    # alasannya SUDAH TIDAK BERLAKU. Kalimat lama di sini berbunyi: "rinciannya
+    # memang tidak boleh dibuka olehnya, jadi menampilkannya hanya menyodorkan
+    # tautan yang berujung akses ditolak". Sekat rincian itu dicabut hari ini
+    # atas keputusan pemilik ("sekarang harus bisa lihat semua catatan"), jadi
+    # tautannya tak lagi berujung ke mana-mana.
+    #
+    # Menyisakan penyempitan ini akan membuat beranda berbohong dengan cara
+    # yang paling sulit disadari: daftar "hari ini" yang terlihat lengkap
+    # padahal separuh pekerjaan pos itu tak tergambar, dan shift yang
+    # menggantikan tak punya cara tahu apa yang sudah ditimbang rekannya.
     hari = await service.daftar_transaksi(
         db,
-        service.FilterTransaksi(
-            dari=hari_ini(), sampai=hari_ini(),
-            petugas_id=None if akun.is_admin else akun.id,
-        ),
+        service.FilterTransaksi(dari=hari_ini(), sampai=hari_ini()),
         batas=8,
     )
     # Komoditas ikut dibawa ke beranda supaya kartunya bisa MEMBENTANG di
