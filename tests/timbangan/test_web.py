@@ -123,14 +123,28 @@ async def test_sandi_salah_tidak_membocorkan_yang_mana(klien):
 
 
 @pytest.mark.parametrize("siapa", ["budi", "miftah"])
-@pytest.mark.parametrize(
-    "jalur", ["/laporan", "/monitoring", "/ekspor.csv", "/transaksi"]
-)
-async def test_ringkasan_dan_catatan_hanya_untuk_admin(klien, siapa, jalur):
+@pytest.mark.parametrize("jalur", ["/laporan", "/monitoring", "/ekspor.csv"])
+async def test_ringkasan_hanya_untuk_admin(klien, siapa, jalur):
     """Keputusan Direksi: hanya Admin yang melihat rekapitulasi.
 
     Diuji dengan dua akun petugas yang berbeda, supaya yang dikunci adalah
     perannya — bukan kebetulan satu nama pengguna tertentu.
+
+    ⚠ `/transaksi` KELUAR dari daftar ini 30 September 2026, dan bukan karena
+    pagarnya dilonggarkan — batasnya digeser pemilik sendiri: "akses operator
+    di app timbangan diberikan semua kecuali ringkasan. berarti dia bisa akses
+    catatan dan bisa print."
+
+    Yang TIDAK ikut bergeser, dan itu sebabnya ketiga jalur ini tetap di sini:
+    Ringkasan, Monitoring, dan Unduh CSV adalah pekerjaan MENILAI POLA, bukan
+    membaca satu catatan. Alasannya sudah tertulis di modul laporan sejak awal
+    dan tidak berubah oleh keputusan ini — menilai pola adalah pekerjaan yang
+    berbeda dari menimbang, dan mencampurnya membuat kedua pekerjaan itu lebih
+    buruk.
+
+    Sisi baliknya dijaga `test_petugas_boleh_membuka_catatan_dan_mencetak` dan
+    `test_petugas_tak_bisa_mengubah_catatan_yang_sudah_tersimpan`: daftarnya
+    terbuka, tetapi jalur yang MENGUBAH catatan tetap tertutup.
     """
     await login(klien, siapa)
     assert (await klien.get(PREFIX + jalur)).status_code == 403
@@ -3691,3 +3705,71 @@ async def test_koreksi_tidak_ikut_dilebur(klien):
     assert "data-gabung" not in koreksi
     # Pencariannya sendiri tetap hidup; yang tidak boleh hanya peleburannya.
     assert "data-cari=" in koreksi
+
+
+async def test_petugas_boleh_membuka_catatan_dan_mencetak(klien, app_uji):
+    """Keputusan pemilik 30 September 2026: "akses operator di app timbangan
+    diberikan semua kecuali ringkasan. berarti dia bisa akses catatan dan bisa
+    print."
+
+    Yang sebetulnya berubah cuma DAFTARNYA. Rincian dan seluruh jalur cetak
+    sudah lama terbuka untuk petugas; yang tak ada cuma jalan menemukannya —
+    tanpa daftar, ia harus menebak alamat tiketnya. Kemampuan yang tak punya
+    pintu sama saja dengan kemampuan yang tak ada.
+    """
+    await login(klien, "budi")                      # petugas, bukan admin
+    trx_id = await _mulai_masuk(klien)
+
+    daftar = await klien.get(f"{PREFIX}/transaksi")
+    assert daftar.status_code == 200, daftar.status_code
+    assert "hanya untuk Admin" not in daftar.text
+
+    # Dan pintunya TERLIHAT — halaman yang bisa dibuka tetapi tak pernah
+    # ditawarkan tak akan pernah dibuka siapa pun.
+    assert f"{PREFIX}/transaksi" in daftar.text and "Catatan" in daftar.text
+
+    cetak = await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak")
+    assert cetak.status_code == 200, cetak.status_code
+    assert "hanya untuk Admin" not in cetak.text
+
+
+async def test_ringkasan_tetap_tertutup_bagi_petugas(klien, app_uji):
+    """Batas yang pemilik tarik sendiri: "semua KECUALI ringkasan".
+
+    Menilai pola adalah pekerjaan yang berbeda dari menimbang, dan mencampurnya
+    membuat kedua pekerjaan itu lebih buruk — alasan yang sudah tertulis di
+    modul laporan sejak awal, dan yang tidak berubah oleh keputusan ini.
+    """
+    await login(klien, "budi")
+    r = await klien.get(f"{PREFIX}/laporan")
+    assert "hanya untuk Admin" in r.text, r.status_code
+
+    # Pintunya pun tak digambar — tombol yang ditekan lalu ditolak mengajari
+    # orang bahwa layarnya tak bisa dipercaya.
+    beranda = await klien.get(f"{PREFIX}/")
+    assert "Ringkasan" not in beranda.text
+
+
+async def test_petugas_tak_bisa_mengubah_catatan_yang_sudah_tersimpan(klien, app_uji):
+    """"Bisa akses catatan dan bisa print" adalah MEMBACA, bukan mengubah.
+
+    Ketiga jalur ini mengubah catatan yang sudah tersimpan — membatalkan
+    transaksi, menutup lembar pemeriksaan, dan mengubah jenis atau arah barang
+    (yang terakhir mengubah seluruh hasil kontrol transaksi). Membukanya
+    bersama daftarnya akan menyelinapkan wewenang yang tak pernah diminta.
+    """
+    await login(klien, "budi")
+    trx_id = await _mulai_masuk(klien)
+
+    batal = await klien.post(f"{PREFIX}/transaksi/{trx_id}/batal",
+                             data={"alasan": "coba-coba"})
+    assert "hanya untuk Admin" in batal.text, batal.status_code
+
+    jenis = await klien.post(f"{PREFIX}/transaksi/{trx_id}/jenis",
+                             data={"jenis_kode": "BERAS", "alasan": "coba"})
+    assert "hanya untuk Admin" in jenis.text, jenis.status_code
+
+    # Unduh CSV ikut tertutup: ia bagian dari menilai pola, bukan dari membaca
+    # satu catatan — dan tombolnya memang tak digambar untuk petugas.
+    daftar = await klien.get(f"{PREFIX}/transaksi")
+    assert "Unduh CSV" not in daftar.text

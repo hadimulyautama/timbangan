@@ -66,9 +66,34 @@ async def _ambil(db: AsyncSession, transaksi_id: int, akun: TimbanganAkun):
 @router.get("/transaksi")
 async def daftar(
     request: Request,
-    akun: TimbanganAkun = Depends(butuh_admin),
+    akun: TimbanganAkun = Depends(butuh_akun),
     db: AsyncSession = Depends(get_db),
 ):
+    """Catatan timbang — TERBUKA untuk petugas sejak 30 September 2026.
+
+    Keputusan pemilik: "akses operator di app timbangan diberikan semua kecuali
+    ringkasan. berarti dia bisa akses catatan dan bisa print."
+
+    Yang sebetulnya berubah cuma DAFTARNYA. Rincian tiap transaksi dan seluruh
+    jalur cetak (A4, NCR, 80 mm, ePOS) sudah lama `butuh_akun` — petugas
+    memang boleh membukanya. Yang tak ada cuma jalan menemukannya: tanpa
+    daftar ini ia harus menebak alamat tiketnya. Kemampuan yang tak punya
+    pintu sama saja dengan kemampuan yang tak ada.
+
+    YANG TETAP TERTUTUP, dan tak satu pun karena datanya rahasia dari petugas:
+
+      · RINGKASAN (`/laporan`) — atas keputusan pemilik yang sama. Menilai
+        pola adalah pekerjaan yang berbeda dari menimbang, dan mencampurnya
+        membuat kedua pekerjaan itu lebih buruk;
+      · Unduh CSV — ia bagian dari pekerjaan menilai pola itu, bukan bagian
+        dari membaca satu catatan. Tombolnya memang sudah bersyarat
+        `is_admin` di templatnya, jadi petugas tak melihat tombol yang akan
+        menolaknya;
+      · membatalkan transaksi, menutup lembar pemeriksaan, dan mengubah jenis
+        atau arah barang. Ketiganya MENGUBAH catatan yang sudah tersimpan —
+        bukan membacanya — dan yang ketiga bahkan mengubah seluruh hasil
+        kontrol transaksi.
+    """
     q = request.query_params
     f = service.FilterTransaksi(
         # Transaksi yang dibatalkan tetap tertera di catatan, bertanda

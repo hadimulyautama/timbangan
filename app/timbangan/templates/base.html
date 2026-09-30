@@ -213,7 +213,11 @@
         Tiket
       </a>
 
-      {% if akun.is_admin %}
+      {# CATATAN terbuka untuk semua sejak 30 September 2026 (keputusan
+         pemilik: "semua kecuali ringkasan ... bisa akses catatan dan bisa
+         print"). Rincian dan seluruh jalur cetak memang sudah terbuka;
+         yang tak ada cuma pintu menemukannya. RINGKASAN di bawah TETAP
+         bersyarat — itu batas yang pemilik tarik sendiri. #}
       <a href="{{ PREFIX }}/transaksi"
          class="{{ 'aktif' if layar in ('daftar', 'rincian', 'koreksi', 'cetak_pilih') }}">
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"
@@ -222,7 +226,6 @@
           <path d="M8 17h5"/></svg>
         Catatan
       </a>
-      {% endif %}
 
       {% if akun.is_admin %}
         <a href="{{ PREFIX }}/laporan"
