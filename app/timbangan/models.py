@@ -498,11 +498,13 @@ class TimbanganTransaksi(Base, TimestampMixin):
     def total_penimbangan_kg(self) -> float:
         return sum(float(p.berat_kg or 0) for p in self.penimbangan)
 
-    @property
-    def petugas_bukti_id(self) -> int | None:
-        """Petugas yang tertera pada bukti timbang: pelaku timbang TERAKHIR."""
-        return self.timbang2_petugas_id or self.timbang1_petugas_id
-
+    # `petugas_bukti_id` DIBUANG 30 September 2026. Ia menjawab "siapa yang
+    # tertera di bukti timbang" dengan "pelaku timbang terakhir", dan pemilik
+    # memutuskan jawabannya bukan itu: yang tertera adalah akun yang MENCETAK
+    # (blok itu ruang tanda tangan, dan yang menandatangani adalah yang
+    # menyerahkan kertasnya). Dibuang, bukan dibiarkan menganggur — properti
+    # yang namanya menjanjikan satu aturan yang sudah tidak berlaku akan
+    # dipakai lagi oleh pembaca berikutnya yang percaya namanya.
 
 class TimbanganMuatan(Base):
     """Baris muatan: satu untuk barang masuk, beberapa untuk pengiriman.

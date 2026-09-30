@@ -432,12 +432,7 @@ async def _bahan_cetak(db: AsyncSession, transaksi_id: int, akun):
     """Data yang sama untuk kedua ukuran — hanya tata letaknya berbeda."""
     b = await _ambil(db, transaksi_id, akun)
     aturan = await service.aturan_untuk(db, b.trx.jenis_kode)
-    petugas = {}
-    for pid in {b.trx.timbang1_petugas_id, b.trx.timbang2_petugas_id} - {None}:
-        orang = await db.get(TimbanganAkun, pid)
-        if orang:
-            petugas[pid] = orang.nama
-    return b, aturan, petugas
+    return b, aturan
 
 
 async def _isi_bukti(db, transaksi_id, akun):
@@ -448,13 +443,31 @@ async def _isi_bukti(db, transaksi_id, akun):
     tiap rute akan tertinggal di salah satunya, dan yang tertinggal justru
     jadi satu-satunya pintu yang masih mengeluarkan kertas.
     """
-    b, aturan, petugas = await _bahan_cetak(db, transaksi_id, akun)
+    b, aturan = await _bahan_cetak(db, transaksi_id, akun)
     service.pastikan_boleh_cetak(b.trx)
     return b, aturan, dict(
         cetakan_ke=await service.cetakan_ke(db, b.trx.id),
         trx=b.trx, aturan=aturan,
         pihak=(b.supplier_nama or b.trx.pihak_nama or ""),
-        petugas=petugas.get(b.trx.petugas_bukti_id, ""),
+        # ── NAMA YANG MENCETAK, bukan yang menimbang ──
+        #
+        # Keputusan pemilik 30 September 2026: "yang di struk bukan petugas
+        # timbang awal. yang di struk haruslah nama akun siapa yang print."
+        #
+        # Sampai hari ini yang tertera `petugas_bukti_id` — pelaku timbang
+        # TERAKHIR. Pada satu orang keduanya sama, jadi selisihnya tak pernah
+        # terlihat; begitu dua shift berganti di tengah satu tiket, kertasnya
+        # menyebut orang yang tidak sedang berdiri di pos.
+        #
+        # Blok itu ruang TANDA TANGAN, dan yang menandatangani adalah orang
+        # yang menyerahkan kertasnya kepada sopir — yaitu yang menekan cetak.
+        # Nama tercetak yang bukan nama penanda tangan membuat kertasnya
+        # bertentangan dengan dirinya sendiri.
+        #
+        # Siapa yang MENIMBANG tidak hilang: ia tetap tercatat di
+        # `timbang1_petugas_id` / `timbang2_petugas_id` dan terbaca di layar
+        # rincian. Yang berubah cuma isi selembar kertas yang ditandatangani.
+        petugas=akun.nama,
         muatan=list(b.trx.muatan),
         perusahaan=tsettings.perusahaan_nama,
         alamat=tsettings.perusahaan_alamat,
@@ -463,7 +476,7 @@ async def _isi_bukti(db, transaksi_id, akun):
     )
 
 
-async def _pdf(db, transaksi_id, request, ncr: bool, akun=None):
+async def _pdf(db, transaksi_id, request, ncr: bool, akun):
     b, aturan, umum = await _isi_bukti(db, transaksi_id, akun)
     if ncr:
         return b.trx, pdf.bukti_ncr(**umum)

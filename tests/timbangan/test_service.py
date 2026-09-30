@@ -109,10 +109,16 @@ async def test_timbang_kedua_menutup_dan_menilai(db, petugas, petugas2, supplier
     assert trx.berat_barang_kg == 10_000
     assert trx.selisih_kg == -48
     assert trx.status_kontrol == logic.PERLU_PEMERIKSAAN
-    # Dua orang berbeda, keduanya tercatat; yang tertera di bukti yang kedua.
+    # Dua orang berbeda, KEDUANYA tercatat — dan itu yang penting: siapa
+    # menimbang apa tak boleh hilang hanya karena kertasnya memuat satu nama.
+    #
+    # ⚠ `petugas_bukti_id` DIBUANG 30 September 2026. Baris di sini dulu
+    # berbunyi "yang tertera di bukti yang kedua"; pemilik memutuskan yang
+    # tertera adalah akun yang MENCETAK, sebab blok itu ruang tanda tangan dan
+    # yang menandatangani adalah yang menyerahkan kertasnya kepada sopir.
+    # Lihat `test_struk_menyebut_akun_yang_mencetak` di `test_web`.
     assert trx.timbang1_petugas_id == petugas.id
     assert trx.timbang2_petugas_id == petugas2.id
-    assert trx.petugas_bukti_id == petugas2.id
 
 
 async def test_arah_keluar_membalik_urutan_angka(db, petugas, supplier):

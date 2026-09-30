@@ -3885,3 +3885,67 @@ async def test_petugas_tak_bisa_menghapus_yang_sudah_ditimbang_kedua(klien, app_
 
     rincian = await klien.get(f"{PREFIX}/transaksi/{trx_id}")
     assert "Dibatalkan." not in rincian.text, "terlanjur dibatalkan petugas"
+
+
+async def test_struk_menyebut_akun_yang_mencetak(klien, app_uji):
+    """Keputusan pemilik 30 September 2026: "yang di struk bukan petugas timbang
+    awal. yang di struk haruslah nama akun siapa yang print."
+
+    Sampai hari ini yang tertera pelaku timbang TERAKHIR. Pada satu orang
+    keduanya sama, jadi selisihnya tak pernah terlihat — begitu dua shift
+    berganti di tengah satu tiket, kertasnya menyebut orang yang tidak sedang
+    berdiri di pos.
+
+    Blok itu ruang TANDA TANGAN, dan yang menandatangani adalah orang yang
+    menyerahkan kertasnya kepada sopir: yang menekan cetak. Nama tercetak yang
+    bukan nama penanda tangan membuat kertasnya bertentangan dengan dirinya
+    sendiri.
+    """
+    # Budi menimbang pertama, Miftah menimbang kedua …
+    await login(klien, "budi")
+    trx_id = await _mulai_masuk(klien)
+    await klien.post(f"{PREFIX}/keluar")
+    await login(klien, "miftah")
+    await klien.post(f"{PREFIX}/tiket/{trx_id}", data={
+        "berat_kg": "3570", "jumlah_karung": "", "tara_per_karung_kg": "",
+        "berat_acuan_kg": "", "nomor_acuan": "", "waktu": "", "catatan": "",
+    })
+    await klien.post(f"{PREFIX}/keluar")
+
+    # … lalu WAHID yang mencetak. Kertasnya harus menyebut Wahid.
+    await login(klien, "wahid")
+    teks = teks_pdf((await klien.get(
+        f"{PREFIX}/transaksi/{trx_id}/cetak/80mm")).content)
+    sesudah = teks.split("Petugas timbang")[1][:60]
+    assert "Wahid" in sesudah, sesudah
+    assert "Miftah" not in sesudah, sesudah
+
+    # Lembar NCR memakai data yang sama — kertas dari jalan yang berbeda
+    # tetap kertas yang sama di mata pengirim barang.
+    ncr = teks_pdf((await klien.get(
+        f"{PREFIX}/transaksi/{trx_id}/cetak/ncr")).content)
+    assert "Wahid" in ncr.split("PETUGAS TIMBANG")[1][:60]
+
+
+async def test_siapa_menimbang_tetap_tercatat_meski_tak_tercetak(klien, app_uji):
+    """Yang berubah cuma isi selembar kertas. Siapa yang MENIMBANG tetap
+    tersimpan dan terbaca di layar rincian — kalau ikut hilang, kertas yang
+    dibetulkan akan dibayar dengan jejak yang lenyap."""
+    from sqlalchemy import select
+
+    from app import database
+    from app.timbangan.models import TimbanganTransaksi
+
+    await login(klien, "budi")
+    trx_id = await _mulai_masuk(klien)
+    await klien.post(f"{PREFIX}/keluar")
+    await login(klien, "miftah")
+    await klien.post(f"{PREFIX}/tiket/{trx_id}", data={
+        "berat_kg": "3570", "jumlah_karung": "", "tara_per_karung_kg": "",
+        "berat_acuan_kg": "", "nomor_acuan": "", "waktu": "", "catatan": "",
+    })
+    async with database.SessionLocal() as db:
+        trx = (await db.execute(select(TimbanganTransaksi).where(
+            TimbanganTransaksi.id == trx_id))).scalars().one()
+        assert trx.timbang1_petugas_id != trx.timbang2_petugas_id
+        assert trx.timbang1_petugas_id and trx.timbang2_petugas_id
