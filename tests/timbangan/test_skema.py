@@ -54,6 +54,7 @@ TANPA_KOLOM_BARU = {
     "0029_timbangan_retur.py": "hanya melebarkan String(10) → String(16)",
     "0031_semai_penghitung_nomor.py": "hanya mengisi data, tak menambah kolom",
     "0038_kunci_baris_64.py": "hanya melebarkan String(36) → String(64) (R-T-01)",
+    "0040_jasa_tiga_komoditas.py": "hanya mengisi data (membuka boleh_jasa)",
 }
 
 

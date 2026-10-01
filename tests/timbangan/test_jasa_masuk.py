@@ -105,20 +105,45 @@ async def test_pemilik_wajib_ada(db, petugas):
 # ════════════════ 2 · ATURANNYA DI DATA, BUKAN DI KODE ════════════════
 
 async def test_hanya_komoditas_yang_dibuka_boleh_dijasakan(db, petugas, pelanggan):
-    """Gabah kering dibuka; beras PK belum — dan penolakannya menyebut sebabnya.
+    """Komoditas yang TIDAK dibuka ditolak — dan penolakannya menyebut yang bisa.
 
-    Bukan karena jasa terbatas pada gabah kering, melainkan karena hanya jalur
-    itu yang sudah utuh di produksi. PK dari luar bahkan tak punya tempat
-    menyimpan pemiliknya di sana.
+    ⚠ Uji ini semula memakai BERAS_PK sebagai contoh "belum dibuka", dan itu
+    sudah TIDAK BENAR: pemilik membuka ketiga komoditasnya (gabah basah, gabah
+    kering, beras PK) pada 1 Oktober 2026, sesudah kedua jalur yang
+    menghalanginya dibangun di produksi. Yang berubah ATURANNYA, bukan ujinya
+    yang perlu dilonggarkan — jadi contohnya diganti komoditas yang memang
+    masih tertutup, dan mekanismenya tetap dijaga sekeras semula.
+
+    `BROKEN_MASUK` dipakai karena jasa sosoh broken & menir adalah MILESTONE
+    TERSENDIRI: rumus rendemen penyosohan berpenyebut PK, dan satu proses sosoh
+    broken yang lolos membuat sebaran rendemen tak bisa dipakai menilai apa pun
+    lagi — untuk SEMUA proses.
     """
     with pytest.raises(service.LayananError) as e:
         await service.simpan_timbang_pertama(
             db, akun=petugas,
-            data=tiket_jasa(pelanggan_id=pelanggan.id, jenis="BERAS_PK"))
+            data=tiket_jasa(pelanggan_id=pelanggan.id, jenis="BROKEN_MASUK"))
     pesan = e.value.args[0]
     assert "belum dibuka untuk jasa" in pesan, pesan
     # Menyebut APA yang bisa, bukan cuma apa yang tidak bisa.
     assert "Gabah Kering" in pesan, pesan
+
+
+@pytest.mark.parametrize("jenis", ["GABAH_BASAH", "GABAH_KERING", "BERAS_PK"])
+async def test_ketiga_komoditas_dibuka_untuk_jasa(db, petugas, pelanggan, jenis):
+    """⭐ KEPUTUSAN PEMILIK NOMOR 1: *"Jasa dari gabah basah, gabah kering, dan
+    beras PK."* Ketiganya, bukan salah satu.
+
+    Diuji satu per satu lewat jalur simpan yang sungguhan — bukan dengan membaca
+    `JENIS_AWAL`. Daftar bibit bisa benar sementara penjaganya menolak, dan yang
+    menanggung selisihnya petugas di pos dengan truk yang sudah di jembatan.
+    """
+    trx = await service.simpan_timbang_pertama(
+        db, akun=petugas,
+        data=tiket_jasa(pelanggan_id=pelanggan.id, jenis=jenis))
+    assert trx.pelanggan_id == pelanggan.id
+    assert trx.supplier_id is None
+    assert trx.jenis_kode == jenis
 
 
 async def test_membuka_komoditas_lain_cukup_lewat_master(db, petugas, pelanggan):
@@ -129,25 +154,27 @@ async def test_membuka_komoditas_lain_cukup_lewat_master(db, petugas, pelanggan)
     kode, uji ini gagal.
     """
     baris = (await db.execute(select(TimbanganJenis).where(
-        TimbanganJenis.kode == "BERAS_PK"))).scalars().one()
+        TimbanganJenis.kode == "BROKEN_MASUK"))).scalars().one()
     baris.boleh_jasa = True
     await db.flush()
 
     trx = await service.simpan_timbang_pertama(
         db, akun=petugas,
-        data=tiket_jasa(pelanggan_id=pelanggan.id, jenis="BERAS_PK"))
+        data=tiket_jasa(pelanggan_id=pelanggan.id, jenis="BROKEN_MASUK"))
     assert trx.pelanggan_id == pelanggan.id
 
 
 async def test_daftar_komoditas_jasa_dibaca_dari_master(db, jenis_tersemai):
     """Beranda menggambar kartunya dari master — bukan dari daftar di kode."""
     daftar = await service.daftar_jenis_jasa(db)
-    assert [j.kode for j in daftar] == ["GABAH_KERING"]
+    # Ketiganya, terurut mengikuti `urutan` di master — bukan urutan abjad.
+    assert [j.kode for j in daftar] == ["GABAH_BASAH", "GABAH_KERING", "BERAS_PK"]
 
     # Dicabut di master → kartunya hilang sendiri dari beranda.
-    baris = (await db.execute(select(TimbanganJenis).where(
-        TimbanganJenis.kode == "GABAH_KERING"))).scalars().one()
-    baris.boleh_jasa = False
+    for kode in ("GABAH_BASAH", "GABAH_KERING", "BERAS_PK"):
+        baris = (await db.execute(select(TimbanganJenis).where(
+            TimbanganJenis.kode == kode))).scalars().one()
+        baris.boleh_jasa = False
     await db.flush()
     assert await service.daftar_jenis_jasa(db) == []
 

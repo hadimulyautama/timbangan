@@ -214,6 +214,11 @@ JENIS_AWAL: tuple[AturanJenis, ...] = (
         ambang_jenis=AMBANG_PER_TON, ambang_nilai=2.0,
         ambang_arah=ARAH_SIMETRIS, ambang_investigasi_nilai=5.0,
         rahasia=True, cetak_bukti=True,
+        # Jasa dari gabah basah: produksi MEMAKSANYA ke pengering (basah yang
+        # menumpuk akan rusak, dan rusaknya jadi perselisihan dengan orang yang
+        # menitipkannya). Gabah basah PABRIK tetap boleh menumpuk seperti
+        # semula — yang dibatasi hanya barang titipan.
+        boleh_jasa=True,
     ),
     AturanJenis(
         # Batas PROPORSIONAL 0,5 kg per ton — ditegaskan Direksi 30 Agustus
@@ -240,6 +245,10 @@ JENIS_AWAL: tuple[AturanJenis, ...] = (
         ambang_jenis=AMBANG_PER_KARUNG, ambang_nilai=0.05,
         ambang_arah=ARAH_KURANG_SAJA,
         rahasia=False, cetak_bukti=True,
+        # Jasa dari beras PK: pelanggan membawa PK untuk DISOSOH. Jalurnya di
+        # produksi dibuka migrasi 0065 — `pk_purchase_batches` punya pemiliknya,
+        # dan penyosohan sudah bisa memikulnya sampai beras & hasil samping.
+        boleh_jasa=True,
     ),
     AturanJenis(
         kode="BROKEN_MASUK", nama="Broken", arah=MASUK, acuan=ACUAN_NOTA,

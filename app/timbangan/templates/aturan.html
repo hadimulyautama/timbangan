@@ -18,6 +18,13 @@
         {% if a and not a.rahasia %}
           <span class="lencana lencana--aman">Nota diberikan</span>
         {% endif %}
+        {# Layar ini RUJUKAN, dan "boleh dijasakan" termasuk yang perlu
+           dirujuk: ia menentukan komoditas mana yang muncul di kartu "Barang
+           masuk jasa", dan petugas yang tak menemukan komoditasnya di situ
+           akan mencari sebabnya di sini. #}
+        {% if j.boleh_jasa %}
+          <span class="lencana lencana--netral">Boleh jasa</span>
+        {% endif %}
       </div>
       {% if a %}
         <div class="baris"><span>Tara per karung</span>

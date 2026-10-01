@@ -3980,7 +3980,11 @@ async def test_beranda_menawarkan_barang_masuk_jasa(klien):
     assert "Titipan pelanggan" in r.text
     # Tautannya ke rute jasa, bukan ke rute barang masuk biasa — satu huruf
     # salah di sini membuat barang titipan tercatat sebagai pembelian.
-    assert f"{PREFIX}/jasa/GABAH_KERING" in r.text
+    # KETIGA komoditasnya ditawarkan — keputusan pemilik nomor 1. Karena lebih
+    # dari satu, kartunya MEMBENTANG (daftar), bukan tautan langsung: bentuknya
+    # mengikuti jumlahnya sendiri, tanpa daftar yang ditulis di templat.
+    for kode in ("GABAH_BASAH", "GABAH_KERING", "BERAS_PK"):
+        assert f"{PREFIX}/jasa/{kode}" in r.text, kode
 
 
 async def test_kartu_jasa_hilang_bila_tak_ada_komoditas_dibuka(klien):
@@ -3995,9 +3999,14 @@ async def test_kartu_jasa_hilang_bila_tak_ada_komoditas_dibuka(klien):
 
     await login(klien)
     async with SessionLocal() as db:
-        baris = (await db.execute(select(TimbanganJenis).where(
-            TimbanganJenis.kode == "GABAH_KERING"))).scalars().one()
-        baris.boleh_jasa = False
+        # KETIGANYA dicabut: pemilik membuka gabah basah, gabah kering, dan
+        # beras PK pada 1 Oktober 2026. Mencabut satu saja tak lagi
+        # mengosongkan daftarnya — dan uji yang hanya mencabut satu akan lulus
+        # tanpa pernah menguji keadaan "kosong" lagi.
+        for kode in ("GABAH_BASAH", "GABAH_KERING", "BERAS_PK"):
+            baris = (await db.execute(select(TimbanganJenis).where(
+                TimbanganJenis.kode == kode))).scalars().one()
+            baris.boleh_jasa = False
         await db.commit()
 
     r = await klien.get(f"{PREFIX}/")
@@ -4037,7 +4046,10 @@ async def test_borang_jasa_menolak_komoditas_yang_belum_dibuka(klien):
     akhir lebih buruk daripada penolakan di depan.
     """
     await login(klien)
-    r = await klien.get(f"{PREFIX}/jasa/BERAS_PK")
+    # `BROKEN_MASUK` — jasa sosoh broken & menir milestone tersendiri, jadi ia
+    # yang masih tertutup. BERAS_PK dipakai di sini sampai 1 Oktober 2026,
+    # ketika pemilik membukanya bersama gabah basah.
+    r = await klien.get(f"{PREFIX}/jasa/BROKEN_MASUK")
     assert "belum dibuka untuk jasa" in r.text
 
 
