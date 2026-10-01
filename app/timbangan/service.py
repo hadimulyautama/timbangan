@@ -22,7 +22,8 @@ import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 
-from sqlalchemy import delete, func, literal, or_, select, update
+from sqlalchemy import delete, func, literal, or_, select, text, update
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from zoneinfo import ZoneInfo
@@ -126,6 +127,7 @@ def _aturan_dari_baris(baris: TimbanganJenis) -> logic.AturanJenis:
         rahasia=bool(baris.rahasia),
         cetak_bukti=bool(baris.cetak_bukti),
         masa_berlaku_tara_hari=int(baris.masa_berlaku_tara_hari or 90),
+        boleh_jasa=bool(getattr(baris, "boleh_jasa", False)),
     )
 
 
@@ -138,6 +140,143 @@ async def daftar_jenis(
     if arah:
         q = q.where(TimbanganJenis.arah.in_([arah, logic.BEBAS]))
     return list((await db.execute(q)).scalars())
+
+
+async def daftar_jenis_jasa(db: AsyncSession) -> list[TimbanganJenis]:
+    """Komoditas yang boleh masuk sebagai barang JASA — dari MASTER, bukan daftar.
+
+    Kosong berarti kartu "Barang masuk jasa" tidak digambar sama sekali di
+    beranda, dan itu perilaku yang benar: kartu yang membuka daftar hampa
+    menyuruh petugas memilih dari ketiadaan. Bentuk kartunya pun mengikuti
+    jumlahnya — satu komoditas jadi tautan langsung, dua atau lebih membentang
+    — jadi membuka komoditas kedua lewat master mengubah kartunya sendiri,
+    tanpa menyentuh satu berkas pun.
+
+    `arah` tetap MASUK: jasa bukan arah baru, ia pemilik yang berbeda pada arah
+    yang sama. Menjadikannya arah tersendiri berarti menggandakan aturan tara
+    dan ambang untuk barang yang cara menimbangnya sama persis.
+    """
+    q = (select(TimbanganJenis)
+         .where(TimbanganJenis.status == "aktif",
+                TimbanganJenis.boleh_jasa.is_(True),
+                TimbanganJenis.arah == logic.MASUK)
+         .order_by(TimbanganJenis.urutan, TimbanganJenis.nama))
+    return list((await db.execute(q)).scalars())
+
+
+@dataclass(frozen=True)
+class PesananJasa:
+    """Satu pesanan jasa yang masih berjalan, beserta apa yang sudah masuk.
+
+    Bobot & jumlah truknya dihitung dari TIKET DI SINI, bukan dari batch di
+    produksi. Dua sebab, dan yang kedua menentukan: tiket adalah yang petugas
+    pos kenali ("yang tadi pagi itu"), dan tiket yang BELUM diterima produksi
+    belum punya batch sama sekali — kalau dihitung dari sana, truk kedua yang
+    datang sejam setelah yang pertama akan melihat "0 kg · 0 truk" dan
+    menyangka ia salah pesanan.
+    """
+
+    id: int
+    kode: str
+    nama_pelanggan: str
+    berat_kg: float
+    truk: int
+
+
+#: Keadaan pesanan jasa yang masih menerima barang. Satu kata, dan ia milik
+#: produksi (`app/models/jasa.py` di sana) — disebut di sini sebagai teks
+#: karena modul ini hanya MEMBACA tabelnya.
+JASA_BERJALAN = "berjalan"
+
+#: Pesanan jasa milik satu pelanggan yang masih berjalan.
+#:
+#: SQL mentah, sama seperti `tautan_produksi`: tabel `jasa` dimiliki repo
+#: penggilingan dan tidak ada di metadata modul ini. Membacanya lewat ORM
+#: berarti memetakan model kedua untuk tabel orang lain, lalu menanggung
+#: perbedaannya setiap kali kolomnya berubah di sana.
+#:
+#: Bobot per pesanan dijumlah dari tiket yang MENUNJUKNYA, dan tiket yang
+#: dibatalkan tidak ikut: ia tak membawa barang apa pun.
+_SQL_PESANAN_JASA = text("""
+    SELECT j.id, j.kode, p.nama_pelanggan,
+           COALESCE(SUM(COALESCE(NULLIF(t.berat_barang_kg, 0),
+                                 t.netto_timbangan_kg, 0)), 0) AS berat,
+           COUNT(t.id) AS truk
+      FROM jasa j
+      JOIN pelanggan p ON p.id = j.pelanggan_id
+      LEFT JOIN timbangan_transaksi t
+             ON t.jasa_id = j.id AND t.status_transaksi = 'AKTIF'
+     WHERE j.pelanggan_id = :pid
+       AND j.status = :berjalan
+     GROUP BY j.id, j.kode, p.nama_pelanggan
+     ORDER BY j.id DESC
+""")
+
+
+async def _baca_pesanan(db: AsyncSession, sql, param: dict) -> list[PesananJasa]:
+    """Baca daftar pesanan jasa — dan BERTAHAN bila tabelnya tak ada.
+
+    Tabel `jasa` dimiliki repo penggilingan. Modul ini harus tetap berdiri
+    sendiri tanpa sistem itu — pemasangan baru, atau produksi yang belum
+    bermigrasi — dan yang hilang saat tabelnya tak ada cuma penawaran
+    "tambahkan ke pesanan": tiap tiket jadi pesanan baru, dan borangnya tetap
+    bisa dipakai. Layar galat di pos sementara truknya di jembatan jauh lebih
+    buruk daripada satu pilihan yang tak muncul.
+
+    ⚠ DI DALAM SAVEPOINT, bukan dengan `db.rollback()` pada sesi pemanggil.
+    Galat basis data membatalkan transaksi yang sedang berjalan di Postgres,
+    jadi kueri ini HARUS dipagari — tetapi `rollback()` penuh akan membuang
+    pekerjaan pemanggilnya yang belum tersimpan. Penolong baca yang membatalkan
+    tulisan orang lain adalah jebakan yang baru terasa pada hari ia dipanggil
+    dari tempat kedua.
+    """
+    try:
+        async with db.begin_nested():
+            baris = (await db.execute(sql, param)).all()
+    except DBAPIError:
+        return []
+    return [PesananJasa(id=b[0], kode=b[1], nama_pelanggan=b[2],
+                        berat_kg=float(b[3] or 0), truk=int(b[4] or 0))
+            for b in baris]
+
+
+async def pesanan_jasa_berjalan(
+    db: AsyncSession, pelanggan_id: int | None
+) -> list[PesananJasa]:
+    """Pesanan jasa pelanggan ini yang masih berjalan — untuk ditawarkan borang.
+
+    ⚠ TANPA SARINGAN JENIS, dan itu koreksi atas rancangan awal. Satu pelanggan
+    boleh mendatangkan gabah basah lalu gabah kering untuk pekerjaan yang SAMA;
+    menyaring "pesanan berjenis sama" akan memaksanya jadi dua pesanan, lalu
+    penjaga kepemilikan di produksi menolak menggiling keduanya bersama — tepat
+    kesalahan yang penawaran ini ada untuk mencegahnya.
+    """
+    if not pelanggan_id:
+        return []
+    return await _baca_pesanan(
+        db, _SQL_PESANAN_JASA,
+        {"pid": int(pelanggan_id), "berjalan": JASA_BERJALAN})
+
+
+#: Seluruh pesanan jasa yang masih berjalan, siapa pun pemiliknya.
+#:
+#: Bentuknya sama dengan `_SQL_PESANAN_JASA`; yang berbeda cuma tanpa saringan
+#: pelanggan. Dirakit dari satu kalimat yang sama supaya kedua daftar tak
+#: pernah menghitung bobot dengan cara berbeda — "12.000 kg" di satu layar dan
+#: "11.940 kg" di layar lain untuk pesanan yang sama adalah selisih yang akan
+#: dicari orang di tempat yang salah.
+_SQL_PESANAN_JASA_SEMUA = text(
+    str(_SQL_PESANAN_JASA).replace("j.pelanggan_id = :pid\n       AND ", ""))
+
+
+async def pesanan_jasa_semua_berjalan(db: AsyncSession) -> list[PesananJasa]:
+    """Pesanan jasa berjalan milik siapa pun — untuk daftar di borang.
+
+    Tiap barisnya MENYEBUT pemiliknya, sebab daftar ini tidak disaring menurut
+    pelanggan yang baru dipilih: lihat catatan di rute `/jasa/{jenis_kode}`.
+    """
+    return await _baca_pesanan(
+        db, _SQL_PESANAN_JASA_SEMUA, {"berjalan": JASA_BERJALAN})
 
 
 async def peta_aturan(db: AsyncSession) -> dict[str, logic.AturanJenis]:
@@ -181,6 +320,7 @@ async def pastikan_jenis(db: AsyncSession) -> int:
             ambang_investigasi_nilai=a.ambang_investigasi_nilai,
             rahasia=a.rahasia, cetak_bukti=a.cetak_bukti,
             masa_berlaku_tara_hari=a.masa_berlaku_tara_hari,
+            boleh_jasa=a.boleh_jasa,
         ))
         ditambah += 1
     if ditambah:
@@ -270,16 +410,31 @@ PIHAK_ARAH: dict[str, tuple] = {
 }
 
 
-def pihak_untuk(arah: str) -> tuple | None:
+def pihak_untuk(arah: str, *, jasa: bool = False) -> tuple | None:
     """(model, kolom transaksi, kolom nama) — atau None bila arah ini tidak
-    memakai master pihak sama sekali (jasa timbang, transfer internal)."""
+    memakai master pihak sama sekali (jasa timbang, transfer internal).
+
+    ⚠ `jasa` MEMBALIK jawabannya pada arah MASUK, dan di sinilah SATU-SATUNYA
+    tempat yang tahu soal itu. Barang masuk biasanya dibeli, jadi lawannya
+    pemasok; barang jasa dititipkan, jadi lawannya pelanggan — arahnya sama,
+    tabelnya berbeda, sebab yang membedakan bukan arah barangnya melainkan
+    hubungan hukumnya.
+
+    Dipusatkan karena fakta itu dibutuhkan EMPAT pembaca: daftar pilihan di
+    borang, nama kolom untuk templatnya, penulisan id ke tiket, dan pencarian
+    tara per pihak. Empat salinan "kalau jasa maka pelanggan" adalah empat
+    kesempatan salah satunya tertinggal — dan yang tertinggal akan menulis
+    pemilik barang ke kolom pemasok, diam-diam.
+    """
+    if jasa:
+        return PIHAK_ARAH[logic.KELUAR]      # (Pelanggan, "pelanggan_id", …)
     return PIHAK_ARAH.get(arah)
 
 
-def nama_kolom_pihak(arah: str) -> str:
+def nama_kolom_pihak(arah: str, *, jasa: bool = False) -> str:
     """Nama atribut yang memuat nama pihak, supaya template tidak perlu tahu
     tabel mana yang sedang dipakai."""
-    pihak = pihak_untuk(arah)
+    pihak = pihak_untuk(arah, jasa=jasa)
     return pihak[2] if pihak else "nama"
 
 
@@ -299,9 +454,17 @@ def _saring_hidup(q, model):
     return q
 
 
-async def daftar_pihak(db: AsyncSession, arah: str) -> list:
-    """Calon lawan transaksi yang MASIH ADA untuk arah ini, terurut nama."""
-    pihak = pihak_untuk(arah)
+async def daftar_pihak(db: AsyncSession, arah: str, *, jasa: bool = False) -> list:
+    """Calon lawan transaksi yang MASIH ADA untuk arah ini, terurut nama.
+
+    ⚠ `jasa` WAJIB diteruskan, dan pernah terlewat di sini. Tanpanya arah MASUK
+    menjawab daftar PEMASOK untuk borang jasa — sementara medannya bernama
+    `pelanggan_id`. Hasilnya bentuk kesalahan yang paling sulit dilihat:
+    borangnya tampak benar, petugas memilih nama yang ada di daftar, dan id
+    pemasok tersimpan di kolom pelanggan. Tak ada galat, dan barang titipan
+    tertaut ke pihak yang tak pernah menitipkan apa pun.
+    """
+    pihak = pihak_untuk(arah, jasa=jasa)
     if pihak is None:
         return []
     model, _, kolom_nama = pihak
@@ -311,7 +474,7 @@ async def daftar_pihak(db: AsyncSession, arah: str) -> list:
 
 
 async def pihak_pilihan(
-    db: AsyncSession, arah: str, *, hari: int = 120
+    db: AsyncSession, arah: str, *, hari: int = 120, jasa: bool = False
 ) -> tuple[list, list]:
     """Dipecah dua: yang benar-benar dipakai belakangan, dan sisanya.
 
@@ -321,7 +484,7 @@ async def pihak_pilihan(
     nama; menyuruhnya menggulir ratusan nama di ponsel, sambil truk menunggu,
     adalah cara membuat orang salah pilih.
     """
-    pihak = pihak_untuk(arah)
+    pihak = pihak_untuk(arah, jasa=jasa)
     if pihak is None:
         return [], []
     _, kolom_trx, _ = pihak
@@ -336,7 +499,7 @@ async def pihak_pilihan(
         ).distinct()
     )).scalars())
 
-    semua = await daftar_pihak(db, arah)
+    semua = await daftar_pihak(db, arah, jasa=jasa)
     return ([s for s in semua if s.id in terpakai],
             [s for s in semua if s.id not in terpakai])
 
@@ -640,6 +803,23 @@ class InputTimbang:
     waktu_operator: datetime | None = None
     cara_timbang: str = CARA_DUA_KALI
     supplier_id: int | None = None
+    #: JASA: barangnya DITITIPKAN, bukan dibeli.
+    #:
+    #: Jasa bukan arah baru dan bukan jenis baru — cara menimbang, tara, dan
+    #: ambangnya sama persis dengan gabah yang dibeli; yang beda cuma
+    #: pemiliknya. Menjadikannya `GABAH_KERING_JASA` berarti menggandakan tiga
+    #: jenis jadi enam, menggandakan aturan taranya, dan memberi petugas enam
+    #: tombol berpasangan mirip untuk salah pilih.
+    #:
+    #: Konsekuensinya satu: pada arah MASUK, lawan transaksinya PELANGGAN, bukan
+    #: pemasok. Lihat `_pasang_pihak`.
+    jasa: bool = False
+    #: Pemilik barang titipan — baris `pelanggan`, bukan `suppliers`.
+    pelanggan_id: int | None = None
+    #: Pesanan jasa yang sudah berjalan, bila petugas memilih "tambahkan ke".
+    #: Kosong berarti pesanan BARU — dan yang melahirkannya produksi, saat
+    #: operator menerima tiket ini.
+    jasa_id: int | None = None
     pihak_nama: str | None = None
     nomor_polisi: str | None = None
     nama_sopir: str | None = None
@@ -1091,7 +1271,8 @@ ARAH_WAJIB_NOPOL = (
 )
 
 
-def _wajib_pihak(arah: str, *, punya_id: bool, pihak_nama: str | None) -> None:
+def _wajib_pihak(arah: str, *, punya_id: bool, pihak_nama: str | None,
+                 jasa: bool = False) -> None:
     """Setiap transaksi harus menyebut lawannya.
 
     Boleh dari daftar (supplier atau pelanggan, menurut arah) ATAU diketik
@@ -1105,11 +1286,52 @@ def _wajib_pihak(arah: str, *, punya_id: bool, pihak_nama: str | None) -> None:
     """
     if punya_id or (pihak_nama or "").strip():
         return
-    sebutan = logic.PIHAK_LABEL.get(arah, "Nama pihak")
+    # Pada tiket jasa yang ditagih bukan "pemasok" melainkan PEMILIK barangnya,
+    # dan sebutan yang salah di sini menyuruh petugas mencari nama di daftar
+    # yang keliru.
+    sebutan = ("Pemilik barang" if jasa
+               else logic.PIHAK_LABEL.get(arah, "Nama pihak"))
     raise LayananError(
         f"{sebutan} wajib diisi — pilih dari daftar, atau ketik namanya "
         "bila belum terdaftar."
     )
+
+
+async def _periksa_jasa(
+    db: AsyncSession, *, aturan: logic.AturanJenis, data: InputTimbang
+) -> None:
+    """Dua hal yang tak boleh lolos pada tiket jasa.
+
+    ⚠ PENJAGA, BUKAN SARINGAN TAMPILAN. Beranda sudah hanya menawarkan
+    komoditas yang `boleh_jasa`, dan borang hanya menawarkan pesanan milik
+    pelanggan yang dipilih — tetapi daftar yang menyaring tanpa penjaga di
+    belakangnya hanya menyaring yang patuh. Halaman di ponsel petugas berumur
+    panjang (antrean luring menyimpannya), jadi kiriman dari halaman lama adalah
+    keadaan biasa di sini, bukan serangan.
+
+      1. **Komoditasnya memang dibuka untuk jasa.** Kalau tidak, produksi akan
+         menolaknya saat diterima — dan penolakan di sana datang berjam-jam
+         kemudian, saat truknya sudah pulang dan barangnya sudah di halaman.
+      2. **Pesanan yang ditunjuk milik pelanggan ITU, dan masih berjalan.**
+         Salah pesanan berarti barang diserahkan ke orang yang salah, dan itu
+         tak bisa dibetulkan dengan pembukuan.
+    """
+    if not aturan.boleh_jasa:
+        raise LayananError(
+            f"{aturan.nama} belum dibuka untuk jasa. Yang bisa dijasakan: "
+            + (", ".join(j.nama for j in await daftar_jenis_jasa(db))
+               or "belum ada satu pun")
+            + ". Buka di master komoditas bila memang sudah boleh."
+        )
+    if data.jasa_id is None:
+        return
+    sah = await pesanan_jasa_berjalan(db, data.pelanggan_id)
+    if not any(p.id == data.jasa_id for p in sah):
+        raise LayananError(
+            "Pesanan jasa yang dipilih bukan milik pelanggan ini, atau sudah "
+            "tidak berjalan. Muat ulang halamannya, lalu pilih lagi — atau "
+            "pilih 'pesanan baru'."
+        )
 
 
 def _wajib_sopir(nama_sopir: str | None, *, cara: str = CARA_DUA_KALI) -> None:
@@ -1157,18 +1379,23 @@ async def nama_pihak(db: AsyncSession, trx: TimbanganTransaksi) -> str | None:
 
 
 def _pasang_pihak(
-    trx: TimbanganTransaksi, arah: str, pihak_id: int | None
+    trx: TimbanganTransaksi, arah: str, pihak_id: int | None, *, jasa: bool = False
 ) -> None:
     """Taruh id lawan transaksi pada kolom yang sesuai arahnya, kosongkan yang lain.
 
     Mengosongkan yang lain bukan kerapian: kalau keduanya terisi, laporan yang
     menggabungkan nama dari dua tabel akan menampilkan salah satu secara acak,
     dan tidak ada yang bisa menebak mana yang benar.
+
+    Pemetaan arah → kolom (dan pembalikannya untuk jasa) dijawab
+    `pihak_untuk()`, bukan disusun ulang di sini — lihat catatannya di sana.
     """
-    pihak = pihak_untuk(arah)
     trx.supplier_id = None
     trx.pelanggan_id = None
-    if pihak is not None and pihak_id:
+    if not pihak_id:
+        return
+    pihak = pihak_untuk(arah, jasa=jasa)
+    if pihak is not None:
         setattr(trx, pihak[1], pihak_id)
 
 
@@ -1351,9 +1578,12 @@ async def simpan_timbang_pertama(
     _wajib_nopol(aturan.arah, data.nomor_polisi, cara=data.cara_timbang)
     _wajib_pihak(
         aturan.arah,
-        punya_id=bool(data.supplier_id),
+        punya_id=bool(data.pelanggan_id if data.jasa else data.supplier_id),
         pihak_nama=data.pihak_nama,
+        jasa=data.jasa,
     )
+    if data.jasa:
+        await _periksa_jasa(db, aturan=aturan, data=data)
     _wajib_sopir(data.nama_sopir, cara=data.cara_timbang)
     _setelan = await setelan.semua(db)
     kapasitas = _setelan["kapasitas_jembatan_kg"]
@@ -1448,7 +1678,18 @@ async def simpan_timbang_pertama(
     # Barang masuk mengisi supplier_id, pengiriman mengisi pelanggan_id, dan
     # tidak pernah keduanya. `data.supplier_id` membawa id dari daftar yang
     # ditawarkan layar, dan layar hanya menawarkan satu daftar per arah.
-    _pasang_pihak(trx, data.arah, data.supplier_id)
+    #
+    # KECUALI jasa: barangnya dititipkan, jadi lawannya pelanggan walaupun
+    # arahnya MASUK. Lihat `_pasang_pihak`.
+    _pasang_pihak(
+        trx, data.arah,
+        data.pelanggan_id if data.jasa else data.supplier_id,
+        jasa=data.jasa,
+    )
+    # Penunjuk pesanan hanya sah pada tiket jasa. Dikosongkan terang-terangan
+    # untuk yang bukan: kiriman ULANG boleh mengubah tiket, dan tiket yang
+    # pernah salah ditandai jasa tak boleh menyimpan penunjuk itu diam-diam.
+    trx.jasa_id = data.jasa_id if data.jasa else None
     trx.pihak_nama = data.pihak_nama
     trx.kendaraan_id = kendaraan.id if kendaraan else None
     trx.nomor_polisi = normalisasi_nopol(data.nomor_polisi)

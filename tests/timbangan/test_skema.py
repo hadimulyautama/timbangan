@@ -40,6 +40,7 @@ MIGRASI = (
     AKAR / "migrations" / "versions" / "0035_indeks_tiket.py",
     AKAR / "migrations" / "versions" / "0036_indeks_duplikat.py",
     AKAR / "migrations" / "versions" / "0037_identitas_bersama.py",
+    AKAR / "migrations" / "versions" / "0039_jasa_masuk.py",
 )
 
 # Daftar di atas DITULIS TANGAN, dan karena itu ia basi tiap kali ada migrasi
@@ -57,9 +58,25 @@ TANPA_KOLOM_BARU = {
 
 
 def _migrasi_belum_terdaftar() -> list[str]:
+    """Migrasi rantai ini yang belum disebut di MIGRASI maupun TANPA_KOLOM_BARU.
+
+    ⚠ POLANYA DULU `00*_timbangan*.py`, DAN JARINGNYA BOLONG. Hanya migrasi
+    paling awal yang dinamai begitu; sejak 0032 namanya menyebut perkaranya
+    (`0032_partai_kunci_baris`, `0033_cetak_revisi`, `0038_kunci_baris_64`, …),
+    jadi TUJUH migrasi lolos dari penjaga ini — termasuk `0039_jasa_masuk`,
+    yang memang menambah kolom dan karena itu wajib ikut diterapkan di sini.
+
+    Yang menutupinya: migrasi 0032–0038 kebetulan sudah terdaftar tangan, jadi
+    uji perbandingan kolomnya tetap benar dan tak ada yang pernah gagal. Penjaga
+    yang diam bukan penjaga yang bekerja — ia hanya belum diuji.
+
+    Seluruh `00*.py` di folder ini milik rantai modul ini (rantai penggilingan
+    ada di repo sebelah), jadi polanya memang boleh seluas itu. Batas `> "0028"`
+    tetap: 0022–0028 adalah pondasi yang sudah disebut satu per satu di atas.
+    """
     ada = {p.name for p in MIGRASI} | set(TANPA_KOLOM_BARU)
     semua = sorted(
-        p.name for p in (AKAR / "migrations" / "versions").glob("00*_timbangan*.py")
+        p.name for p in (AKAR / "migrations" / "versions").glob("00*.py")
     )
     return [n for n in semua if n not in ada and n > "0028"]
 

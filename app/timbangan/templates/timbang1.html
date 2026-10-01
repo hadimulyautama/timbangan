@@ -1,6 +1,11 @@
 {% extends "base.html" %}
 {% from "macros.html" import isian, berat, tahap, konteks_jenis %}
 
+{# `jasa` diteruskan rute `/jasa/{kode}`; borang biasa tidak mengirimnya.
+   Barang JASA dititipkan pelanggan untuk digiling — bukan dibeli. Borangnya
+   SAMA, sebab cara menimbang, tara, dan ambangnya memang sama persis; yang
+   ditambahkan hanya DUA pertanyaan: milik siapa, dan pesanan yang mana. #}
+{% set jasa = jasa|default(false) %}
 {% set masuk = aturan.arah == MASUK %}
 {% set bebas = aturan.arah == BEBAS %}
 {% set transfer = aturan.arah == TRANSFER %}
@@ -9,12 +14,31 @@
 {# Pengiriman: timbang pertama adalah truk KOSONG. #}
 {% set trx_keluar = aturan.arah == KELUAR %}
 
-{% block judul %}Timbang 1 · {{ aturan.nama }}{% endblock %}
-{% block bar_judul %}Timbang pertama{% endblock %}
+{% block judul %}Timbang 1 · {{ aturan.nama }}{{ ' · JASA' if jasa }}{% endblock %}
+{% block bar_judul %}{{ 'Timbang pertama — JASA' if jasa else 'Timbang pertama' }}{% endblock %}
 {% block bar_sub %}{{ akun.nama }}{% endblock %}
 
 {% block konteks %}
-  {{ konteks_jenis(aturan, PREFIX ~ '/pilih/' ~ aturan.arah) }}
+  {{ konteks_jenis(aturan, PREFIX ~ ('/' if jasa else '/pilih/' ~ aturan.arah)) }}
+  {% if jasa %}
+    {# Disebut di kepala layar, bukan cuma di judul. Satu-satunya hal yang
+       membedakan tiket ini dari barang masuk biasa adalah PEMILIKNYA, dan
+       petugas yang tak melihatnya akan mengisi borang yang sama dengan
+       kebiasaan yang sama. #}
+    <div class="konteks" style="border-color:#2f6e7a">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2f6e7a"
+           stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 12v8H4v-8"/><path d="M2 7h20v5H2z"/><path d="M12 22V7"/>
+        <path d="M12 7A3.5 3.5 0 0 0 8.5 3.5 3.5 3.5 0 0 0 12 7z"/>
+        <path d="M12 7a3.5 3.5 0 0 1 3.5-3.5A3.5 3.5 0 0 1 12 7z"/></svg>
+      <div style="flex-grow:1;min-width:0">
+        <div class="konteks__nama">Barang JASA — titipan pelanggan</div>
+        <div class="konteks__aturan">
+          Barangnya tidak dibeli. Digiling lalu kembali ke pemiliknya.
+        </div>
+      </div>
+    </div>
+  {% endif %}
   {% if not bebas %}
     {{ tahap(1,
              'Truk bermuatan' if bongkar else 'Truk kosong',
@@ -23,7 +47,8 @@
 {% endblock %}
 
 {% block isi %}
-<form method="post" action="{{ PREFIX }}/timbang/{{ aturan.kode }}"
+<form method="post"
+      action="{{ PREFIX }}{{ '/jasa/' if jasa else '/timbang/' }}{{ aturan.kode }}"
       style="display:flex;flex-direction:column;gap:14px">
   {# Kunci kiriman, BUKAN nomor tiket. Nomornya diterbitkan server saat
      menyimpan; yang ditampilkan di bawah cuma perkiraan. #}
@@ -62,13 +87,20 @@
              'Contoh: Gudang 1 → Gudang 2', true, true) }}
   {% else %}
     <div class="grup">
-      <div class="lbl">{{ PIHAK_LABEL.get(aturan.arah, 'Pihak') }}</div>
+      <div class="lbl">
+        {{ 'Pemilik barang' if jasa else PIHAK_LABEL.get(aturan.arah, 'Pihak') }}
+      </div>
       {# `data-gabung` menyatukan daftar ini dengan kolom teks bebas di
          bawahnya menjadi SATU kolom: cocok dengan daftar → pihak terdaftar,
          tidak cocok → nama bebas. Tanpa JavaScript keduanya tetap tampil
          dan tetap bekerja seperti semula. #}
-      <select class="fld" name="supplier_id" data-gabung="f-pihak_nama"
-              data-cari="Ketik nama {{ PIHAK_LABEL.get(aturan.arah, 'pihak')|lower }}…">
+      {# Nama medannya BERBEDA untuk jasa — `pelanggan_id`, bukan
+         `supplier_id` — sebab tabelnya berbeda. Satu medan bernama salah akan
+         menulis pemilik barang ke kolom pemasok, dan tak ada yang akan
+         melihatnya sampai laporan pembelian memuat nama pelanggan. #}
+      <select class="fld" name="{{ 'pelanggan_id' if jasa else 'supplier_id' }}"
+              data-gabung="f-pihak_nama"
+              data-cari="Ketik nama {{ 'pemilik barang' if jasa else PIHAK_LABEL.get(aturan.arah, 'pihak')|lower }}…">
         <option value="">— pilih —</option>
         {# Yang sering datang ditaruh di atas: petugas memilih sambil truk
            menunggu, bukan sambil duduk santai. #}
@@ -88,6 +120,14 @@
       <div class="bantu">
         Wajib diisi — pilih dari daftar, atau ketik langsung bila belum
         terdaftar.
+        {% if jasa %}
+          {# Daftar pelanggan disegarkan dari Kledo SEKALI SEMINGGU, jadi
+             pelanggan yang baru dibuat hari ini memang bisa belum ada di
+             situ. Pintu ketik-bebas itu bukan kelonggaran — tanpanya truk
+             pelanggan baru tak bisa ditimbang sampai sinkronisasi berikutnya. #}
+          Pelanggan baru bisa belum muncul (daftarnya disegarkan mingguan) —
+          ketik namanya saja.
+        {% endif %}
       </div>
     </div>
     {# Ditulis langsung, tidak lewat macro `isian`: macro menandai isian tak
@@ -97,7 +137,7 @@
        layanan (`_wajib_pihak`). #}
     <div class="grup">
       <div class="lbl">
-        Nama {{ PIHAK_LABEL.get(aturan.arah, 'pihak')|lower }}
+        Nama {{ 'pemilik barang' if jasa else PIHAK_LABEL.get(aturan.arah, 'pihak')|lower }}
         <span style="text-transform:none;letter-spacing:0;font-weight:500">
           (bila belum terdaftar)</span>
       </div>
@@ -105,6 +145,51 @@
       <div class="bantu">
         Isi ini bila tidak memilih dari daftar di atas.
       </div>
+    </div>
+  {% endif %}
+
+  {# ── Pertanyaan KEDUA, dan ia yang paling mudah terlewat ──
+
+     Pak Budi menjasakan 24 ton; truknya 12 ton. Ia datang DUA KALI, dan dua
+     tiket itu harus masuk SATU pesanan — kalau tidak, satu pekerjaan terpecah
+     jadi dua nota, dua rendemen, dua hitungan sisa, dan penjaga kepemilikan di
+     produksi akan menolak menggiling keduanya bersama: benar menurut
+     aturannya, salah menurut kenyataannya.
+
+     Bawaannya "pesanan baru", sebab itu yang paling sering benar — truk
+     pertama selalu pesanan baru, dan pesanan susulan hanya ada bila memang ada
+     yang sedang berjalan.
+
+     Daftarnya TIDAK disaring menurut pelanggan yang baru dipilih (siapa
+     pelanggannya belum diketahui saat halaman ini digambar), jadi tiap baris
+     MENYEBUT pemiliknya. Pasangan yang keliru ditolak layanan dengan kalimat
+     yang menyuruh memuat ulang — bukan diterima lalu menyerahkan barang ke
+     orang yang salah. #}
+  {% if jasa %}
+    <div class="grup">
+      <div class="lbl">Pesanan</div>
+      {% if pesanan %}
+        <select class="fld" name="jasa_id">
+          <option value="">— pesanan BARU —</option>
+          {% for ps in pesanan %}
+            <option value="{{ ps.id }}">
+              {{ ps.kode }} · {{ ps.nama_pelanggan }} ·
+              {{ ps.berat_kg|kg }}{% if ps.truk %} · {{ ps.truk }} truk{% endif %}
+            </option>
+          {% endfor %}
+        </select>
+        <div class="bantu">
+          Pilih pesanan yang sudah berjalan bila truk ini bagian dari
+          pekerjaan yang sama. Pastikan namanya cocok dengan pemilik di atas.
+        </div>
+      {% else %}
+        {# Tak ada pesanan berjalan sama sekali: tak ada yang perlu dipilih,
+           dan daftar berisi satu baris "pesanan baru" cuma menambah satu
+           ketukan tanpa memberi pilihan. #}
+        <div class="kartu kosong" style="margin:0">
+          Belum ada pesanan jasa yang berjalan — tiket ini jadi pesanan baru.
+        </div>
+      {% endif %}
     </div>
   {% endif %}
 

@@ -180,6 +180,21 @@ class AturanJenis:
     rahasia: bool = True           # hasil kontrol tidak keluar ke pihak lawan
     cetak_bukti: bool = False      # bukti timbang diserahkan ke pihak lawan
     masa_berlaku_tara_hari: int = 90
+    #: Komoditas ini boleh masuk sebagai barang JASA (titipan pelanggan)?
+    #:
+    #: ATURANNYA DI DATA, BUKAN DI KODE — itu salah satu dari dua aturan yang
+    #: membentuk modul ini. Hari ini hanya gabah kering yang dibuka, bukan
+    #: karena jasa terbatas pada gabah kering, melainkan karena hanya jalur
+    #: itulah yang sudah utuh di sisi produksi: gabah basah belum punya aturan
+    #: "wajib ke pengering", dan PK dari luar belum punya tempat menyimpan
+    #: pemiliknya sama sekali (`pk_purchase_batches` tanpa `jasa_id`) — produksi
+    #: MENOLAK tiket jasa di jalur itu, terang-terangan.
+    #:
+    #: Jadi begitu kedua jalur itu dibangun di sana, yang perlu dilakukan di
+    #: sini NOL: centang kolomnya di master komoditas. Kalau ia `if` di kode,
+    #: pembukaannya menunggu rilis — dan yang menunggu rilis cenderung dibuka
+    #: dengan menambah `if` kedua di tempat lain.
+    boleh_jasa: bool = False
 
     def tara_default(self) -> float:
         """Tara yang dipakai bila tidak ada tara standar untuk pihak ini."""
@@ -216,6 +231,8 @@ JENIS_AWAL: tuple[AturanJenis, ...] = (
         ambang_jenis=AMBANG_PER_TON, ambang_nilai=0.5,
         ambang_arah=ARAH_KURANG_SAJA,
         rahasia=True, cetak_bukti=True,
+        # Satu-satunya yang dibuka untuk jasa hari ini — lihat `boleh_jasa`.
+        boleh_jasa=True,
     ),
     AturanJenis(
         kode="BERAS_PK", nama="Beras PK", arah=MASUK, acuan=ACUAN_NOTA,

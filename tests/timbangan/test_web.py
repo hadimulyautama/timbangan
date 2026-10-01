@@ -3949,3 +3949,126 @@ async def test_siapa_menimbang_tetap_tercatat_meski_tak_tercetak(klien, app_uji)
             TimbanganTransaksi.id == trx_id))).scalars().one()
         assert trx.timbang1_petugas_id != trx.timbang2_petugas_id
         assert trx.timbang1_petugas_id and trx.timbang2_petugas_id
+
+
+# ─────────────────── Barang masuk JASA ───────────────────
+#
+# Layarnya dirender SUNGGUHAN di sini, bukan cuma layanannya yang dipanggil.
+# Yang ditambahkan borang ini adalah dua medan Jinja dan satu kartu beranda —
+# dan kesalahan di templat tidak pernah terlihat dari uji layanan: ia muncul
+# sebagai halaman kosong di tangan petugas, sambil truk menunggu.
+
+
+async def _pelanggan_uji(nama: str = "Pak Budi") -> int:
+    """Satu pelanggan di cermin Kledo. Mengembalikan id-nya."""
+    from app.database import SessionLocal
+    from app.models import Pelanggan
+
+    async with SessionLocal() as db:
+        p = Pelanggan(nama_pelanggan=nama)
+        db.add(p)
+        await db.commit()
+        return p.id
+
+
+async def test_beranda_menawarkan_barang_masuk_jasa(klien):
+    """Kartunya ada, dan ia menyebut apa itu tanpa menyuruh orang menebak."""
+    await login(klien)
+    r = await klien.get(f"{PREFIX}/")
+    assert r.status_code == 200
+    assert "Barang masuk jasa" in r.text
+    assert "Titipan pelanggan" in r.text
+    # Tautannya ke rute jasa, bukan ke rute barang masuk biasa — satu huruf
+    # salah di sini membuat barang titipan tercatat sebagai pembelian.
+    assert f"{PREFIX}/jasa/GABAH_KERING" in r.text
+
+
+async def test_kartu_jasa_hilang_bila_tak_ada_komoditas_dibuka(klien):
+    """⭐ Aturannya di DATA: dicabut di master, kartunya hilang sendiri.
+
+    Kartu yang membuka daftar hampa menyuruh petugas memilih dari ketiadaan.
+    """
+    from sqlalchemy import select
+
+    from app.database import SessionLocal
+    from app.timbangan.models import TimbanganJenis
+
+    await login(klien)
+    async with SessionLocal() as db:
+        baris = (await db.execute(select(TimbanganJenis).where(
+            TimbanganJenis.kode == "GABAH_KERING"))).scalars().one()
+        baris.boleh_jasa = False
+        await db.commit()
+
+    r = await klien.get(f"{PREFIX}/")
+    assert "Barang masuk jasa" not in r.text
+    # Dan barang masuk BIASA tetap ada — pencabutan jasa tak boleh menyentuhnya.
+    assert "Barang masuk" in r.text
+
+
+async def test_borang_jasa_menanyakan_pemilik_dan_pesanan(klien):
+    """DUA pertanyaan tambahan, dan nama medannya yang menentukan.
+
+    `pelanggan_id`, bukan `supplier_id`: satu medan bernama salah akan menulis
+    pemilik barang ke kolom pemasok, dan tak ada yang melihatnya sampai laporan
+    pembelian memuat nama pelanggan.
+    """
+    await login(klien)
+    r = await klien.get(f"{PREFIX}/jasa/GABAH_KERING")
+    assert r.status_code == 200
+    assert 'name="pelanggan_id"' in r.text
+    assert 'name="supplier_id"' not in r.text, "borang jasa menawarkan pemasok"
+    assert "Pemilik barang" in r.text
+    assert "Barang JASA" in r.text
+    # Tanpa pesanan berjalan: tak ada daftar yang perlu dipilih.
+    assert "jadi pesanan baru" in r.text
+    # ⚠ DAN DAFTARNYA BUKAN DAFTAR PEMASOK. Ini pernah salah: medannya bernama
+    # `pelanggan_id` sementara pilihannya pemasok, sebab `daftar_pihak` adalah
+    # pembaca KEEMPAT aturan "pada tiket jasa lawannya pelanggan" dan benderanya
+    # terlewat di situ. Borangnya tampak benar, petugas memilih nama yang ada,
+    # dan id pemasok tersimpan di kolom pelanggan — tanpa satu pun galat.
+    assert "H. Anton" not in r.text, "borang jasa menawarkan pemasok"
+
+
+async def test_borang_jasa_menolak_komoditas_yang_belum_dibuka(klien):
+    """Tautan lama ke komoditas yang kemudian ditutup tak membuka borang.
+
+    Halaman di ponsel petugas berumur panjang; borang yang pasti ditolak di
+    akhir lebih buruk daripada penolakan di depan.
+    """
+    await login(klien)
+    r = await klien.get(f"{PREFIX}/jasa/BERAS_PK")
+    assert "belum dibuka untuk jasa" in r.text
+
+
+async def test_alur_jasa_tersimpan_sebagai_milik_pelanggan(klien):
+    """Alur penuh lewat HTTP: borang → simpan → tiket terbuka milik pelanggan."""
+    from sqlalchemy import select
+
+    from app.database import SessionLocal
+    from app.timbangan.models import TimbanganTransaksi
+
+    await login(klien)
+    pid = await _pelanggan_uji()
+
+    form = (await klien.get(f"{PREFIX}/jasa/GABAH_KERING")).text
+    kunci = kode_dari(form)
+    # Nama pelanggannya memang ditawarkan di daftar.
+    assert "Pak Budi" in form
+
+    r = await klien.post(f"{PREFIX}/jasa/GABAH_KERING", data={
+        "kunci": kunci, "berat_kg": "13.600", "pelanggan_id": str(pid),
+        "jasa_id": "", "nomor_polisi": "ad 9 jasa", "nama_sopir": "Slamet",
+        "nomor_acuan": "", "jumlah_karung": "120",
+        "tara_per_karung_kg": "0,25", "berat_acuan_kg": "0",
+        "tara_lain_kg": "0", "waktu": "", "catatan": "", "pihak_nama": "",
+    })
+    assert r.status_code == 200
+    assert "Menunggu timbang kedua" in r.text
+
+    async with SessionLocal() as db:
+        trx = (await db.execute(select(TimbanganTransaksi))).scalars().one()
+        assert trx.pelanggan_id == pid
+        assert trx.supplier_id is None, "barang titipan tercatat sebagai dibeli"
+        assert trx.jasa_id is None, "tanpa penunjuk berarti pesanan baru"
+        assert trx.arah == "MASUK" and trx.jenis_kode == "GABAH_KERING"

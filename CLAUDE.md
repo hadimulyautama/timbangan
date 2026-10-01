@@ -55,6 +55,51 @@ hanya menautkan akun bersama + kode perangkat. Pintu: operator, admin,
 superadmin (`pintu.TIMBANGAN`). Uji: `tests/timbangan/test_identitas*.py`,
 `tests/pg/`, `tests/test_identitas_paket.py` (AST peran harfiah).
 
+## Barang masuk JASA (sejak 1 Oktober 2026)
+
+Barang yang **DITITIPKAN** pelanggan untuk digiling, bukan dibeli. Dari sudut
+pos timbang yang berubah **satu** hal: lawan transaksinya PELANGGAN, padahal
+arahnya tetap MASUK.
+
+**Tidak ada jenis timbang baru.** Cara menimbang, tara, dan ambangnya sama
+persis — `GABAH_KERING_JASA` akan menggandakan tiga jenis jadi enam,
+menggandakan aturan taranya, dan memberi petugas enam tombol berpasangan mirip
+untuk salah pilih.
+
+**Komoditas mana yang boleh dijasakan ada di DATA**: `timbangan_jenis.boleh_jasa`
+(migrasi 0039). Hari ini hanya `GABAH_KERING` — bukan karena jasa terbatas pada
+gabah kering, melainkan karena hanya jalur itu yang sudah utuh di produksi:
+gabah basah belum punya aturan "wajib ke pengering", dan PK dari luar belum
+punya tempat menyimpan pemiliknya sama sekali (produksi MENOLAK tiket jasa di
+jalur itu). Begitu keduanya dibangun di sana, yang perlu dilakukan di sini NOL:
+centang kolomnya di master. Kartu beranda pun mengikuti daftarnya sendiri — ia
+hilang bila tak satu pun dibuka, dan berubah bentuk saat yang kedua dibuka.
+
+⚠ **`pihak_untuk(arah, jasa=…)` adalah SATU-SATUNYA tempat yang tahu "pada tiket
+jasa lawannya pelanggan".** Faktanya dibutuhkan EMPAT pembaca: daftar pilihan
+borang, nama kolom untuk templatnya, penulisan id ke tiket, dan `daftar_pihak`.
+Benderanya pernah terlewat di yang keempat — borang menawarkan PEMASOK di bawah
+medan bernama `pelanggan_id`, dan id pemasok tersimpan di kolom pelanggan tanpa
+satu pun galat. Jangan menyalin cabang "kalau jasa maka pelanggan" ke tempat
+kelima.
+
+Borangnya menanyakan **dua** hal tambahan: pemilik barang (daftar pelanggan,
+dengan pintu ketik-bebas — cermin Kledo disegarkan mingguan, jadi pelanggan baru
+memang bisa belum ada) dan **pesanan**: baru, atau tambahkan ke `JAS-…` yang
+sedang berjalan. Yang kedua itu yang membuat 24 ton dengan truk 12 ton tetap
+SATU pekerjaan; tanpanya satu pesanan terpecah dua dan produksi menolak
+menggiling keduanya bersama.
+
+**Baris `jasa` dibuat PRODUKSI, bukan di sini** (`purchase.pesanan_jasa_dari_tiket`
+di sana). Tiket di sini bisa dibatalkan dan direvisi; tiket batal yang sudah
+melahirkan pesanan meninggalkan pesanan yatim di sana —
+`timbangan_transaksi.jasa_id` karenanya PENUNJUK ke pesanan yang sudah ada, dan
+kolomnya pun milik rantai migrasi produksi (0064 di sana; 0039 di sini
+menambahkannya idempoten supaya modul ini tetap bisa berdiri sendiri).
+
+Uji: `tests/timbangan/test_jasa_masuk.py` (layanan) dan bagian JASA di
+`tests/timbangan/test_web.py` (layarnya dirender sungguhan).
+
 ## Hubungan dengan produksi
 
 Timbangan adalah **otoritas berat**. Sistem produksi MENAUT ke tiket timbang

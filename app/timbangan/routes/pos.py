@@ -278,6 +278,9 @@ async def beranda(
         hari_ini_daftar=hari,
         menganggur={b.trx.id for b in await service.tiket_menganggur(db)},
         per_arah=per_arah,
+        # Komoditas yang dibuka untuk JASA — dari kolom `boleh_jasa` di master,
+        # bukan dari daftar di kode. Kosong berarti kartunya tak digambar.
+        jenis_jasa=await service.daftar_jenis_jasa(db),
         peta=await service.peta_aturan(db),
     )
 
@@ -355,6 +358,142 @@ async def form_timbang_pertama(
         sekarang=sekarang(),
         kembali=f"{PREFIX}/pilih/{aturan.arah}",
     )
+
+
+# ═══════════════════════ Barang masuk JASA ═══════════════════════
+#
+# Barang yang DITITIPKAN pelanggan untuk digiling, bukan dibeli. Rutenya
+# tersendiri, tetapi borang dan aturan timbangnya SAMA PERSIS dengan barang
+# masuk biasa — cara menimbang, tara, dan ambangnya tak berbeda sedikit pun;
+# yang beda cuma pemiliknya.
+#
+# Karena itu TIDAK ada jenis timbang `GABAH_KERING_JASA`. Menggandakan tiga
+# jenis jadi enam berarti menggandakan aturan tara dan memberi petugas enam
+# tombol berpasangan mirip untuk salah pilih. Yang ditambahkan borang ini cuma
+# DUA pertanyaan: milik siapa, dan pesanan yang mana.
+#
+# Rute terpisah (bukan `?jasa=1` pada rute biasa) supaya tak ada satu pun
+# jalan tak sengaja: tiket jasa menulis `pelanggan_id` pada arah MASUK —
+# kebalikan dari tiket biasa — dan parameter yang hilang dari URL akan
+# membuatnya menulis pemilik barang ke kolom pemasok tanpa bersuara.
+
+
+@router.get("/jasa/{jenis_kode}")
+async def form_jasa_masuk(
+    jenis_kode: str,
+    request: Request,
+    pelanggan_id: str = "",
+    akun: TimbanganAkun = Depends(butuh_akun),
+    db: AsyncSession = Depends(get_db),
+):
+    """Borang barang masuk JASA — satu halaman, dua pertanyaan tambahan."""
+    try:
+        aturan = await service.aturan_untuk(db, jenis_kode.upper())
+    except service.LayananError as e:
+        return redirect("/", err=str(e))
+    if not aturan.boleh_jasa:
+        # Dijawab di sini juga, bukan hanya saat menyimpan: halaman di ponsel
+        # petugas berumur panjang, dan tautan lama ke komoditas yang kemudian
+        # ditutup akan membuka borang yang pasti ditolak di akhir.
+        return redirect("/", err=f"{aturan.nama} belum dibuka untuk jasa.")
+
+    tara, asal = await service.tara_disarankan(db, supplier_id=None, aturan=aturan)
+    # Daftar PELANGGAN, bukan pemasok — lihat `service.pihak_untuk`.
+    sering, lainnya = await service.pihak_pilihan(db, aturan.arah, jasa=True)
+    return render(
+        request, "timbang1.html",
+        aturan=aturan,
+        jasa=True,
+        kode=await service.kode_baru(db, akun, aturan.arah),
+        kunci=str(uuid4()),
+        pihak_sering=sering,
+        pihak_lainnya=lainnya,
+        kolom_nama=service.nama_kolom_pihak(aturan.arah, jasa=True),
+        # SELURUH pesanan berjalan, bukan hanya milik satu pelanggan.
+        #
+        # Siapa pelanggannya baru diketahui SETELAH petugas memilih, dan
+        # memecahnya jadi dua halaman ("pilih pelanggan" lalu "pilih pesanan")
+        # membayar satu perjalanan bolak-balik lagi di tempat yang membayarnya
+        # dengan berdiri di samping truk. Jadi daftarnya utuh dan tiap barisnya
+        # MENYEBUT pemiliknya; pasangan yang keliru ditolak layanan dengan
+        # kalimat yang menyuruh memuat ulang. Pesanan jasa yang berjalan
+        # sekaligus segelintir — daftarnya pendek dengan sendirinya.
+        pesanan=await service.pesanan_jasa_semua_berjalan(db),
+        kendaraan=await service.kendaraan_dikenal(db),
+        tara=tara,
+        asal_tara=asal,
+        sekarang=sekarang(),
+        kembali=f"{PREFIX}/",
+    )
+
+
+@router.post("/jasa/{jenis_kode}")
+async def simpan_jasa_masuk(
+    jenis_kode: str,
+    request: Request,
+    kunci: str = Form(""),
+    berat_kg: str = Form(...),
+    pelanggan_id: str = Form(""),
+    jasa_id: str = Form(""),
+    pihak_nama: str = Form(""),
+    nomor_polisi: str = Form(""),
+    nama_sopir: str = Form(""),
+    nomor_acuan: str = Form(""),
+    jumlah_karung: str = Form("0"),
+    tara_per_karung_kg: str = Form("0"),
+    berat_acuan_kg: str = Form("0"),
+    tara_lain_kg: str = Form("0"),
+    waktu: str = Form(""),
+    catatan: str = Form(""),
+    akun: TimbanganAkun = Depends(butuh_akun),
+    db: AsyncSession = Depends(get_db),
+):
+    jenis_kode = jenis_kode.upper()
+    try:
+        aturan = await service.aturan_untuk(db, jenis_kode)
+    except service.LayananError as e:
+        return redirect("/", err=str(e))
+
+    data = service.InputTimbang(
+        kunci=kunci.strip() or None,
+        arah=aturan.arah,
+        jenis_kode=jenis_kode,
+        berat_kg=_angka(berat_kg),
+        waktu_operator=_waktu_operator(waktu),
+        # Jasa SELALU dua kali timbang: bobot barangnya yang jadi dasar yang
+        # ditunjukkan ke pemiliknya, dan satu kali timbang tak menghasilkan
+        # netto. Tidak ditawarkan sebagai pilihan supaya tak bisa dipilih
+        # keliru.
+        cara_timbang=CARA_DUA_KALI,
+        jasa=True,
+        pelanggan_id=int(pelanggan_id) if pelanggan_id.isdigit() else None,
+        jasa_id=int(jasa_id) if jasa_id.isdigit() else None,
+        pihak_nama=pihak_nama.strip() or None,
+        nomor_polisi=nomor_polisi.strip() or None,
+        nama_sopir=nama_sopir.strip() or None,
+        tara_lain_kg=_angka(tara_lain_kg),
+        muatan=[service.InputMuatan(
+            jenis_kode=jenis_kode,
+            jumlah_karung=int(_angka(jumlah_karung)),
+            tara_per_karung_kg=_angka(tara_per_karung_kg),
+            berat_acuan_kg=_angka(berat_acuan_kg),
+            nomor_acuan=nomor_acuan.strip() or None,
+        )],
+        catatan=catatan.strip() or None,
+        perangkat_kode=akun.perangkat_kode,
+    )
+
+    try:
+        trx = await service.simpan_timbang_pertama(
+            db, akun=akun, data=data,
+            ip=request.client.host if request.client else None,
+        )
+    except (service.LayananError, logic.ValidasiError) as e:
+        return redirect(f"/jasa/{jenis_kode}", err=str(e))
+    except DBAPIError as e:
+        return redirect(f"/jasa/{jenis_kode}",
+                        err=await galat_db(db, e, "menyimpan timbangan"))
+    return redirect(f"/transaksi/{trx.id}", ok="Timbang pertama jasa tersimpan.")
 
 
 @router.post("/timbang/{jenis_kode}")

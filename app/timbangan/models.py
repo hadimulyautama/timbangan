@@ -35,6 +35,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -141,6 +142,12 @@ class TimbanganJenis(Base, TimestampMixin):
     masa_berlaku_tara_hari: Mapped[int] = mapped_column(
         Integer, nullable=False, default=90
     )
+
+    #: Komoditas ini boleh masuk sebagai barang JASA? Lihat
+    #: `logic.AturanJenis.boleh_jasa` — aturannya di DATA supaya komoditas
+    #: berikutnya dibuka dengan centang, bukan dengan rilis.
+    boleh_jasa: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false"))
 
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="aktif")
     catatan: Mapped[str | None] = mapped_column(Text)
@@ -385,6 +392,26 @@ class TimbanganTransaksi(Base, TimestampMixin):
     #: berperan sebagai vendor sekaligus pelanggan. Yang menentukan adalah
     #: arah transaksi ini, bukan sifat orangnya.
     pelanggan_id: Mapped[int | None] = mapped_column(ForeignKey("pelanggan.id"))
+    #: Pesanan JASA (toll milling) yang tiket MASUK ini masuki — NULL untuk
+    #: barang yang dibeli, yaitu hampir semuanya.
+    #:
+    #: ⚠ Penunjuk ke pesanan yang SUDAH berjalan, bukan tempat melahirkannya.
+    #: Pak Budi yang menjasakan 24 ton dengan truk 12 ton datang DUA KALI;
+    #: tiket kedua menunjuk pesanan yang sama, dan karena itu satu pekerjaan
+    #: tetap satu nota dan satu rendemen. Baris `jasa`-nya sendiri dibuat
+    #: PRODUKSI saat operator menerima tiketnya — tiket di sini bisa
+    #: dibatalkan atau direvisi, dan tiket batal yang sudah melahirkan pesanan
+    #: akan meninggalkan pesanan yatim di sana.
+    #:
+    #: ⚠ TANPA ForeignKey DI TINGKAT ORM, dan itu disengaja. Tabel `jasa`
+    #: dimiliki repo penggilingan (migrasi 0064 di sana), tidak ada di metadata
+    #: modul ini — dan uji modul ini membangun skemanya dari metadata, jadi FK
+    #: ke tabel yang tak ada di situ akan menggagalkan `create_all` di seluruh
+    #: suite. FK-nya berdiri di tingkat BASIS DATA, dipasang migrasi 0064
+    #: produksi. Pola dan alasan yang sama sudah dipakai arah sebaliknya:
+    #: `purchase_batches.timbangan_transaksi_id` di sana pun kolom Integer
+    #: biasa di ORM.
+    jasa_id: Mapped[int | None] = mapped_column(Integer)
     # Untuk jasa timbang: pihak tidak selalu terdaftar sebagai supplier.
     pihak_nama: Mapped[str | None] = mapped_column(String(120))
     kendaraan_id: Mapped[int | None] = mapped_column(
