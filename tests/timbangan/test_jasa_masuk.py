@@ -59,6 +59,7 @@ async def test_tiket_jasa_mengisi_pelanggan_bukan_supplier(db, petugas, pelangga
     assert trx.supplier_id is None, "pemilik barang tertulis sebagai pemasok"
     assert trx.arah == logic.MASUK, "jasa bukan arah baru"
     assert trx.jenis_kode == "GABAH_KERING", "jasa bukan jenis baru"
+    assert trx.jasa is True
 
 
 async def test_tiket_biasa_tetap_mengisi_supplier(db, petugas, supplier):
@@ -75,6 +76,7 @@ async def test_tiket_biasa_tetap_mengisi_supplier(db, petugas, supplier):
     assert trx.supplier_id == supplier.id
     assert trx.pelanggan_id is None
     assert trx.jasa_id is None
+    assert trx.jasa is False
 
 
 async def test_pemilik_boleh_diketik_bebas(db, petugas):
@@ -83,12 +85,28 @@ async def test_pemilik_boleh_diketik_bebas(db, petugas):
     Pelanggan yang baru dibuat hari ini memang bisa belum ada di daftar — dan
     tanpa pintu ketik-bebas, truknya tak bisa ditimbang sampai sinkronisasi
     berikutnya. Itu bukan kelonggaran; itu syarat supaya pos tetap bisa bekerja.
+
+    ⚠⚠ DAN `trx.jasa` WAJIB TETAP TRUE DI SINI — cacat lapangan 2 Oktober 2026.
+    Uji ini sudah ADA sebelum cacatnya ditemukan dan sudah membuktikan
+    `(supplier_id, pelanggan_id) == (None, None)` sebagai perilaku yang BENAR
+    untuk pintu ketik-bebas. Yang luput: DUA kolom NULL itu berarti baris
+    tiketnya, dilihat dari repo `produksi` (basis data yang sama), IDENTIK
+    bentuknya dengan pembelian biasa yang pemasoknya diketik bebas. Sampai
+    migrasi 0041 menambah kolom `jasa`, produksi membaca `pelanggan_id IS NOT
+    NULL` sebagai satu-satunya penanda — dan pelanggan baru ketik-bebas gagal
+    terdeteksi, lalu dicatat sebagai PEMASOK PALSU bernama pelanggan itu
+    sendiri. Pelajarannya: menguji bahwa sebuah pintu BEKERJA tidak sama
+    dengan menguji bahwa jejak yang ditinggalkannya BISA DIBACA BENAR oleh
+    pembaca lain.
     """
     trx = await service.simpan_timbang_pertama(
         db, akun=petugas,
         data=tiket_jasa(pelanggan_id=None, pihak_nama="Bu Sri (baru)"))
     assert trx.pihak_nama == "Bu Sri (baru)"
     assert (trx.supplier_id, trx.pelanggan_id) == (None, None)
+    assert trx.jasa is True, (
+        "pelanggan baru ketik-bebas kehilangan penanda jasa — produksi akan "
+        "membacanya sebagai pembelian biasa dan membuat pemasok palsu")
 
 
 async def test_pemilik_wajib_ada(db, petugas):
@@ -289,3 +307,35 @@ async def test_pemilik_tak_pernah_bocor_ke_kolom_pemasok(db, petugas, pelanggan)
     assert len(baris) == 3
     assert {b.supplier_id for b in baris} == {None}
     assert {b.pelanggan_id for b in baris} == {pelanggan.id}
+
+
+# ═════ 7 · TANDA `jasa` — tersimpan, bukan diturunkan (migrasi 0041) ═════
+#
+# Cacat lapangan 2 Oktober 2026. Bagian ini diperiksa TERPISAH dari bagian 1
+# karena pertanyaannya beda: bagian 1 bertanya "kolom pihaknya benar?",
+# bagian ini bertanya "TANDA JASA-nya sendiri selamat sampai basis data?" —
+# dan keduanya bisa benar salah satu tanpa yang lain.
+
+async def test_tanda_jasa_pemasok_ketik_bebas_tetap_false(db, petugas):
+    """Sisi SEBALIKNYA dari `test_pemilik_boleh_diketik_bebas`: pembelian
+    biasa yang pemasoknya diketik bebas tak boleh ikut tertandai jasa hanya
+    karena `pihak_nama` terisi — satu-satunya pembeda memang `data.jasa`,
+    bukan ada-tidaknya nama bebas."""
+    data = tiket_jasa(pelanggan_id=None, pihak_nama="CV Makmur (baru)")
+    data.jasa = False
+    data.supplier_id = None
+    trx = await service.simpan_timbang_pertama(db, akun=petugas, data=data)
+    assert trx.pihak_nama == "CV Makmur (baru)"
+    assert trx.jasa is False
+
+
+async def test_tanda_jasa_bertahan_pada_kiriman_ulang(db, petugas, pelanggan):
+    """Kiriman ulang (antrean luring) memakai `kunci` yang sama — baris yang
+    SAMA diperbarui, bukan baris baru. Tandanya wajib tetap benar sesudahnya,
+    sebab jalur simpan kedua kalinya menjalankan kode yang sama persis."""
+    data = tiket_jasa(pelanggan_id=pelanggan.id)
+    data.kunci = "kunci-kirim-ulang-1"
+    trx1 = await service.simpan_timbang_pertama(db, akun=petugas, data=data)
+    trx2 = await service.simpan_timbang_pertama(db, akun=petugas, data=data)
+    assert trx1.id == trx2.id, "kiriman ulang seharusnya memperbarui baris yang sama"
+    assert trx2.jasa is True

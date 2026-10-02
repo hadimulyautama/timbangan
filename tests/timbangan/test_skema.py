@@ -41,6 +41,7 @@ MIGRASI = (
     AKAR / "migrations" / "versions" / "0036_indeks_duplikat.py",
     AKAR / "migrations" / "versions" / "0037_identitas_bersama.py",
     AKAR / "migrations" / "versions" / "0039_jasa_masuk.py",
+    AKAR / "migrations" / "versions" / "0041_tanda_jasa.py",
 )
 
 # Daftar di atas DITULIS TANGAN, dan karena itu ia basi tiap kali ada migrasi
@@ -56,6 +57,8 @@ TANPA_KOLOM_BARU = {
     "0038_kunci_baris_64.py": "hanya melebarkan String(36) → String(64) (R-T-01)",
     "0040_jasa_tiga_komoditas.py": "hanya mengisi data (membuka boleh_jasa)",
 }
+# `0041_tanda_jasa.py` TIDAK masuk di sini — ia menambah kolom (`jasa`) dan
+# karena itu wajib ikut diterapkan di MIGRASI di atas, bukan dikecualikan.
 
 
 def _migrasi_belum_terdaftar() -> list[str]:

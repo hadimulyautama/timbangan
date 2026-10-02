@@ -97,8 +97,31 @@ melahirkan pesanan meninggalkan pesanan yatim di sana —
 kolomnya pun milik rantai migrasi produksi (0064 di sana; 0039 di sini
 menambahkannya idempoten supaya modul ini tetap bisa berdiri sendiri).
 
-Uji: `tests/timbangan/test_jasa_masuk.py` (layanan) dan bagian JASA di
-`tests/timbangan/test_web.py` (layarnya dirender sungguhan).
+⚠⚠ **`timbangan_transaksi.jasa` (migrasi 0041) ADALAH SATU-SATUNYA PENANDA
+"ini jasa?"** — bukan `pelanggan_id IS NOT NULL`. Cacat lapangan 2 Oktober
+2026: pelanggan BARU yang diketik bebas di pintu ketik-bebas (sah dan
+disengaja — cermin Kledo disegarkan mingguan) membuat `pelanggan_id` tetap
+NULL sampai produksi membuatnya saat menerima tiketnya. Sampai migrasi ini,
+baris tiket "jasa-pelanggan-baru" jadi IDENTIK bentuknya dengan
+"pembelian-pemasok-baru", dan produksi (`timbang_link.adalah_jasa`, basis
+data yang sama) membuat PEMASOK PALSU dari nama pelanggan.
+
+Diisi SEKALI, di `simpan_timbang_pertama`, dari `data.jasa` — fakta yang
+petugas tahu pasti pada detik ia menekan "Barang masuk jasa", lepas dari
+apakah pelanggannya sudah terdaftar. `supplier_id`/`pelanggan_id` TETAP ada
+dan tetap diisi seperti sebelumnya (mereka menjawab SIAPA, bukan lagi
+APAKAH).
+
+⚠ Pelajaran metodologis: `test_pemilik_boleh_diketik_bebas` sudah ADA
+sebelum cacat ini ditemukan dan sudah membuktikan `(supplier_id,
+pelanggan_id) == (None, None)` sebagai perilaku BENAR untuk pintu ketik-bebas
+— tetapi tak pernah memeriksa apakah jejak itu masih bisa dibaca benar oleh
+PEMBACA LAIN (produksi, basis data yang sama). Menguji bahwa sebuah pintu
+bekerja tidak sama dengan menguji bahwa akibatnya di seberang pintu itu benar.
+
+Uji: `tests/timbangan/test_jasa_masuk.py` (layanan, termasuk bagian 7 — tanda
+`jasa` itu sendiri) dan bagian JASA di `tests/timbangan/test_web.py` (layarnya
+dirender sungguhan, termasuk jalur pelanggan-baru-ketik-bebas lewat HTTP).
 
 ## Hubungan dengan produksi
 

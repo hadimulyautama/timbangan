@@ -385,6 +385,25 @@ class TimbanganTransaksi(Base, TimestampMixin):
     # Salinan aturan yang dipakai (JSON) — butir b.
     aturan_snapshot: Mapped[str | None] = mapped_column(Text)
 
+    #: ⚠⚠ TIKET INI MEMBAWA BARANG TITIPAN, bukan barang yang dibeli — dan ini
+    #: SATU-SATUNYA tempat faktanya hidup. Migrasi 0041 (2 Oktober 2026),
+    #: sesudah cacat lapangan: sampai migrasi itu, "ini jasa?" DITURUNKAN dari
+    #: `pelanggan_id IS NOT NULL` (lihat `timbang_link.adalah_jasa` di repo
+    #: produksi) — dan itu SALAH untuk pelanggan BARU yang diketik bebas di
+    #: pintu ketik-bebas (cermin Kledo disegarkan mingguan, jadi pelanggan
+    #: baru memang bisa belum ada): `_pasang_pihak(..., pihak_id=None,
+    #: jasa=True)` mengosongkan KEDUA kolom FK di bawah, dan baris tiket
+    #: "jasa-pelanggan-baru" jadi IDENTIK bentuknya dengan
+    #: "pembelian-pemasok-baru". Produksi lalu membuat PEMASOK PALSU dari nama
+    #: pelanggan — persis yang dilarang keras spek.
+    #:
+    #: Kolom ini DIISI SEKALI, saat petugas menekan "Barang masuk jasa" —
+    #: fakta yang ia tahu pasti pada detik itu, lepas dari apakah
+    #: pelanggannya sudah terdaftar. `supplier_id`/`pelanggan_id` TETAP ada
+    #: di bawah (turunan — mana pelanggannya, kalau sudah diketahui), tetapi
+    #: bukan lagi penentu "jasa atau bukan".
+    jasa: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False,
+                                       server_default=text("false"))
     #: Lawan transaksi pada arah MASUK.
     supplier_id: Mapped[int | None] = mapped_column(ForeignKey("suppliers.id"))
     #: Lawan transaksi pada arah KELUAR. Dua kolom, bukan satu, karena

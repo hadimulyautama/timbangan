@@ -4084,3 +4084,48 @@ async def test_alur_jasa_tersimpan_sebagai_milik_pelanggan(klien):
         assert trx.supplier_id is None, "barang titipan tercatat sebagai dibeli"
         assert trx.jasa_id is None, "tanpa penunjuk berarti pesanan baru"
         assert trx.arah == "MASUK" and trx.jenis_kode == "GABAH_KERING"
+        assert trx.jasa is True
+
+
+async def test_alur_jasa_pelanggan_baru_ketik_bebas_tetap_bertanda(klien):
+    """⭐⭐ REPRODUKSI LANGSUNG laporan pemilik 2 Oktober 2026, lewat HTTP
+    sungguhan — bukan memanggil `service.simpan_timbang_pertama` langsung.
+
+    Kembaran `test_alur_jasa_tersimpan_sebagai_milik_pelanggan` di atas, dengan
+    SATU beda yang disengaja: `pelanggan_id` dikirim KOSONG dan `pihak_nama`
+    diisi nama yang belum ada di cermin pelanggan — persis yang terjadi saat
+    petugas mengetik nama baru alih-alih mengklik baris di daftar.
+
+    Sebelum migrasi 0041, baris yang dihasilkan di sini IDENTIK bentuknya
+    dengan tiket pembelian biasa yang pemasoknya diketik bebas — dan repo
+    `produksi` (basis data yang sama) membuat pemasok palsu darinya.
+    """
+    from sqlalchemy import select
+
+    from app.database import SessionLocal
+    from app.timbangan.models import TimbanganTransaksi
+
+    await login(klien)
+
+    form = (await klien.get(f"{PREFIX}/jasa/GABAH_KERING")).text
+    kunci = kode_dari(form)
+
+    r = await klien.post(f"{PREFIX}/jasa/GABAH_KERING", data={
+        "kunci": kunci, "berat_kg": "10.050", "pelanggan_id": "",
+        "jasa_id": "", "pihak_nama": "Marnooo",
+        "nomor_polisi": "ad 1 xy", "nama_sopir": "Slamet",
+        "nomor_acuan": "", "jumlah_karung": "0",
+        "tara_per_karung_kg": "0", "berat_acuan_kg": "0",
+        "tara_lain_kg": "0", "waktu": "", "catatan": "",
+    })
+    assert r.status_code == 200
+    assert "Menunggu timbang kedua" in r.text
+
+    async with SessionLocal() as db:
+        trx = (await db.execute(select(TimbanganTransaksi))).scalars().one()
+        assert trx.pihak_nama == "Marnooo"
+        assert (trx.supplier_id, trx.pelanggan_id) == (None, None)
+        assert trx.jasa is True, (
+            "tiket jasa pelanggan-baru-ketik-bebas kehilangan tandanya lewat "
+            "jalur HTTP sungguhan — produksi akan membacanya sebagai "
+            "pembelian biasa dan membuat pemasok palsu bernama pelanggan")

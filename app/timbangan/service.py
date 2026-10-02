@@ -1686,6 +1686,21 @@ async def simpan_timbang_pertama(
         data.pelanggan_id if data.jasa else data.supplier_id,
         jasa=data.jasa,
     )
+    # ⚠⚠ PENANDANYA SENDIRI — bukan diturunkan dari `pelanggan_id`.
+    #
+    # Cacat lapangan 2 Oktober 2026: pelanggan BARU yang diketik bebas (pintu
+    # ketik-bebas, sah dan disengaja — lihat `_wajib_pihak`) membuat
+    # `_pasang_pihak` di atas mengosongkan `pelanggan_id` juga, sebab
+    # `pihak_id`-nya memang belum ada id sampai pelanggannya dibuat di
+    # PRODUKSI (`purchase.find_or_create_pelanggan`, bukan di sini). Tanpa
+    # baris ini, tiket itu identik bentuknya dengan pembelian biasa yang
+    # pemasoknya diketik bebas — dan produksi membuat PEMASOK PALSU dari nama
+    # pelanggan, persis yang dilarang keras spek.
+    #
+    # Dicatat apa adanya (`data.jasa`), bukan "benar" menurut penjaga lain:
+    # `_periksa_jasa` sudah menolak komoditas yang belum dibuka untuk jasa,
+    # jadi pada titik ini `data.jasa=True` memang sah.
+    trx.jasa = data.jasa
     # Penunjuk pesanan hanya sah pada tiket jasa. Dikosongkan terang-terangan
     # untuk yang bukan: kiriman ULANG boleh mengubah tiket, dan tiket yang
     # pernah salah ditandai jasa tak boleh menyimpan penunjuk itu diam-diam.
