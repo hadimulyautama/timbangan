@@ -1861,6 +1861,113 @@ async def test_jejak_audit_menyimpan_salinan_penuh_catatan_yang_dihapus(
     assert '"jumlah_karung": 120' in jejak.nilai_sebelum
 
 
+# ═══════════════════════════ Hapus massal ═══════════════════════════
+
+async def test_hapus_massal_hanya_super_admin(klien, app_uji):
+    await login(klien, "budi")
+    trx_id = await _selesaikan(klien, "GABAH_BASAH")
+    await klien.post(f"{PREFIX}/keluar")
+
+    await login(klien, "wahid")
+    daftar = (await klien.get(f"{PREFIX}/transaksi")).text
+    assert "Hapus massal" not in daftar                # tombolnya tidak ada…
+
+    r = await klien.post(f"{PREFIX}/transaksi/hapus-massal", data={
+        "transaksi_id": [str(trx_id)], "alasan": "coba", "konfirmasi": "1"})
+    assert r.status_code == 403                        # …dan pintunya tertutup
+    assert await trx_oleh_id(trx_id) is not None
+
+
+async def test_hapus_massal_menghapus_yang_dipilih(klien, app_uji):
+    await login(klien, "budi")
+    a = await _selesaikan(klien, "GABAH_BASAH")
+    b = await _selesaikan(klien, "GABAH_BASAH")
+    c = await _selesaikan(klien, "GABAH_BASAH")
+    await klien.post(f"{PREFIX}/keluar")
+
+    await _jadi_super(app_uji)
+    await login(klien, "wahid")
+    r = await klien.post(f"{PREFIX}/transaksi/hapus-massal", data={
+        "transaksi_id": [str(a), str(b)],
+        "alasan": "Dobel entri saat uji coba", "konfirmasi": "2"})
+    assert "2 catatan dihapus permanen" in r.text
+
+    assert await trx_oleh_id(a) is None
+    assert await trx_oleh_id(b) is None
+    assert await trx_oleh_id(c) is not None             # yang tak dipilih tetap ada
+
+
+async def test_hapus_massal_menuntut_konfirmasi_jumlah_persis(klien, app_uji):
+    """Konfirmasinya JUMLAH yang dipilih, bukan kata bebas — mengetik angka
+    yang salah (termasuk jumlah yang BENAR untuk pilihan yang BEDA) ditolak,
+    dan tidak satu pun baris terhapus."""
+    await login(klien, "budi")
+    a = await _selesaikan(klien, "GABAH_BASAH")
+    b = await _selesaikan(klien, "GABAH_BASAH")
+    await klien.post(f"{PREFIX}/keluar")
+
+    await _jadi_super(app_uji)
+    await login(klien, "wahid")
+    r = await klien.post(f"{PREFIX}/transaksi/hapus-massal", data={
+        "transaksi_id": [str(a), str(b)],
+        "alasan": "coba", "konfirmasi": "3"})
+    assert "ketik angka 2 persis" in r.text
+    assert await trx_oleh_id(a) is not None
+    assert await trx_oleh_id(b) is not None
+
+
+async def test_hapus_massal_menuntut_alasan(klien, app_uji):
+    await login(klien, "budi")
+    a = await _selesaikan(klien, "GABAH_BASAH")
+    await klien.post(f"{PREFIX}/keluar")
+
+    await _jadi_super(app_uji)
+    await login(klien, "wahid")
+    r = await klien.post(f"{PREFIX}/transaksi/hapus-massal", data={
+        "transaksi_id": [str(a)], "alasan": "   ", "konfirmasi": "1"})
+    assert "disertai alasan" in r.text
+    assert await trx_oleh_id(a) is not None
+
+
+async def test_hapus_massal_tanpa_pilihan_ditolak(klien, app_uji):
+    await _jadi_super(app_uji)
+    await login(klien, "wahid")
+    r = await klien.post(f"{PREFIX}/transaksi/hapus-massal", data={
+        "alasan": "coba", "konfirmasi": "0"})
+    assert "Tidak ada catatan yang dipilih" in r.text
+
+
+async def test_hapus_massal_jejak_audit_tiap_baris(klien, app_uji):
+    """Satu baris jejak audit PER catatan yang dihapus — bukan satu baris
+    gabungan untuk seluruh batch, supaya tiap catatan tetap bisa ditelusuri
+    sendiri-sendiri di sejarahnya."""
+    from sqlalchemy import select
+
+    from app import database
+    from app.timbangan.models import TimbanganAudit
+
+    await login(klien, "budi")
+    a = await _selesaikan(klien, "GABAH_BASAH")
+    b = await _selesaikan(klien, "GABAH_BASAH")
+    await klien.post(f"{PREFIX}/keluar")
+
+    await _jadi_super(app_uji)
+    await login(klien, "wahid")
+    kode_a, kode_b = (await trx_oleh_id(a)).kode, (await trx_oleh_id(b)).kode
+    await klien.post(f"{PREFIX}/transaksi/hapus-massal", data={
+        "transaksi_id": [str(a), str(b)],
+        "alasan": "Dobel entri saat uji coba", "konfirmasi": "2"})
+
+    async with database.SessionLocal() as db:
+        jejak = list((await db.execute(
+            select(TimbanganAudit).where(TimbanganAudit.aksi == "HAPUS_TRANSAKSI")
+        )).scalars())
+    ringkasan = [j.ringkasan for j in jejak]
+    assert any(kode_a in r for r in ringkasan)
+    assert any(kode_b in r for r in ringkasan)
+    assert len(jejak) == 2
+
+
 async def test_super_admin_punya_semua_wewenang_admin(klien, app_uji):
     await _jadi_super(app_uji)
     await login(klien, "wahid")

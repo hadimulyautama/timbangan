@@ -638,6 +638,74 @@ async def hapus_transaksi(
     return redirect("/transaksi", ok=f"{kode} dihapus permanen.")
 
 
+@router.post("/transaksi/hapus-massal")
+async def hapus_massal(
+    request: Request,
+    transaksi_id: list[int] = Form([]),
+    alasan: str = Form(""),
+    konfirmasi: str = Form(""),
+    akun: TimbanganAkun = Depends(butuh_super),
+    db: AsyncSession = Depends(get_db),
+):
+    """Hapus permanen banyak catatan sekaligus — satu per satu lewat
+    `service.hapus_transaksi` yang SAMA dengan hapus satu baris.
+
+    Aturan dan jejak auditnya tidak berbeda; yang berbeda cuma dipanggil
+    berulang. Konfirmasinya pun sengaja BUKAN ketik nomor transaksi (banyak
+    baris, banyak nomor berbeda) melainkan ketik JUMLAH baris yang dipilih —
+    pemeriksaan bahwa orangnya sungguh menghitung apa yang akan hilang,
+    bukan sekadar menekan tombol.
+
+    Baris yang masih tertaut catatan produksi DILEWATI, bukan membatalkan
+    seluruh batch: Super Admin yang memilih 20 baris tak perlu mengulang
+    dari awal hanya karena satu di antaranya tertaut.
+    """
+    ids = sorted(set(transaksi_id))
+    if not ids:
+        return redirect("/transaksi", err="Tidak ada catatan yang dipilih.")
+    if konfirmasi.strip() != str(len(ids)):
+        return redirect(
+            "/transaksi",
+            err=f"Untuk menghapus {len(ids)} catatan, ketik angka {len(ids)} persis.",
+        )
+    if not (alasan or "").strip():
+        return redirect("/transaksi", err="Penghapusan harus disertai alasan.")
+
+    dihapus = 0
+    dilewati: list[str] = []
+    for tid in ids:
+        label = f"#{tid}"
+        try:
+            b = await _ambil(db, tid, akun)
+            label = b.trx.kode
+            await service.hapus_transaksi(
+                db, akun=akun, trx=b.trx, alasan=alasan,
+                ip=request.client.host if request.client else None,
+            )
+            dihapus += 1
+        except service.LayananError as e:
+            await db.rollback()
+            dilewati.append(f"{label}: {e}")
+        except IntegrityError:
+            await db.rollback()
+            dilewati.append(f"{label}: masih tertaut catatan lain")
+        except DBAPIError as e:
+            dilewati.append(f"{label}: {await galat_db(db, e, 'menghapus tiket')}")
+
+    if dihapus == 0:
+        pesan = f"Tidak ada yang dihapus. {len(dilewati)} dilewati: " + "; ".join(dilewati[:5])
+        if len(dilewati) > 5:
+            pesan += f"; dan {len(dilewati) - 5} lainnya."
+        return redirect("/transaksi", err=pesan)
+
+    pesan = f"{dihapus} catatan dihapus permanen."
+    if dilewati:
+        pesan += f" {len(dilewati)} dilewati: " + "; ".join(dilewati[:5])
+        if len(dilewati) > 5:
+            pesan += f"; dan {len(dilewati) - 5} lainnya."
+    return redirect("/transaksi", ok=pesan)
+
+
 @router.post("/transaksi/{transaksi_id}/cetak")
 async def catat_cetak(
     transaksi_id: int,

@@ -45,11 +45,19 @@
     <button type="submit" class="tbl lebar-penuh">Terapkan</button>
   </form>
 
-  <div class="kartu" style="padding:0;overflow:hidden">
+  <form id="form-hapus-massal" method="post"
+        action="{{ PREFIX }}/transaksi/hapus-massal"
+        class="kartu" style="padding:0;overflow:hidden">
     <div class="gulung">
       <table>
         <thead>
           <tr>
+            {% if akun.is_super %}
+              <th style="width:1%">
+                <input type="checkbox" data-pilih-semua
+                       aria-label="Pilih semua di halaman ini">
+              </th>
+            {% endif %}
             <th>Tanggal</th><th>Nomor polisi</th><th>Pihak</th><th>Komoditas</th>
             <th class="angka">Barang</th><th class="angka">Selisih</th>
             <th>Status</th>
@@ -59,6 +67,15 @@
           {% for b in baris %}
             <tr onclick="location='{{ PREFIX }}/transaksi/{{ b.trx.id }}'"
                 style="cursor:pointer">
+              {% if akun.is_super %}
+                {# Klik di sel ini tak boleh ikut memicu navigasi barisnya —
+                   lihat {% raw %}{% block skrip %}{% endraw %} untuk jaring
+                   keduanya (perubahan lewat keyboard, bukan klik mentah). #}
+                <td onclick="event.stopPropagation()">
+                  <input type="checkbox" name="transaksi_id" value="{{ b.trx.id }}"
+                         data-baris-pilih aria-label="Pilih {{ b.trx.kode }}">
+                </td>
+              {% endif %}
               <td>{{ b.trx.tanggal|tgl(true) }}</td>
               <td>{{ b.trx.nomor_polisi or b.trx.kode }}</td>
               <td>{{ b.supplier_nama or b.trx.pihak_nama or '—' }}</td>
@@ -80,13 +97,54 @@
               </td>
             </tr>
           {% else %}
-            <tr><td colspan="7" class="kosong">
+            <tr><td colspan="{{ 8 if akun.is_super else 7 }}" class="kosong">
               Tidak ada transaksi pada rentang ini.</td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
-  </div>
+
+    {% if akun.is_super and baris %}
+      {# Sama seperti "Hapus permanen" di rincian.html: terkunci di balik
+         teks yang harus diketik, bukan sekadar tombol ditekan. Bedanya di
+         sana nomor transaksi (satu baris, satu nomor); di sini JUMLAH yang
+         dipilih — tak ada satu nomor yang mewakili banyak baris berbeda. #}
+      <details style="border-top:1px solid var(--garis)">
+        <summary style="cursor:pointer;font-weight:700;font-size:14px;padding:12px 14px">
+          Hapus massal
+        </summary>
+        <div style="padding:0 14px 14px;display:flex;flex-direction:column;gap:10px">
+          <div class="bantu">
+            Sama seperti hapus satu baris: permanen, dan tetap tercatat penuh
+            di jejak audit. Baris yang masih tertaut catatan produksi akan
+            dilewati, bukan membatalkan seluruh penghapusan. "Pilih semua"
+            hanya memilih baris di halaman ini ({{ baris|length }} baris) —
+            paginasi membuat memilih lintas halaman sekaligus mustahil tanpa
+            risiko salah hitung.
+          </div>
+          <div data-jumlah-dipilih-wadah hidden>
+            <b><span data-jumlah-dipilih>0</span> baris dipilih.</b>
+          </div>
+          <div class="grup">
+            <div class="lbl">Alasan penghapusan</div>
+            <textarea class="fld" name="alasan" rows="2" required></textarea>
+          </div>
+          <div class="grup">
+            <div class="lbl">Ketik jumlah baris yang dipilih</div>
+            <input class="fld" name="konfirmasi" required autocomplete="off"
+                   inputmode="numeric">
+            <div class="bantu">
+              Supaya penghapusan ini bukan sekadar tombol tertekan — hitung
+              dulu berapa yang benar-benar dipilih.
+            </div>
+          </div>
+          <button type="submit" class="tbl bahaya" data-tombol-hapus-massal>
+            Hapus baris terpilih
+          </button>
+        </div>
+      </details>
+    {% endif %}
+  </form>
 
   {% if total > per_halaman %}
     <div class="aksi-baris">
@@ -109,4 +167,52 @@
        href="{{ PREFIX }}/ekspor.csv?dari={{ f.dari|iso }}&sampai={{ f.sampai|iso }}">
       Unduh CSV</a>
   {% endif %}
+{% endblock %}
+
+{% block skrip %}
+{% if akun.is_super %}
+<script>
+/* Hapus massal: "Pilih semua" hanya menandai baris di halaman ini — tak ada
+   state tersimpan lintas halaman, jadi mewarisi centang dari halaman lain
+   mustahil tanpa risiko lupa apa yang sebenarnya tercentang. Jumlah yang
+   diketik di konfirmasi diperiksa di SERVER, bukan di sini — naskah ini
+   cuma menolong orangnya melihat angkanya sendiri sebelum mengetik. */
+(function () {
+  var form = document.getElementById('form-hapus-massal');
+  if (!form) { return; }
+  var semua = form.querySelector('[data-pilih-semua]');
+  var kotak = form.querySelectorAll('[data-baris-pilih]');
+  var wadahJumlah = form.querySelector('[data-jumlah-dipilih-wadah]');
+  var tekaJumlah = form.querySelector('[data-jumlah-dipilih]');
+  var tombol = form.querySelector('[data-tombol-hapus-massal]');
+
+  function perbarui() {
+    var n = 0;
+    Array.prototype.forEach.call(kotak, function (k) { if (k.checked) { n++; } });
+    if (tekaJumlah) { tekaJumlah.textContent = n; }
+    if (wadahJumlah) { wadahJumlah.hidden = n === 0; }
+    if (tombol) { tombol.disabled = n === 0; }
+    if (semua) { semua.checked = n > 0 && n === kotak.length; }
+  }
+
+  Array.prototype.forEach.call(kotak, function (k) {
+    // Klik checkbox tak boleh ikut memicu navigasi baris (onclick di
+    // <tr>) — ditahan juga di <td>-nya lewat onclick langsung; ini jaring
+    // kedua untuk perubahan yang datang bukan dari klik mentah (keyboard).
+    k.addEventListener('click', function (e) { e.stopPropagation(); });
+    k.addEventListener('change', perbarui);
+  });
+
+  if (semua) {
+    semua.addEventListener('click', function (e) { e.stopPropagation(); });
+    semua.addEventListener('change', function () {
+      Array.prototype.forEach.call(kotak, function (k) { k.checked = semua.checked; });
+      perbarui();
+    });
+  }
+
+  perbarui();
+})();
+</script>
+{% endif %}
 {% endblock %}
