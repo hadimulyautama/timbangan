@@ -109,19 +109,20 @@ async def daftar(
         status_tiket=q.get("tiket") or None,
         cari=q.get("cari") or None,
     )
-    # Bawaan DUA HARI terakhir — hari ini dan kemarin.
+    # Bawaan DUA MINGGU terakhir — diubah dari dua hari atas permintaan
+    # pemilik, 4 Oktober 2026.
     #
-    # Sebelumnya 30 hari, dengan alasan halaman tidak boleh kosong hanya karena
-    # petugas lupa mengisi rentang tanggal. Alasan itu tetap terpenuhi oleh dua
-    # hari, dan 30 hari membawa ongkos yang tidak sebanding: yang dibuka
-    # sehari-hari adalah timbangan yang baru saja terjadi, sementara halaman
-    # harus menghitung dan mengirim sebulan penuh untuk itu.
+    # Sempat 30 hari, lalu dipotong ke dua hari dengan alasan performa
+    # (halaman tak perlu menghitung & mengirim sebulan penuh untuk kerja
+    # sehari-hari). Dua minggu adalah titik tengah: masih jauh lebih ringan
+    # dari 30 hari, tapi cukup panjang untuk menoleh ke belakang tanpa harus
+    # mengisi tanggal secara manual tiap kali.
     #
     # Rentang yang lebih panjang tidak hilang, hanya tidak lagi jadi bawaan —
     # isian tanggal di atas daftar ada justru untuk itu, dan setiap tautan
     # halaman berikutnya serta tombol ekspor membawa rentang yang sedang
     # dipilih.
-    BAWAAN_HARI = 1        # hari ini + 1 hari ke belakang = dua hari
+    BAWAAN_HARI = 13        # hari ini + 13 hari ke belakang = 14 hari (2 minggu)
     try:
         f.dari = date.fromisoformat(q["dari"]) if q.get("dari") else \
             hari_ini() - timedelta(days=BAWAAN_HARI)

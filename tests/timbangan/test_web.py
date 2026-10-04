@@ -3559,8 +3559,10 @@ async def test_alur_retur_supplier_berangkat_bermuatan(klien):
     assert "retur ke supplier" in r.text.lower()
 
 
-async def test_catatan_bawaannya_dua_hari_terakhir(klien):
-    """Yang dibuka sehari-hari adalah timbangan yang baru saja terjadi.
+async def test_catatan_bawaannya_dua_minggu_terakhir(klien):
+    """Diubah dari dua hari ke dua minggu atas permintaan pemilik, 4 Oktober
+    2026 — titik tengah antara dua hari (terlalu pendek untuk menoleh ke
+    belakang) dan 30 hari lama (terlalu berat dimuat tiap hari).
 
     Rentangnya harus tampak di isian tanggal, bukan tersembunyi di dalam
     kueri — Admin yang ingin melihat lebih jauh ke belakang perlu tahu dari
@@ -3572,7 +3574,7 @@ async def test_catatan_bawaannya_dua_hari_terakhir(klien):
 
     await login(klien, "wahid")
     halaman = (await klien.get(f"{PREFIX}/transaksi")).text
-    assert f'name="dari" value="{hari_ini() - timedelta(days=1)}"' in halaman
+    assert f'name="dari" value="{hari_ini() - timedelta(days=13)}"' in halaman
     assert f'name="sampai" value="{hari_ini()}"' in halaman
 
 
