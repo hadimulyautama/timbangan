@@ -6,7 +6,7 @@ keputusan yang harus lewat revisi SOP, bukan lewat kotak isian di ponsel.
 """
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Form, Request
 from sqlalchemy import func, select
@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Supplier
 from app.timbangan import format as fmt
-from app.timbangan import service, setelan
+from app.timbangan import klien_produksi, service, setelan
 from app.timbangan import versi as _versi
 from app.timbangan.config import tsettings
 from app.timbangan.db import get_db, hari_ini
@@ -105,6 +105,28 @@ def _parameter_sesi() -> list[dict]:
     ]
 
 
+async def _status_kledo() -> dict:
+    """Keadaan sinkron kontak Kledo, dibaca dari PRODUKSI lewat HTTP.
+
+    Timbangan tidak menyimpan status ini sendiri — produksi yang menjalankan
+    sinkronnya dan satu-satunya yang tahu sedang berjalan atau tidak (lihat
+    `app/services/kledo_sinkron.py` di sana). Bila produksi tak terjangkau,
+    itu DIBEDAKAN dari "Kledo belum tersambung": yang pertama salah pada
+    sambungan Timbangan→Produksi, yang kedua salah pada KLEDO_API_KEY di
+    sisi produksi — dua masalah yang perlu diperbaiki orang berbeda.
+    """
+    try:
+        s = await klien_produksi.status_sinkron_kontak()
+    except klien_produksi.ProduksiTakTersedia as e:
+        return {
+            "tak_terjangkau": str(e), "terkonfigurasi": False,
+            "sedang_berjalan": False, "hasil_terakhir": None,
+            "gagal_terakhir": None, "selesai_pada": None,
+        }
+    selesai = datetime.fromisoformat(s["selesai_pada"]) if s.get("selesai_pada") else None
+    return {**s, "tak_terjangkau": None, "selesai_pada": selesai}
+
+
 @router.get("/pengaturan")
 async def pengaturan(
     request: Request,
@@ -138,10 +160,36 @@ async def pengaturan(
         bukti=_parameter_bukti(),
         sesi=_parameter_sesi(),
         sumber_label=SUMBER_LABEL,
+        # Hanya Admin ke atas yang melihat (dan memicu) tombolnya — sama
+        # seperti Tara & Monitoring di bawahnya. Tak perlu memanggil produksi
+        # sama sekali untuk operator, yang tak akan melihat kartunya.
+        kledo=await _status_kledo() if akun.is_admin else None,
         # Versi kode yang sedang berjalan, di kaki halaman, untuk semua peran.
         # Peringatan skema tertinggal hanya untuk Admin ke atas (di templat).
         versi=await _versi.info(),
         kembali=f"{PREFIX}/",
+    )
+
+
+@router.post("/pengaturan/kledo-kontak")
+async def mulai_sinkron_kledo_kontak(
+    request: Request, akun: TimbanganAkun = Depends(butuh_admin),
+):
+    """Minta produksi memulai satu putaran sinkron kontak Kledo.
+
+    Timbangan hanya MEMICU — tak menunggu ~600 kontak selesai diambil (itu
+    berjalan di produksi, di latar). Hasilnya dibaca lewat `_status_kledo()`
+    saat halaman ini dimuat ulang, bukan dari balasan permintaan ini.
+    """
+    try:
+        dimulai = await klien_produksi.mulai_sinkron_kontak()
+    except klien_produksi.ProduksiTakTersedia as e:
+        return redirect("/pengaturan", err=str(e))
+    if not dimulai:
+        return redirect("/pengaturan", err="Sinkron kontak Kledo sudah berjalan — tunggu sampai selesai.")
+    return redirect(
+        "/pengaturan",
+        ok="Sinkron kontak Kledo dimulai — muat ulang halaman ini sebentar lagi untuk melihat hasilnya.",
     )
 
 

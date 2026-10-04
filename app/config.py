@@ -43,5 +43,16 @@ class Settings:
     database_url: str = _url_asyncpg(os.getenv("DATABASE_URL", ""))
     app_timezone: str = os.getenv("APP_TIMEZONE", "Asia/Jakarta")
 
+    # ── Seam Timbangan → Produksi (pemicu sinkron kontak Kledo) ──
+    #
+    # Timbangan TIDAK PERNAH memegang KLEDO_API_KEY — kunci itu luas (bisa
+    # membaca seluruh keuangan perusahaan lewat Kledo) dan modul ini sengaja
+    # price-blind (lihat aturan di atas). Yang dipunyai di sini hanya alamat
+    # & token untuk MEMICU sinkron yang berjalan di produksi; lihat
+    # `app/timbangan/klien_produksi.py`.
+    produksi_api_url: str = os.getenv("PRODUKSI_API_URL", "")
+    produksi_api_token: str = os.getenv("PRODUKSI_API_TOKEN", "")  # = INTERNAL_API_TOKEN di sisi produksi
+    produksi_api_timeout: float = float(os.getenv("PRODUKSI_API_TIMEOUT", "120"))
+
 
 settings = Settings()
