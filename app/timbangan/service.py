@@ -3476,7 +3476,7 @@ class FilterTransaksi:
     dari: date | None = None
     sampai: date | None = None
     supplier_id: int | None = None
-    arah: str | None = None
+    arah: str | tuple[str, ...] | None = None
     jenis_kode: str | None = None
     status_kontrol: str | None = None
     status_tiket: str | None = None
@@ -3499,7 +3499,15 @@ def _terapkan_filter(q, f: FilterTransaksi):
     if f.supplier_id:
         q = q.where(TimbanganTransaksi.supplier_id == f.supplier_id)
     if f.arah:
-        q = q.where(TimbanganTransaksi.arah == f.arah)
+        # Satu arah atau beberapa — dibutuhkan filter "Retur" di Catatan, yang
+        # menggabungkan RETUR_MASUK & RETUR_KELUAR jadi satu pilihan (pembeda
+        # keduanya urusan pihak lawan transaksinya, bukan urusan orang yang
+        # sedang mencari "transaksi retur apa saja hari ini"). Pola yang sama
+        # dengan `status_kontrol` di bawah.
+        if isinstance(f.arah, (list, tuple, set)):
+            q = q.where(TimbanganTransaksi.arah.in_(sorted(f.arah)))
+        else:
+            q = q.where(TimbanganTransaksi.arah == f.arah)
     if f.jenis_kode:
         q = q.where(TimbanganTransaksi.jenis_kode == f.jenis_kode)
     if f.status_kontrol:

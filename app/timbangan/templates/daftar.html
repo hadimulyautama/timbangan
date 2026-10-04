@@ -18,6 +18,25 @@
       <input class="fld" type="date" name="sampai" value="{{ f.sampai|iso }}">
     </div>
     <div class="grup">
+      <div class="lbl">Arah</div>
+      {# Bawaan TANPA filter ("Semua") — permintaan pemilik 4 Oktober 2026.
+         "Retur" satu pilihan gabungan (RETUR_MASUK + RETUR_KELUAR): yang
+         mencari transaksi retur biasanya tak peduli arahnya dulu. #}
+      <select class="fld" name="arah">
+        <option value="" {{ 'selected' if not arah_pilih }}>Semua</option>
+        <option value="KELUAR" {{ 'selected' if arah_pilih == 'KELUAR' }}>
+          Barang keluar</option>
+        <option value="MASUK" {{ 'selected' if arah_pilih == 'MASUK' }}>
+          Barang masuk</option>
+        <option value="TRANSFER" {{ 'selected' if arah_pilih == 'TRANSFER' }}>
+          Transfer internal</option>
+        <option value="RETUR" {{ 'selected' if arah_pilih == 'RETUR' }}>
+          Retur (masuk & keluar)</option>
+        <option value="BEBAS" {{ 'selected' if arah_pilih == 'BEBAS' }}>
+          Jasa timbang</option>
+      </select>
+    </div>
+    <div class="grup">
       <div class="lbl">Komoditas</div>
       <select class="fld" name="jenis">
         <option value="">Semua</option>

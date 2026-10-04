@@ -3695,6 +3695,90 @@ async def test_catatan_tetap_menerima_rentang_yang_diminta(klien):
     assert 'name="sampai" value="2026-08-31"' in halaman
 
 
+# ─────────────────────── Catatan: filter arah ───────────────────────
+#
+# Permintaan pemilik 4 Oktober 2026: barang keluar, barang masuk, transfer,
+# retur, dan jasa timbang — bawaan TANPA filter. Baris dibuat lewat ORM
+# langsung (bukan alur timbang penuh): yang diuji di sini adalah QUERY-nya,
+# bukan alur bisnis tiap arah — itu sudah dijaga test_service.py sendiri.
+
+async def _buat_arah(kode: str, arah: str, jenis: str) -> int:
+    from app import database
+    from app.timbangan.db import hari_ini
+    from app.timbangan.models import (
+        CARA_SEKALI,
+        TIKET_SELESAI,
+        TRX_AKTIF,
+        TimbanganTransaksi,
+    )
+
+    async with database.SessionLocal() as db:
+        trx = TimbanganTransaksi(
+            kode=kode, tanggal=hari_ini(), arah=arah, jenis_kode=jenis,
+            cara_timbang=CARA_SEKALI, status_tiket=TIKET_SELESAI,
+            status_transaksi=TRX_AKTIF, timbang1_kg=1_000,
+            netto_timbangan_kg=1_000, berat_barang_kg=1_000,
+            berat_acuan_kg=0, perangkat_kode="P1",
+        )
+        db.add(trx)
+        await db.commit()
+        await db.refresh(trx)
+        return trx.id
+
+
+async def test_catatan_bawaan_tanpa_filter_arah_menampilkan_semua(klien, app_uji):
+    await _buat_arah("UJI-ARAH-01", "MASUK", "GABAH_BASAH")
+    await _buat_arah("UJI-ARAH-02", "KELUAR", "BERAS")
+    await _buat_arah("UJI-ARAH-03", "TRANSFER", "TRANSFER")
+    await _buat_arah("UJI-ARAH-04", "BEBAS", "BEBAS")
+    await _buat_arah("UJI-ARAH-05", "RETUR_MASUK", "RETUR_PELANGGAN")
+    await _buat_arah("UJI-ARAH-06", "RETUR_KELUAR", "RETUR_SUPPLIER")
+
+    await login(klien, "wahid")
+    halaman = (await klien.get(f"{PREFIX}/transaksi")).text
+    for kode in ("UJI-ARAH-01", "UJI-ARAH-02", "UJI-ARAH-03",
+                 "UJI-ARAH-04", "UJI-ARAH-05", "UJI-ARAH-06"):
+        assert kode in halaman, f"{kode} tak tampil padahal tanpa filter arah"
+    assert 'name="arah"' in halaman
+    assert 'value="" selected' in halaman, \
+        "pilihan \"Semua\" tak tertanda terpilih sebagai bawaan"
+
+
+async def test_catatan_filter_arah_keluar(klien, app_uji):
+    await _buat_arah("UJI-ARAH-11", "MASUK", "GABAH_BASAH")
+    await _buat_arah("UJI-ARAH-12", "KELUAR", "BERAS")
+
+    await login(klien, "wahid")
+    halaman = (await klien.get(f"{PREFIX}/transaksi?arah=KELUAR")).text
+    assert "UJI-ARAH-12" in halaman
+    assert "UJI-ARAH-11" not in halaman
+
+
+async def test_catatan_filter_arah_retur_menggabungkan_keduanya(klien, app_uji):
+    """"Retur" satu pilihan di borang, tapi mencakup DUA arah sungguhan
+    (RETUR_MASUK dari pelanggan, RETUR_KELUAR ke supplier) — orang yang
+    mencari transaksi retur biasanya tak peduli arahnya dulu."""
+    await _buat_arah("UJI-ARAH-21", "RETUR_MASUK", "RETUR_PELANGGAN")
+    await _buat_arah("UJI-ARAH-22", "RETUR_KELUAR", "RETUR_SUPPLIER")
+    await _buat_arah("UJI-ARAH-23", "MASUK", "GABAH_BASAH")
+
+    await login(klien, "wahid")
+    halaman = (await klien.get(f"{PREFIX}/transaksi?arah=RETUR")).text
+    assert "UJI-ARAH-21" in halaman
+    assert "UJI-ARAH-22" in halaman
+    assert "UJI-ARAH-23" not in halaman
+
+
+async def test_catatan_filter_arah_jasa_timbang(klien, app_uji):
+    await _buat_arah("UJI-ARAH-31", "BEBAS", "BEBAS")
+    await _buat_arah("UJI-ARAH-32", "TRANSFER", "TRANSFER")
+
+    await login(klien, "wahid")
+    halaman = (await klien.get(f"{PREFIX}/transaksi?arah=BEBAS")).text
+    assert "UJI-ARAH-31" in halaman
+    assert "UJI-ARAH-32" not in halaman
+
+
 async def test_beranda_membentangkan_komoditas_tanpa_halaman_baru(klien):
     """Memilih komoditas tidak boleh menuntut satu perjalanan bolak-balik.
 

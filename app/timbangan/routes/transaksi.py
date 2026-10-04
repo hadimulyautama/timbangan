@@ -23,6 +23,9 @@ from app.timbangan.web import galat_db, PREFIX, redirect, render
 
 router = APIRouter(prefix=PREFIX)
 
+#: Dua arah retur digabung jadi satu pilihan filter — lihat `daftar()`.
+ARAH_RETUR = (logic.RETUR_MASUK, logic.RETUR_KELUAR)
+
 #: Kategori penutup pemeriksaan. Sengaja tidak ada kategori "curang":
 #: sistem mencatat temuan, manusia yang menyimpulkan.
 KATEGORI_HASIL = {
@@ -97,13 +100,20 @@ async def daftar(
         kontrol transaksi.
     """
     q = request.query_params
+    # "Retur" di filter ini SATU pilihan, bukan dua — RETUR_MASUK (dari
+    # pelanggan) dan RETUR_KELUAR (ke supplier) digabung, sebab yang mencari
+    # "transaksi retur apa saja hari ini" biasanya tak peduli arahnya dulu.
+    # Bawaan TANPA filter: alamat tanpa `arah` menampilkan semua, persis
+    # seperti tanpa filter lain mana pun di borang ini.
+    arah_pilih = q.get("arah") or ""
+    arah_filter = ARAH_RETUR if arah_pilih == "RETUR" else (arah_pilih or None)
     f = service.FilterTransaksi(
         # Transaksi yang dibatalkan tetap tertera di catatan, bertanda
         # "Batal". Truk yang batal bongkar memang pernah datang; menyembunyikan
         # barisnya membuat catatan terlihat rapi dengan cara yang keliru.
         # Ringkasan, ekspor, dan beranda tetap tidak menghitungnya.
         sertakan_void=True,
-        arah=q.get("arah") or None,
+        arah=arah_filter,
         jenis_kode=q.get("jenis") or None,
         status_kontrol=q.get("status") or None,
         status_tiket=q.get("tiket") or None,
@@ -135,6 +145,7 @@ async def daftar(
     return render(
         request, "daftar.html",
         f=f, halaman=halaman, per_halaman=per_halaman,
+        arah_pilih=arah_pilih,
         total=await service.hitung_transaksi(db, f),
         baris=await service.daftar_transaksi(
             db, f, batas=per_halaman, offset=(halaman - 1) * per_halaman
