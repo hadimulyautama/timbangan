@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 import app.models  # noqa: F401
 from app import database
 from app.database import Base
-from app.models import Supplier
+from app.models import Pelanggan, Supplier
 from app.timbangan import service
 from app.timbangan.models import (
     ROLE_ADMIN,
@@ -56,6 +56,9 @@ async def app_uji(monkeypatch):
             TimbanganAkun(username="wahid", nama="Wahid", role=ROLE_ADMIN,
                           password_hash=hash_sandi(SANDI), perangkat_kode="P0"),
             Supplier(nama_supplier="H. Anton"),
+            # Pelanggan tak lagi bisa diketik bebas sejak 4 Oktober 2026 —
+            # uji arah KELUAR/jasa butuh satu baris nyata untuk dipilih.
+            Pelanggan(nama_pelanggan="Toko Uji"),
         ])
         await db.commit()
 
@@ -3083,7 +3086,7 @@ async def test_ringkasan_menautkan_lembar_pemeriksaan_yang_terbuka(
     form = (await klien.get(f"{PREFIX}/timbang/BERAS")).text
     await klien.post(f"{PREFIX}/timbang/BERAS", data={
         "kunci": kode_dari(form), "berat_kg": "3680", "cara_timbang": "DUA_KALI",
-        "supplier_id": "", "pihak_nama": "CV Uji", "nomor_polisi": "K 8382 CC",
+        "supplier_id": "1", "pihak_nama": "", "nomor_polisi": "K 8382 CC",
         "jumlah_karung": "0", "tara_per_karung_kg": "0",
         "berat_acuan_kg": "9000", "tara_lain_kg": "0", "waktu": "",
         "catatan": "", "nomor_acuan": "SJ-1", "nama_sopir": "Slamet",
@@ -3122,7 +3125,7 @@ async def test_ringkasan_bersih_setelah_lembarnya_ditutup(klien, app_uji):
     form = (await klien.get(f"{PREFIX}/timbang/BERAS")).text
     await klien.post(f"{PREFIX}/timbang/BERAS", data={
         "kunci": kode_dari(form), "berat_kg": "3680", "cara_timbang": "DUA_KALI",
-        "supplier_id": "", "pihak_nama": "CV Uji", "nomor_polisi": "K 1 AA",
+        "supplier_id": "1", "pihak_nama": "", "nomor_polisi": "K 1 AA",
         "jumlah_karung": "0", "tara_per_karung_kg": "0",
         "berat_acuan_kg": "9000", "tara_lain_kg": "0", "waktu": "",
         "catatan": "", "nomor_acuan": "SJ-2", "nama_sopir": "Slamet",
@@ -3173,7 +3176,13 @@ async def test_pihak_kosong_ditolak_dengan_sebutan_arahnya(klien, jenis, sebutan
         "berat_acuan_kg": "9000", "nomor_acuan": "N", "tara_lain_kg": "0",
         "waktu": "", "catatan": "",
     })
-    assert f"{sebutan} wajib diisi" in r.text
+    if sebutan == "Pelanggan":
+        # Sejak 4 Oktober 2026 pelanggan tak lagi punya pintu ketik-bebas —
+        # kalimatnya pun bukan lagi "wajib diisi" (yang menyiratkan dua
+        # jalan), melainkan "wajib dipilih dari daftar Kledo".
+        assert f"{sebutan} wajib dipilih dari daftar Kledo" in r.text
+    else:
+        assert f"{sebutan} wajib diisi" in r.text
 
 
 async def test_pihak_boleh_dari_daftar_atau_diketik(klien):
@@ -3191,6 +3200,24 @@ async def test_pihak_boleh_dari_daftar_atau_diketik(klien):
             "tara_lain_kg": "0", "waktu": "", "catatan": "",
         })
         assert "wajib diisi" not in r.text
+
+
+async def test_borang_pelanggan_tak_lagi_menawarkan_ketik_bebas(klien):
+    """Layar itu sendiri tidak boleh menjanjikan pintu yang sudah ditutup di
+    layanan — `data-gabung` (yang melebur pencarian dengan kolom bebas,
+    lihat `pasangPencarian` di app.js) harus hilang dari borang pelanggan,
+    dan kolom "(bila belum terdaftar)"-nya ikut hilang. Pemasok TIDAK
+    berubah — permintaan pemilik 4 Oktober 2026 hanya menyebut pelanggan."""
+    await login(klien)
+
+    keluar = (await klien.get(f"{PREFIX}/timbang/BERAS")).text
+    assert 'data-gabung' not in keluar, "pelanggan masih menawarkan ketik bebas"
+    assert '(bila belum terdaftar)' not in keluar
+
+    masuk = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
+    assert 'data-gabung="f-pihak_nama"' in masuk, \
+        "pemasok kehilangan pintu ketik-bebasnya — bukan bagian permintaan ini"
+    assert '(bila belum terdaftar)' in masuk
 
 
 async def test_nama_sopir_wajib(klien):
@@ -3313,7 +3340,7 @@ async def test_ringkasan_tidak_menyebut_pekerjaan_untuk_yang_sudah_tuntas(
     form = (await klien.get(f"{PREFIX}/timbang/BERAS")).text
     await klien.post(f"{PREFIX}/timbang/BERAS", data={
         "kunci": kode_dari(form), "berat_kg": "3680", "cara_timbang": "DUA_KALI",
-        "supplier_id": "", "pihak_nama": "CV Uji", "nomor_polisi": "K 8 CC",
+        "supplier_id": "1", "pihak_nama": "", "nomor_polisi": "K 8 CC",
         "nama_sopir": "Slamet", "jumlah_karung": "0",
         "tara_per_karung_kg": "0", "berat_acuan_kg": "9000",
         "tara_lain_kg": "0", "waktu": "", "catatan": "", "nomor_acuan": "SJ-1",
@@ -3355,7 +3382,7 @@ async def test_angka_dan_daftar_di_luar_batas_sepakat(klien, app_uji):
     form = (await klien.get(f"{PREFIX}/timbang/BERAS")).text
     await klien.post(f"{PREFIX}/timbang/BERAS", data={
         "kunci": kode_dari(form), "berat_kg": "3680", "cara_timbang": "DUA_KALI",
-        "supplier_id": "", "pihak_nama": "CV Uji", "nomor_polisi": "K 9 DD",
+        "supplier_id": "1", "pihak_nama": "", "nomor_polisi": "K 9 DD",
         "nama_sopir": "Slamet", "jumlah_karung": "0",
         "tara_per_karung_kg": "0", "berat_acuan_kg": "9000",
         "tara_lain_kg": "0", "waktu": "", "catatan": "", "nomor_acuan": "SJ-9",
@@ -4280,18 +4307,19 @@ async def test_alur_jasa_tersimpan_sebagai_milik_pelanggan(klien):
         assert trx.jasa is True
 
 
-async def test_alur_jasa_pelanggan_baru_ketik_bebas_tetap_bertanda(klien):
-    """⭐⭐ REPRODUKSI LANGSUNG laporan pemilik 2 Oktober 2026, lewat HTTP
-    sungguhan — bukan memanggil `service.simpan_timbang_pertama` langsung.
+async def test_alur_jasa_pelanggan_baru_ketik_bebas_kini_ditolak(klien):
+    """⭐⭐ Dulu REPRODUKSI LANGSUNG laporan pemilik 2 Oktober 2026 (migrasi
+    0041): pelanggan baru yang diketik bebas tersimpan dengan `pelanggan_id`
+    kosong, dan sebelum migrasi itu baris yang dihasilkan IDENTIK bentuknya
+    dengan tiket pembelian biasa yang pemasoknya diketik bebas — produksi
+    (basis data yang sama) membuat pemasok palsu darinya.
 
-    Kembaran `test_alur_jasa_tersimpan_sebagai_milik_pelanggan` di atas, dengan
-    SATU beda yang disengaja: `pelanggan_id` dikirim KOSONG dan `pihak_nama`
-    diisi nama yang belum ada di cermin pelanggan — persis yang terjadi saat
-    petugas mengetik nama baru alih-alih mengklik baris di daftar.
-
-    Sebelum migrasi 0041, baris yang dihasilkan di sini IDENTIK bentuknya
-    dengan tiket pembelian biasa yang pemasoknya diketik bebas — dan repo
-    `produksi` (basis data yang sama) membuat pemasok palsu darinya.
+    Sejak permintaan pemilik 4 Oktober 2026 ("pelanggan tidak boleh diketik
+    bebas, harus yang dari kontak kledo"), jalur yang melahirkan bug itu
+    TERTUTUP SELURUHNYA — bukan lagi sekadar ditandai `jasa=True` dengan
+    benar begitu terjadi. Uji ini dulu membuktikan submisi ini LOLOS dan
+    tetap bertanda benar; sekarang ia membuktikan submisi yang sama DITOLAK
+    sebelum sempat tersimpan sama sekali.
     """
     from sqlalchemy import select
 
@@ -4311,14 +4339,11 @@ async def test_alur_jasa_pelanggan_baru_ketik_bebas_tetap_bertanda(klien):
         "tara_per_karung_kg": "0", "berat_acuan_kg": "0",
         "tara_lain_kg": "0", "waktu": "", "catatan": "",
     })
-    assert r.status_code == 200
-    assert "Menunggu timbang kedua" in r.text
+    assert "wajib dipilih dari daftar Kledo" in r.text
+    assert "Menunggu timbang kedua" not in r.text
 
     async with SessionLocal() as db:
-        trx = (await db.execute(select(TimbanganTransaksi))).scalars().one()
-        assert trx.pihak_nama == "Marnooo"
-        assert (trx.supplier_id, trx.pelanggan_id) == (None, None)
-        assert trx.jasa is True, (
-            "tiket jasa pelanggan-baru-ketik-bebas kehilangan tandanya lewat "
-            "jalur HTTP sungguhan — produksi akan membacanya sebagai "
-            "pembelian biasa dan membuat pemasok palsu bernama pelanggan")
+        ada = (await db.execute(select(TimbanganTransaksi))).scalars().first()
+        assert ada is None, (
+            "tiket tetap tersimpan walau pelanggan tak dipilih dari daftar "
+            "Kledo — pintu ketik-bebas belum benar-benar tertutup")

@@ -86,20 +86,27 @@
     {{ isian('pihak_nama', PIHAK_LABEL[TRANSFER], '', '', 'text',
              'Contoh: Gudang 1 → Gudang 2', true, true) }}
   {% else %}
+    {% set is_pelanggan = kolom_nama == 'nama_pelanggan' %}
     <div class="grup">
       <div class="lbl">
         {{ 'Pemilik barang' if jasa else PIHAK_LABEL.get(aturan.arah, 'Pihak') }}
       </div>
       {# `data-gabung` menyatukan daftar ini dengan kolom teks bebas di
          bawahnya menjadi SATU kolom: cocok dengan daftar → pihak terdaftar,
-         tidak cocok → nama bebas. Tanpa JavaScript keduanya tetap tampil
-         dan tetap bekerja seperti semula. #}
+         tidak cocok → nama bebas. HANYA untuk pemasok — pelanggan tidak
+         punya pintu ketik-bebas lagi (permintaan pemilik 4 Oktober 2026),
+         jadi `data-gabung` dilepas dan `pasangPencarian` tak lagi menerima
+         nama yang tak cocok dengan siapa pun di daftar. Dulu digabung sebab
+         sinkronisasi Kledo cuma mingguan; sejak tombol "Perbarui Kontak"
+         ada, pelanggan baru tinggal disegarkan sebelum truk datang. Pagar
+         sesungguhnya tetap di layanan (`_wajib_pihak`) — ini cuma berhenti
+         MENAWARKAN jalan yang sudah ditutup di sana. #}
       {# Nama medannya BERBEDA untuk jasa — `pelanggan_id`, bukan
          `supplier_id` — sebab tabelnya berbeda. Satu medan bernama salah akan
          menulis pemilik barang ke kolom pemasok, dan tak ada yang akan
          melihatnya sampai laporan pembelian memuat nama pelanggan. #}
       <select class="fld" name="{{ 'pelanggan_id' if jasa else 'supplier_id' }}"
-              data-gabung="f-pihak_nama"
+              {% if not is_pelanggan %}data-gabung="f-pihak_nama"{% endif %}
               data-cari="Ketik nama {{ 'pemilik barang' if jasa else PIHAK_LABEL.get(aturan.arah, 'pihak')|lower }}…">
         <option value="">— pilih —</option>
         {# Yang sering datang ditaruh di atas: petugas memilih sambil truk
@@ -118,34 +125,35 @@
         </optgroup>
       </select>
       <div class="bantu">
-        Wajib diisi — pilih dari daftar, atau ketik langsung bila belum
-        terdaftar.
-        {% if jasa %}
-          {# Daftar pelanggan disegarkan dari Kledo SEKALI SEMINGGU, jadi
-             pelanggan yang baru dibuat hari ini memang bisa belum ada di
-             situ. Pintu ketik-bebas itu bukan kelonggaran — tanpanya truk
-             pelanggan baru tak bisa ditimbang sampai sinkronisasi berikutnya. #}
-          Pelanggan baru bisa belum muncul (daftarnya disegarkan mingguan) —
-          ketik namanya saja.
+        {% if is_pelanggan %}
+          Wajib dipilih dari daftar Kledo — tidak bisa diketik bebas. Belum
+          muncul? Minta Admin menekan <b>Perbarui Kontak</b> di Pengaturan,
+          lalu muat ulang layar ini.
+        {% else %}
+          Wajib diisi — pilih dari daftar, atau ketik langsung bila belum
+          terdaftar.
         {% endif %}
       </div>
     </div>
-    {# Ditulis langsung, tidak lewat macro `isian`: macro menandai isian tak
-       wajib dengan "(boleh kosong)", dan di sini itu menyesatkan. Kolom ini
-       boleh kosong HANYA bila daftar di atas sudah dipilih — salah satu dari
-       keduanya wajib, dan HTML tidak bisa menyatakan itu. Pagarnya di
-       layanan (`_wajib_pihak`). #}
-    <div class="grup">
-      <div class="lbl">
-        Nama {{ 'pemilik barang' if jasa else PIHAK_LABEL.get(aturan.arah, 'pihak')|lower }}
-        <span style="text-transform:none;letter-spacing:0;font-weight:500">
-          (bila belum terdaftar)</span>
+    {% if not is_pelanggan %}
+      {# Ditulis langsung, tidak lewat macro `isian`: macro menandai isian
+         tak wajib dengan "(boleh kosong)", dan di sini itu menyesatkan.
+         Kolom ini boleh kosong HANYA bila daftar di atas sudah dipilih —
+         salah satu dari keduanya wajib, dan HTML tidak bisa menyatakan itu.
+         Pagarnya di layanan (`_wajib_pihak`). Pelanggan tak lagi punya
+         kolom ini sama sekali — lihat catatan `data-gabung` di atas. #}
+      <div class="grup">
+        <div class="lbl">
+          Nama {{ PIHAK_LABEL.get(aturan.arah, 'pihak')|lower }}
+          <span style="text-transform:none;letter-spacing:0;font-weight:500">
+            (bila belum terdaftar)</span>
+        </div>
+        <input class="fld teks" name="pihak_nama" id="f-pihak_nama" type="text">
+        <div class="bantu">
+          Isi ini bila tidak memilih dari daftar di atas.
+        </div>
       </div>
-      <input class="fld teks" name="pihak_nama" id="f-pihak_nama" type="text">
-      <div class="bantu">
-        Isi ini bila tidak memilih dari daftar di atas.
-      </div>
-    </div>
+    {% endif %}
   {% endif %}
 
   {# ── Pertanyaan KEDUA, dan ia yang paling mudah terlewat ──

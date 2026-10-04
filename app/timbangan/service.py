@@ -1275,22 +1275,39 @@ def _wajib_pihak(arah: str, *, punya_id: bool, pihak_nama: str | None,
                  jasa: bool = False) -> None:
     """Setiap transaksi harus menyebut lawannya.
 
-    Boleh dari daftar (supplier atau pelanggan, menurut arah) ATAU diketik
-    bebas untuk pihak yang belum terdaftar — tetapi tidak boleh kosong.
-    Catatan timbang tanpa nama pihak tidak bisa dicocokkan dengan nota,
-    tidak bisa direkap, dan tidak bisa dipertanggungjawabkan kepada siapa
-    pun; ia hanya menyisakan angka yang tidak menjelaskan apa-apa.
+    Pemasok: dari daftar ATAU diketik bebas untuk yang belum terdaftar.
+    Pelanggan: HANYA dari daftar Kledo — permintaan pemilik 4 Oktober 2026,
+    "nama pelanggan tidak boleh diketik bebas, harus yang dari kontak
+    kledo". Dulu keduanya sama-sama punya pintu ketik-bebas karena
+    sinkronisasi Kledo cuma berjalan mingguan; sejak tombol "Perbarui
+    Kontak" ada (app/services/kledo_sinkron.py di produksi), pelanggan baru
+    tak lagi harus menunggu jadwal — Admin tinggal menekannya sebelum truk
+    datang. Pemasok TIDAK ikut berubah: permintaannya hanya menyebut
+    pelanggan.
+
+    Dipusatkan lewat `pihak_untuk` (bukan membandingkan `arah` sendiri):
+    satu tempat yang tahu "pelanggan atau pemasok", sama seperti alasan
+    `pihak_untuk` sendiri dipusatkan — lihat docstring-nya.
 
     "Salah satu dari dua" tidak bisa dinyatakan HTML, jadi pagarnya memang
     harus di sini — bukan sekadar `required` di isian.
     """
-    if punya_id or (pihak_nama or "").strip():
-        return
     # Pada tiket jasa yang ditagih bukan "pemasok" melainkan PEMILIK barangnya,
     # dan sebutan yang salah di sini menyuruh petugas mencari nama di daftar
     # yang keliru.
     sebutan = ("Pemilik barang" if jasa
                else logic.PIHAK_LABEL.get(arah, "Nama pihak"))
+    pihak = pihak_untuk(arah, jasa=jasa)
+    if pihak is not None and pihak[0] is Pelanggan:
+        if punya_id:
+            return
+        raise LayananError(
+            f"{sebutan} wajib dipilih dari daftar Kledo. Belum ada di "
+            "daftar? Minta Admin menekan “Perbarui Kontak” di "
+            "Pengaturan, lalu coba lagi."
+        )
+    if punya_id or (pihak_nama or "").strip():
+        return
     raise LayananError(
         f"{sebutan} wajib diisi — pilih dari daftar, atau ketik namanya "
         "bila belum terdaftar."

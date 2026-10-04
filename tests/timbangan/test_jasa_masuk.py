@@ -79,34 +79,28 @@ async def test_tiket_biasa_tetap_mengisi_supplier(db, petugas, supplier):
     assert trx.jasa is False
 
 
-async def test_pemilik_boleh_diketik_bebas(db, petugas):
-    """Cermin pelanggan disegarkan dari Kledo MINGGUAN.
+async def test_pemilik_baru_ketik_bebas_kini_ditolak(db, petugas):
+    """Dulu "Cermin pelanggan disegarkan dari Kledo MINGGUAN" adalah alasan
+    pintu ketik-bebas HARUS ada: pelanggan yang baru dibuat hari ini bisa
+    belum ada di daftar, dan tanpa pintu itu truknya tak bisa ditimbang
+    sampai sinkronisasi berikutnya.
 
-    Pelanggan yang baru dibuat hari ini memang bisa belum ada di daftar — dan
-    tanpa pintu ketik-bebas, truknya tak bisa ditimbang sampai sinkronisasi
-    berikutnya. Itu bukan kelonggaran; itu syarat supaya pos tetap bisa bekerja.
+    Permintaan pemilik 4 Oktober 2026 menutup pintu itu ("pelanggan tidak
+    boleh diketik bebas, harus yang dari kontak kledo") — dan alasannya kini
+    sudah hilang juga: sinkronisasi bisa dipicu KAPAN SAJA lewat tombol
+    "Perbarui Kontak", bukan menunggu jadwal mingguan.
 
-    ⚠⚠ DAN `trx.jasa` WAJIB TETAP TRUE DI SINI — cacat lapangan 2 Oktober 2026.
-    Uji ini sudah ADA sebelum cacatnya ditemukan dan sudah membuktikan
-    `(supplier_id, pelanggan_id) == (None, None)` sebagai perilaku yang BENAR
-    untuk pintu ketik-bebas. Yang luput: DUA kolom NULL itu berarti baris
-    tiketnya, dilihat dari repo `produksi` (basis data yang sama), IDENTIK
-    bentuknya dengan pembelian biasa yang pemasoknya diketik bebas. Sampai
-    migrasi 0041 menambah kolom `jasa`, produksi membaca `pelanggan_id IS NOT
-    NULL` sebagai satu-satunya penanda — dan pelanggan baru ketik-bebas gagal
-    terdeteksi, lalu dicatat sebagai PEMASOK PALSU bernama pelanggan itu
-    sendiri. Pelajarannya: menguji bahwa sebuah pintu BEKERJA tidak sama
-    dengan menguji bahwa jejak yang ditinggalkannya BISA DIBACA BENAR oleh
-    pembaca lain.
+    ⚠⚠ Cacat lapangan 2 Oktober 2026 (lihat riwayat git untuk detailnya: dua
+    kolom pihak NULL dari pintu ketik-bebas pernah terbaca produksi sebagai
+    pemasok palsu) karena itu TAK LAGI BISA TERJADI — bukan karena jejaknya
+    sekarang dibaca benar, melainkan karena jalur yang melahirkannya ditutup
+    di sini, sebelum satu baris pun tersimpan.
     """
-    trx = await service.simpan_timbang_pertama(
-        db, akun=petugas,
-        data=tiket_jasa(pelanggan_id=None, pihak_nama="Bu Sri (baru)"))
-    assert trx.pihak_nama == "Bu Sri (baru)"
-    assert (trx.supplier_id, trx.pelanggan_id) == (None, None)
-    assert trx.jasa is True, (
-        "pelanggan baru ketik-bebas kehilangan penanda jasa — produksi akan "
-        "membacanya sebagai pembelian biasa dan membuat pemasok palsu")
+    with pytest.raises(service.LayananError) as e:
+        await service.simpan_timbang_pertama(
+            db, akun=petugas,
+            data=tiket_jasa(pelanggan_id=None, pihak_nama="Bu Sri (baru)"))
+    assert "wajib dipilih dari daftar Kledo" in e.value.args[0], e.value.args[0]
 
 
 async def test_pemilik_wajib_ada(db, petugas):
