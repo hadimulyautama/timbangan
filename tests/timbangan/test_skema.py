@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import importlib.util
 import pathlib
+from unittest.mock import patch
 
 import pytest
 import sqlalchemy as sa
@@ -42,6 +43,7 @@ MIGRASI = (
     AKAR / "migrations" / "versions" / "0037_identitas_bersama.py",
     AKAR / "migrations" / "versions" / "0039_jasa_masuk.py",
     AKAR / "migrations" / "versions" / "0041_tanda_jasa.py",
+    AKAR / "migrations" / "versions" / "0042_muatan_produk_bersama.py",
 )
 
 # Daftar di atas DITULIS TANGAN, dan karena itu ia basi tiap kali ada migrasi
@@ -57,8 +59,9 @@ TANPA_KOLOM_BARU = {
     "0038_kunci_baris_64.py": "hanya melebarkan String(36) → String(64) (R-T-01)",
     "0040_jasa_tiga_komoditas.py": "hanya mengisi data (membuka boleh_jasa)",
 }
-# `0041_tanda_jasa.py` TIDAK masuk di sini — ia menambah kolom (`jasa`) dan
-# karena itu wajib ikut diterapkan di MIGRASI di atas, bukan dikecualikan.
+# Migrasi 0042 menambah kolom serta FK ke master milik aplikasi lain. Uji ini
+# membangun skema SQLite sementara untuk mencocokkan kolom; FK lintas aplikasi
+# sudah diuji di PostgreSQL dan tidak dapat ditambahkan lewat ALTER SQLite.
 
 
 def _migrasi_belum_terdaftar() -> list[str]:
@@ -113,7 +116,11 @@ def kolom_migrasi() -> dict[str, set[str]]:
 
         with Operations.context(MigrationContext.configure(conn)):
             for m in modul:
-                m.upgrade()
+                if m.__name__ == "0042_muatan_produk_bersama":
+                    with patch.object(m.op, "create_foreign_key", return_value=None):
+                        m.upgrade()
+                else:
+                    m.upgrade()
 
         pemeriksa = sa.inspect(conn)
         return {

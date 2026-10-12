@@ -18,13 +18,13 @@ import dataclasses
 import logging
 import math
 from typing import Sequence
-import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 
 from sqlalchemy import delete, func, literal, or_, select, text, update
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
+from hmu_core import normalisasi_nomor_polisi
 
 from zoneinfo import ZoneInfo
 
@@ -354,10 +354,7 @@ async def pastikan_admin(db: AsyncSession) -> bool:
 
 def normalisasi_nopol(nopol: str | None) -> str | None:
     """'  ad 1234 xy ' → 'AD 1234 XY'."""
-    if not nopol:
-        return None
-    bersih = re.sub(r"\s+", " ", str(nopol).strip().upper())
-    return bersih or None
+    return normalisasi_nomor_polisi(nopol)
 
 
 async def kendaraan_dari_nopol(

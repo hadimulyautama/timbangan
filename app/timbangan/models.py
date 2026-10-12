@@ -40,7 +40,10 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base, TimestampMixin
-from hmu_core import Brand, PackageSize, PackagingMaterial, RiceQualityStandard  # noqa: F401
+from hmu_core import Armada, Brand, PackageSize, PackagingMaterial, RiceQualityStandard  # noqa: F401
+
+# Nama lama tetap tersedia untuk semua pemanggil Timbangan.
+TimbanganKendaraan = Armada
 
 # Numeric tanpa Decimal → aritmetika float konsisten di seluruh lapisan.
 KG = Numeric(14, 3, asdecimal=False)
@@ -247,24 +250,6 @@ class TimbanganAkun(Base, TimestampMixin):
     def is_super(self) -> bool:
         """Hanya Super Admin. Bedanya satu: boleh menghapus data."""
         return self.role == ROLE_SUPERADMIN
-
-class TimbanganKendaraan(Base, TimestampMixin):
-    """Master armada. Nomor polisi dinormalkan (huruf besar, tanpa spasi ganda)."""
-
-    __tablename__ = "timbangan_kendaraan"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    # `unique=True` SAJA, tanpa `index=True`. Constraint unik sudah berindeks;
-    # menyebut keduanya membuat SQLAlchemy mengharapkan indeks unik bernama
-    # `ix_...` sementara basis data punya constraint `..._key`, dan
-    # autogenerate lalu mengusulkan menukar keduanya tiap kali dijalankan.
-    # Temuan QA X-19.
-    nomor_polisi: Mapped[str] = mapped_column(
-        String(20), unique=True, nullable=False
-    )
-    catatan: Mapped[str | None] = mapped_column(Text)
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default="aktif")
-
 
 class TimbanganSupplierProfil(Base, TimestampMixin):
     """Atribut monitoring supplier (1:1 dengan `suppliers`).
