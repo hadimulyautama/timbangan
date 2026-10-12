@@ -87,6 +87,17 @@ async def _sinkronkan_proses_bersama(
     if trx.id is None:
         await db.flush()
 
+    # Akun timbang adalah profil lokal/kompatibilitas. Identitas orangnya
+    # tetap `users.id` bersama. Simpan pelaksana kanonis pada ledger proses
+    # agar riwayat lintas aplikasi tidak bergantung pada ID profil timbang.
+    pelaksana_id = None
+    if trx.dibuat_oleh_id is not None:
+        pelaksana_id = (await db.execute(
+            select(TimbanganAkun.user_id).where(
+                TimbanganAkun.id == trx.dibuat_oleh_id
+            )
+        )).scalar_one_or_none()
+
     proses = (await db.execute(
         select(ProsesTerpadu).where(
             ProsesTerpadu.aplikasi == "timbangan",
@@ -162,6 +173,7 @@ async def _sinkronkan_proses_bersama(
             else sekarang() if trx.status_tiket == TIKET_DITUTUP_PAKSA
             else None
         ),
+        "pelaksana_id": pelaksana_id,
         "referensi_asal": [f"{nama}:{nilai}" for nama, nilai in (
             ("purchase_batch", trx.purchase_batch_id),
             ("pk_purchase_batch", trx.pk_purchase_batch_id),

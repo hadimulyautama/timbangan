@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 
 import pytest
 from sqlalchemy import func, select
-from hmu_core import ProsesTerpadu
+from hmu_core import ProsesTerpadu, User
 
 from app.timbangan import logic, service
 from app.timbangan.models import (
@@ -80,6 +80,10 @@ async def test_aturan_dibaca_dari_db_bukan_dari_kode(db):
 # ─────────────────── Alur dua tahap ───────────────────
 
 async def test_timbang_pertama_membuka_tiket(db, petugas, supplier):
+    orang = User(nama="Budi", role="operator", status="aktif")
+    db.add(orang)
+    await db.flush()
+    petugas.user_id = orang.id
     trx = await service.simpan_timbang_pertama(
         db, akun=petugas, data=masuk_gabah("TRX-20260830-P1-001", supplier.id, 13_600)
     )
@@ -102,6 +106,7 @@ async def test_timbang_pertama_membuka_tiket(db, petugas, supplier):
     assert proses.status == "berjalan"
     assert proses.metadata_domain["nomor_polisi"] == "AD 1234 XY"
     assert proses.metadata_domain["supplier_id"] == supplier.id
+    assert proses.pelaksana_id == orang.id
     await db.refresh(proses, ["arus"])
     assert proses.arus == []  # menimbang tidak mengubah stok barang
 
