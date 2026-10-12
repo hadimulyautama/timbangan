@@ -40,6 +40,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base, TimestampMixin
+from hmu_core import Brand, PackageSize, PackagingMaterial, RiceQualityStandard  # noqa: F401
 
 # Numeric tanpa Decimal → aritmetika float konsisten di seluruh lapisan.
 KG = Numeric(14, 3, asdecimal=False)
@@ -571,6 +572,19 @@ class TimbanganMuatan(Base):
     )
     urutan: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     jenis_kode: Mapped[str] = mapped_column(String(30), nullable=False)
+
+    # Detail produk/kemasan memakai master bersama yang sama dengan Stok
+    # Produk. NULL mempertahankan arti tiket lama dan barang curah.
+    kualitas_id: Mapped[int | None] = mapped_column(
+        ForeignKey("rice_quality_standards.id")
+    )
+    merek_produk_id: Mapped[int | None] = mapped_column(ForeignKey("brands.id"))
+    packaging_material_id: Mapped[int | None] = mapped_column(
+        ForeignKey("packaging_materials.id")
+    )
+    package_size_id: Mapped[int | None] = mapped_column(
+        ForeignKey("package_sizes.id")
+    )
 
     # Nomor nota boleh kosong — supplier sering memakai nota tulis tangan.
     nomor_acuan: Mapped[str | None] = mapped_column(String(50), index=True)

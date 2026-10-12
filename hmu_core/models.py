@@ -1,18 +1,68 @@
-"""Master data BERSAMA: users, suppliers, pelanggan, warehouses, silos, dryers.
+"""Model master BERSAMA: identitas, lokasi, mutu, merek, dan kemasan.
 
 Satu sumber kebenaran untuk SEMUA sistem (produksi, kantor, timbangan) via submodule `core`.
 Diekstrak dari app/models/master.py — **skema HARUS identik dengan DB live** (jangan ubah
-kolom tanpa migrasi core). Master fisik (warehouse/silo/dryer) + master kontak (supplier/
-pelanggan, dijembatani ke Kledo via kledo_contact_id) + user (auth/RBAC).
+kolom tanpa migrasi). Gudang/silo/dryer dan master mutu/merek/kemasan dipakai
+lintas aplikasi. Supplier/pelanggan dijembatani ke Kledo via kledo_contact_id.
+
+Tabel mutu, merek, jenis kemasan, dan ukuran sudah dimiliki migrasi aplikasi
+Operasional. Definisi ORM dipusatkan di paket ini; rantai migrasi Operasional
+tetap mengelola tabelnya, sedangkan aplikasi lain hanya mereferensikannya.
 """
 from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Numeric, String, Text, text
+from sqlalchemy import (BigInteger, Boolean, DateTime, ForeignKey, Index,
+                        Integer, Numeric, String, Text, text)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from hmu_core.base import Base, TimestampMixin
+
+
+class RiceQualityStandard(Base, TimestampMixin):
+    """Nilai master untuk atribut kualitas Beras Putih."""
+
+    __tablename__ = "rice_quality_standards"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kode: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
+    nama: Mapped[str] = mapped_column(String(50), nullable=False)
+    urutan: Mapped[int] = mapped_column(Integer, default=0)
+    aktif: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class Brand(Base, TimestampMixin):
+    """Master merek yang dipakai identitas produk dan spesifikasi kemasan."""
+
+    __tablename__ = "brands"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    nama: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    tipe: Mapped[str] = mapped_column(String(10), default="house")
+    aktif: Mapped[bool] = mapped_column(Boolean, default=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PackagingMaterial(Base, TimestampMixin):
+    """Master jenis/bahan karung atau kemasan."""
+
+    __tablename__ = "packaging_materials"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kode: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
+    nama: Mapped[str] = mapped_column(String(50), nullable=False)
+    aktif: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class PackageSize(Base, TimestampMixin):
+    """Ukuran nominal kemasan dalam kilogram."""
+
+    __tablename__ = "package_sizes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ukuran_kg: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
+    aktif: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
 class Warehouse(Base, TimestampMixin):
@@ -109,7 +159,14 @@ class Pelanggan(Base, TimestampMixin):
 
 
 class Silo(Base, TimestampMixin):
-    """Silo A & B per gudang. G1: khusus gabah kering. G2: kolam campuran PK."""
+    """Silo A & B per gudang. G1: khusus gabah kering. G2: kolam campuran PK.
+
+    `jenis_isi` ('pk' / 'broken') keputusan pemilik 6 Oktober 2026: broken
+    punya silonya SENDIRI, dan dari situ jenis bahan sebuah proses sosoh
+    diturunkan dari silo sumbernya — bukan dicatat per-pemakaian. Bawaannya
+    'pk': SELURUH silo yang ada hari ini (G1 maupun G2) memang berisi PK/gabah,
+    dan baris lama tak boleh berubah arti oleh kolom yang baru ditambahkan.
+    """
 
     __tablename__ = "silos"
 
@@ -119,6 +176,8 @@ class Silo(Base, TimestampMixin):
     kapasitas_ton: Mapped[float | None] = mapped_column(Numeric(10, 2))
     # kosong / terisi
     status: Mapped[str] = mapped_column(String(20), default="kosong")
+    # pk / broken — lihat docstring kelas.
+    jenis_isi: Mapped[str] = mapped_column(String(20), nullable=False, default="pk")
 
     warehouse: Mapped[Warehouse] = relationship(back_populates="silos")
 

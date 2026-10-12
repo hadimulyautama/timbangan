@@ -776,6 +776,10 @@ class InputMuatan:
     nomor_acuan: str | None = None
     tara_standar_id: int | None = None
     catatan: str | None = None
+    kualitas_id: int | None = None
+    merek_produk_id: int | None = None
+    packaging_material_id: int | None = None
+    package_size_id: int | None = None
 
 
 @dataclass
@@ -904,6 +908,10 @@ async def _pasang_muatan(
             berat_acuan_kg=float(m.berat_acuan_kg or 0),
             tara_standar_id=m.tara_standar_id,
             catatan=m.catatan,
+            kualitas_id=m.kualitas_id,
+            merek_produk_id=m.merek_produk_id,
+            packaging_material_id=m.packaging_material_id,
+            package_size_id=m.package_size_id,
         ))
     # Penggantian di tempat: baris lama terhapus lewat cascade delete-orphan.
     trx.muatan[:] = baris_baru

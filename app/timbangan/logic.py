@@ -29,6 +29,7 @@ import math
 from dataclasses import dataclass, field
 from datetime import date
 from statistics import pstdev
+from hmu_core.komoditas import kode_komoditas_lama
 
 # ─────────────────────────── Konstanta ───────────────────────────
 from app.timbangan import format as fmt
@@ -195,6 +196,11 @@ class AturanJenis:
     #: pembukaannya menunggu rilis — dan yang menunggu rilis cenderung dibuka
     #: dengan menambah `if` kedua di tempat lain.
     boleh_jasa: bool = False
+
+    @property
+    def komoditas_bersama(self) -> str | None:
+        """Identitas domain bersama; aturan timbang tetap milik Timbangan."""
+        return kode_komoditas_lama(self.kode)
 
     def tara_default(self) -> float:
         """Tara yang dipakai bila tidak ada tara standar untuk pihak ini."""
