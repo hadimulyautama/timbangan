@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 
 import pytest
 from sqlalchemy import func, select
+from hmu_core import ProsesTerpadu
 
 from app.timbangan import logic, service
 from app.timbangan.models import (
@@ -92,6 +93,18 @@ async def test_timbang_pertama_membuka_tiket(db, petugas, supplier):
     terbuka = await service.tiket_terbuka(db)
     assert [b.trx.kode for b in terbuka] == ["TRX-20260830-P1-001"]
 
+    proses = (await db.execute(select(ProsesTerpadu).where(
+        ProsesTerpadu.aplikasi == "timbangan",
+        ProsesTerpadu.id_sumber == str(trx.id),
+    ))).scalar_one()
+    assert proses.kode == trx.kode
+    assert proses.jenis == "penimbangan"
+    assert proses.status == "berjalan"
+    assert proses.metadata_domain["nomor_polisi"] == "AD 1234 XY"
+    assert proses.metadata_domain["supplier_id"] == supplier.id
+    await db.refresh(proses, ["arus"])
+    assert proses.arus == []  # menimbang tidak mengubah stok barang
+
 
 async def test_timbang_kedua_menutup_dan_menilai(db, petugas, petugas2, supplier):
     """Contoh Anton: netto kontrol 10.000 vs nota 10.048 → perlu pemeriksaan."""
@@ -119,6 +132,14 @@ async def test_timbang_kedua_menutup_dan_menilai(db, petugas, petugas2, supplier
     # Lihat `test_struk_menyebut_akun_yang_mencetak` di `test_web`.
     assert trx.timbang1_petugas_id == petugas.id
     assert trx.timbang2_petugas_id == petugas2.id
+
+    proses = (await db.execute(select(ProsesTerpadu).where(
+        ProsesTerpadu.aplikasi == "timbangan",
+        ProsesTerpadu.id_sumber == str(trx.id),
+    ))).scalar_one()
+    assert proses.status == "selesai"
+    assert proses.metadata_domain["berat_barang_kg"] == trx.berat_barang_kg
+    assert proses.waktu_selesai == trx.timbang2_waktu
 
 
 async def test_arah_keluar_membalik_urutan_angka(db, petugas, supplier):

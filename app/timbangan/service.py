@@ -24,7 +24,8 @@ from datetime import date, datetime, time, timedelta
 from sqlalchemy import delete, func, literal, or_, select, text, update
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
-from hmu_core import normalisasi_nomor_polisi
+from hmu_core import (JenisProses, ProsesTerpadu, StatusProses,
+                       normalisasi_nomor_polisi)
 
 from zoneinfo import ZoneInfo
 
@@ -70,6 +71,113 @@ from app.timbangan.models import (
 
 
 log = logging.getLogger("timbangan.service")
+
+
+async def _sinkronkan_proses_bersama(
+    db: AsyncSession, trx: TimbanganTransaksi
+) -> None:
+    """Cerminkan siklus tiket timbang ke indeks proses bersama.
+
+    Tiket timbang tetap menjadi sumber angka bruto, tara, netto, dan detail
+    muatan. Baris bersama hanya indeks/jejak proses: ia tidak membawa arus
+    stok karena penimbangan mengukur barang, bukan memindahkannya. Menulisnya
+    pada sesi yang sama membuat kedua catatan selalu berhasil atau batal
+    bersama, dan kunci sumber membuat kiriman ulang tetap satu baris.
+    """
+    if trx.id is None:
+        await db.flush()
+
+    proses = (await db.execute(
+        select(ProsesTerpadu).where(
+            ProsesTerpadu.aplikasi == "timbangan",
+            ProsesTerpadu.tabel_sumber == "timbangan_transaksi",
+            ProsesTerpadu.id_sumber == str(trx.id),
+        )
+    )).scalar_one_or_none()
+
+    status = (
+        StatusProses.DIBATALKAN.value if trx.status_transaksi == TRX_VOID
+        else StatusProses.DIHENTIKAN.value if trx.status_tiket == TIKET_DITUTUP_PAKSA
+        else StatusProses.SELESAI.value if trx.status_tiket == TIKET_SELESAI
+        else StatusProses.BERJALAN.value
+    )
+    jasa = bool(getattr(trx, "jasa", False)) and trx.arah == logic.MASUK
+    metadata = {
+        "arah": trx.arah,
+        "jenis_kode": trx.jenis_kode,
+        "cara_timbang": trx.cara_timbang,
+        "nomor_polisi": trx.nomor_polisi,
+        "kendaraan_id": trx.kendaraan_id,
+        "nama_sopir": trx.nama_sopir,
+        "pihak_nama": trx.pihak_nama,
+        "supplier_id": trx.supplier_id,
+        "pelanggan_id": trx.pelanggan_id,
+        "jasa": jasa,
+        "timbang1_kg": trx.timbang1_kg,
+        "timbang2_kg": trx.timbang2_kg,
+        "netto_timbangan_kg": trx.netto_timbangan_kg,
+        "berat_barang_kg": trx.berat_barang_kg,
+        "total_tara_kg": trx.total_tara_kg,
+        "jumlah_karung": trx.jumlah_karung,
+        "berat_acuan_kg": trx.berat_acuan_kg,
+        "selisih_kg": trx.selisih_kg,
+        "status_kontrol": trx.status_kontrol,
+        "timbang1_waktu": (trx.timbang1_waktu.isoformat()
+                            if trx.timbang1_waktu else None),
+        "timbang2_waktu": (trx.timbang2_waktu.isoformat()
+                            if trx.timbang2_waktu else None),
+        "timbang1_petugas_id": trx.timbang1_petugas_id,
+        "timbang2_petugas_id": trx.timbang2_petugas_id,
+        "void_alasan": trx.void_alasan,
+        "tutup_paksa_alasan": trx.tutup_paksa_alasan,
+        "muatan": [
+            {
+                "jenis_kode": m.jenis_kode,
+                "nomor_acuan": m.nomor_acuan,
+                "jumlah_karung": m.jumlah_karung,
+                "berat_acuan_kg": m.berat_acuan_kg,
+                "tara_per_karung_kg": m.tara_per_karung_kg,
+                "kualitas_id": m.kualitas_id,
+                "merek_produk_id": m.merek_produk_id,
+                "packaging_material_id": m.packaging_material_id,
+                "package_size_id": m.package_size_id,
+            }
+            for m in trx.muatan
+        ],
+    }
+    nilai = {
+        "kode": trx.kode,
+        "jenis": JenisProses.PENIMBANGAN.value,
+        "status": status,
+        # Untuk barang jasa, pemilik barang memang pelanggan. Barang
+        # pembelian dan pengiriman dicatat sebagai proses milik pabrik;
+        # pihak lawan transaksi tetap tersimpan di metadata.
+        "jenis_pemilik": "pelanggan" if jasa else "pabrik",
+        "id_pemilik": trx.pelanggan_id if jasa else None,
+        "nama_pemilik": trx.pihak_nama if jasa else None,
+        "waktu_mulai": trx.timbang1_waktu,
+        "waktu_selesai": (
+            trx.void_pada if trx.status_transaksi == TRX_VOID
+            else trx.timbang2_waktu if trx.status_tiket == TIKET_SELESAI
+            else sekarang() if trx.status_tiket == TIKET_DITUTUP_PAKSA
+            else None
+        ),
+        "referensi_asal": [f"{nama}:{nilai}" for nama, nilai in (
+            ("purchase_batch", trx.purchase_batch_id),
+            ("pk_purchase_batch", trx.pk_purchase_batch_id),
+            ("jasa", trx.jasa_id),
+        ) if nilai is not None],
+        "metadata_domain": metadata,
+    }
+    if proses is None:
+        proses = ProsesTerpadu(
+            aplikasi="timbangan", tabel_sumber="timbangan_transaksi",
+            id_sumber=str(trx.id), **nilai,
+        )
+        db.add(proses)
+    else:
+        for nama, isi in nilai.items():
+            setattr(proses, nama, isi)
 
 
 class LayananError(Exception):
@@ -1798,6 +1906,7 @@ async def simpan_timbang_pertama(
         sesudah={"timbang1_kg": float(trx.timbang1_kg)},
         perangkat=trx.perangkat_kode, ip=ip,
     )
+    await _sinkronkan_proses_bersama(db, trx)
     await db.commit()
     await db.refresh(trx)
     return trx
@@ -1892,6 +2001,7 @@ async def tambah_penimbangan(
         sesudah={"berat_kg": daftar, "total_kg": float(trx.timbang1_kg)},
         perangkat=trx.perangkat_kode, ip=ip,
     )
+    await _sinkronkan_proses_bersama(db, trx)
     await db.commit()
     await db.refresh(trx)
     return trx
@@ -1924,6 +2034,7 @@ async def hapus_penimbangan(
         ringkasan=f"−{dibuang:g} kg (baris {urutan}) → total {trx.timbang1_kg:g} kg",
         sebelum={"berat_kg": dibuang}, perangkat=trx.perangkat_kode, ip=ip,
     )
+    await _sinkronkan_proses_bersama(db, trx)
     await db.commit()
     await db.refresh(trx)
     return trx
@@ -1968,6 +2079,7 @@ async def selesaikan_partai(
                  "jumlah_baris": len(trx.penimbangan)},
         perangkat=trx.perangkat_kode, ip=ip,
     )
+    await _sinkronkan_proses_bersama(db, trx)
     await db.commit()
     await db.refresh(trx)
     return trx
@@ -2067,6 +2179,7 @@ async def simpan_timbang_kedua(
             sesudah={"timbang2_kg": float(trx.timbang2_kg)},
             perangkat=trx.perangkat_kode, ip=ip,
         )
+        await _sinkronkan_proses_bersama(db, trx)
         await db.commit()
         await db.refresh(trx)
         return trx
@@ -2112,6 +2225,7 @@ async def simpan_timbang_kedua(
     if trx.status_kontrol in logic.STATUS_WAJIB_PERIKSA:
         await buka_pemeriksaan(db, akun=akun, trx=trx)
 
+    await _sinkronkan_proses_bersama(db, trx)
     await db.commit()
     await db.refresh(trx)
     return trx
@@ -2285,6 +2399,7 @@ async def ubah_jenis(
     if trx.status_kontrol in logic.STATUS_WAJIB_PERIKSA:
         await buka_pemeriksaan(db, akun=akun, trx=trx)
 
+    await _sinkronkan_proses_bersama(db, trx)
     await db.commit()
     await db.refresh(trx)
     return f"{aturan_lama.nama} → {aturan_baru.nama}"
@@ -2426,6 +2541,7 @@ async def koreksi_transaksi(
         sebelum=sebelum, sesudah=sesudah,
         perangkat=trx.perangkat_kode, ip=ip,
     )
+    await _sinkronkan_proses_bersama(db, trx)
     await db.commit()
     await db.refresh(trx)
     return trx
@@ -2589,6 +2705,7 @@ async def void_transaksi(
         db, akun=akun, aksi="VOID", entitas="transaksi", entitas_id=trx.kode,
         ringkasan=trx.void_alasan, ip=ip,
     )
+    await _sinkronkan_proses_bersama(db, trx)
     await db.commit()
     await db.refresh(trx)
     return trx
@@ -2656,6 +2773,7 @@ async def tutup_paksa(
         ringkasan=f"{trx.tutup_paksa_alasan} — truk pergi tanpa timbang keluar",
         ip=ip,
     )
+    await _sinkronkan_proses_bersama(db, trx)
     await db.commit()
     await db.refresh(trx)
     return trx
@@ -2742,6 +2860,11 @@ async def hapus_transaksi(
     # dua kali membuat ORM mengira ada baris yang hilang diam-diam.
     for model in (TimbanganCetak, TimbanganPemeriksaan):
         await db.execute(delete(model).where(model.transaksi_id == trx.id))
+    await db.execute(delete(ProsesTerpadu).where(
+        ProsesTerpadu.aplikasi == "timbangan",
+        ProsesTerpadu.tabel_sumber == "timbangan_transaksi",
+        ProsesTerpadu.id_sumber == str(trx.id),
+    ))
     await db.delete(trx)
     await db.commit()
     return kode
