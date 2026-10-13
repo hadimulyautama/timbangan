@@ -110,6 +110,12 @@
             {{ m.nomor_acuan or '(tanpa nomor)' }}</span>
           <b>{{ m.jumlah_karung }} karung</b>
         </div>
+        {% if trx.arah == KELUAR %}
+          <div class="baris">
+            <span>Tara {{ NAMA_JENIS.get(m.jenis_kode, m.jenis_kode) }} · {{ m.jumlah_karung }} × {{ m.tara_per_karung_kg|angka(3) }} kg</span>
+            <b>−{{ (m.jumlah_karung * m.tara_per_karung_kg)|angka(2) }} kg</b>
+          </div>
+        {% endif %}
       {% elif m.jumlah_karung %}
         <div class="baris">
           <span>Muatan</span><b>{{ m.jumlah_karung }} karung</b>
@@ -265,6 +271,12 @@
         Cetak bukti timbang
         {% if cetak %}({{ cetak|length }}× tercetak){% endif %}
       </a>
+      {% if tautan_produksi %}
+        <a href="{{ tautan_produksi }}" class="tbl blok">
+          Hubungkan ke barang keluar Produksi
+        </a>
+        <div class="bantu">Tiket ini akan dibawa ke form verifikasi Produksi. Pilih transaksi barang keluar yang sesuai; tiket baru tertaut setelah verifikasi disimpan.</div>
+      {% endif %}
     {% endif %}
 
     {% if trx.selesai %}

@@ -53,6 +53,9 @@ class Settings:
     produksi_api_url: str = os.getenv("PRODUKSI_API_URL", "")
     produksi_api_token: str = os.getenv("PRODUKSI_API_TOKEN", "")  # = INTERNAL_API_TOKEN di sisi produksi
     produksi_api_timeout: float = float(os.getenv("PRODUKSI_API_TIMEOUT", "120"))
+    produksi_web_url: str = os.getenv(
+        "PRODUKSI_WEB_URL", "https://penggilingan-beras-production.up.railway.app"
+    ).rstrip("/")
 
 
 settings = Settings()

@@ -13,6 +13,7 @@ from app.timbangan import epos, logic, pdf, service
 from app.timbangan.config import tsettings
 from app.timbangan.db import get_db, hari_ini
 from app.timbangan.models import TimbanganAkun, TimbanganCetak
+from app.config import settings
 from app.timbangan.routes.pos import _angka
 from app.timbangan.security import (
     butuh_admin,
@@ -182,6 +183,11 @@ async def rincian(
         cetak=cetak,
         boleh_ubah=boleh_ubah, sebab_terkunci=sebab,
         boleh_batal=service.boleh_membatalkan(akun, b.trx),
+        tautan_produksi=(
+            f"{settings.produksi_web_url}/barang-keluar?buka=verifikasi_keluar&tiket={b.trx.id}"
+            if b.trx.arah == logic.KELUAR and b.trx.status_tiket == "SELESAI"
+            and b.trx.status_transaksi != "VOID" else None
+        ),
         kategori_hasil=KATEGORI_HASIL,
         kembali=f"{PREFIX}/",
     )
