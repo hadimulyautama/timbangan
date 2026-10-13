@@ -159,6 +159,17 @@ h1, h2, h3 { font-family: var(--judul); letter-spacing: -0.01em; margin: 0; }
     border-top: none; border-right: 1px solid var(--garis);
     padding-bottom: 0;
   }
+  .bawah__ukur {
+    position: absolute; top: 0; right: -5px; bottom: 0; z-index: 2;
+    width: 10px; cursor: col-resize; touch-action: none;
+  }
+  .bawah__ukur::after {
+    content: ""; position: absolute; inset: 0 4px; background: transparent;
+    transition: background .15s ease;
+  }
+  .bawah__ukur:hover::after, .bawah__ukur:focus-visible::after,
+  body.ubah-lebar-sidebar .bawah__ukur::after { background: var(--aksi); }
+  .bawah__ukur:focus-visible { outline: 2px solid var(--aksi); outline-offset: -1px; }
   .bawah__kepala { display: block; }
   .bawah__isi,
   .bingkai.lebar ~ .bawah .bawah__isi {
@@ -185,8 +196,13 @@ h1, h2, h3 { font-family: var(--judul); letter-spacing: -0.01em; margin: 0; }
   /* `width: 100%` WAJIB di sini: pada item flex, margin auto membatalkan
      `align-self: stretch`, sehingga tanpa itu kolom isi menyusut mengikuti
      isinya alih-alih memenuhi 820px. */
-  .isi, .bar__dalam { width: 100%; max-width: 820px; margin: 0 auto; }
-  .bingkai.lebar .isi, .bingkai.lebar .bar__dalam { max-width: 1180px; }
+  .isi, .bar__dalam { width: 100%; max-width: 1480px; margin: 0 auto; }
+  .bingkai.lebar .isi, .bingkai.lebar .bar__dalam { max-width: 1600px; }
+  .isi { padding: 28px clamp(28px, 3vw, 64px) 48px; gap: 18px; }
+  .isi > .kartu, .isi > form.kartu { width: 100%; }
+  .isi .petak { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+  .isi .saring { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; }
+  .isi .saring > .lebar-penuh { grid-column: 1 / -1; }
 
   /* Bilah atas jadi TERANG. Identitas aplikasi sudah dipegang sidebar; dua
      blok gelap bersebelahan membuat layar terasa berat, dan judul halaman
@@ -210,10 +226,11 @@ h1, h2, h3 { font-family: var(--judul); letter-spacing: -0.01em; margin: 0; }
   /* Tombol tidak ikut melebar bersama halaman. Sasaran sentuh selebar layar
      masuk akal di ponsel; di desktop ia justru berhenti terbaca sebagai
      tombol. Dibatasi lalu dirapatkan ke kiri, sejajar isi di atasnya. */
-  .saring > .tbl { max-width: 190px; }
+  .saring > .tbl { max-width: 260px; }
   .bingkai.lebar .isi > .tbl.blok,
   .bingkai.lebar .isi > form > .tbl.blok { max-width: 300px; }
-  .bingkai.lebar .aksi-baris { max-width: 520px; }
+  .bingkai.lebar .aksi-baris { max-width: 760px; }
+  .bar__dalam { max-width: none; }
 }
 
 /* ── Konteks komoditas & tahap ───────────────────────────── */

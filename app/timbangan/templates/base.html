@@ -249,10 +249,48 @@
         Pengaturan
       </a>
     </div>
+    <div class="bawah__ukur" role="separator" tabindex="0"
+         aria-orientation="vertical" aria-label="Ubah lebar sidebar"
+         title="Tarik untuk mengubah lebar sidebar"></div>
   </nav>
 {% endif %}
 
 <script src="{{ PREFIX }}/static/app.js?v={{ VERSI }}" defer></script>
+<script>
+(function () {
+  var pegangan = document.querySelector(".bawah__ukur");
+  if (!pegangan || !window.matchMedia("(min-width: 900px)").matches) return;
+  var kunci = "hmu.sidebar.lebar.timbangan";
+  function terapkan(n, tetap) {
+    n = Math.max(220, Math.min(420, Math.round(n)));
+    document.documentElement.style.setProperty("--sidebar", n + "px");
+    pegangan.setAttribute("aria-valuemin", "220");
+    pegangan.setAttribute("aria-valuemax", "420");
+    pegangan.setAttribute("aria-valuenow", String(n));
+    if (tetap) { try { localStorage.setItem(kunci, String(n)); } catch (_) {} }
+  }
+  try { var awal = Number(localStorage.getItem(kunci)); if (awal) terapkan(awal, false); } catch (_) {}
+  var tarik = false;
+  pegangan.addEventListener("pointerdown", function (e) {
+    tarik = true; pegangan.setPointerCapture(e.pointerId);
+    document.body.classList.add("ubah-lebar-sidebar"); e.preventDefault();
+  });
+  pegangan.addEventListener("pointermove", function (e) { if (tarik) terapkan(e.clientX, false); });
+  function selesai() {
+    if (!tarik) return;
+    tarik = false; document.body.classList.remove("ubah-lebar-sidebar");
+    terapkan(parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sidebar")) || 226, true);
+  }
+  pegangan.addEventListener("pointerup", selesai);
+  pegangan.addEventListener("pointercancel", selesai);
+  pegangan.addEventListener("keydown", function (e) {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    var kini = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sidebar")) || 226;
+    terapkan(kini + (e.key === "ArrowRight" ? 16 : -16), true);
+  });
+})();
+</script>
 {% block skrip %}{% endblock %}
 </body>
 </html>
