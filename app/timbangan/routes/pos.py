@@ -796,19 +796,19 @@ async def form_timbang_kedua(
     tara, asal = await service.tara_disarankan(
         db, supplier_id=baris.trx.supplier_id, aturan=aturan
     )
-    jenis_muatan = (await service.daftar_jenis(db, arah=logic.KELUAR)
-                    if baris.trx.arah == logic.KELUAR else [])
-    tara_muatan = {}
-    for jenis in jenis_muatan:
-        aturan_muatan = await service.aturan_untuk(db, jenis.kode)
-        tara_muatan[jenis.kode] = (await service.tara_disarankan(
-            db, supplier_id=None, aturan=aturan_muatan
-        ))[0]
+    integrasi_muatan = None
+    integrasi_error = None
+    if baris.trx.arah == logic.KELUAR:
+        try:
+            from app.timbangan import klien_produksi
+            integrasi_muatan = await klien_produksi.muatan_pengiriman(transaksi_id)
+        except klien_produksi.ProduksiTakTersedia as e:
+            integrasi_error = str(e)
     return render(
         request, "timbang2.html",
         b=baris, aturan=aturan, sekarang=sekarang(),
         tara=tara, asal_tara=asal,
-        jenis_muatan=jenis_muatan, tara_muatan=tara_muatan,
+        integrasi_muatan=integrasi_muatan, integrasi_error=integrasi_error,
         kembali=f"{PREFIX}/tiket",
     )
 
@@ -825,9 +825,6 @@ async def simpan_timbang_kedua(
     waktu: str = Form(""),
     catatan: str = Form(""),
     aksi: str = Form("selesai"),
-    muatan_jenis: list[str] = Form([]),
-    muatan_karung: list[str] = Form([]),
-    muatan_tara: list[str] = Form([]),
     akun: TimbanganAkun = Depends(butuh_akun),
     db: AsyncSession = Depends(get_db),
 ):
@@ -838,28 +835,28 @@ async def simpan_timbang_kedua(
     # Jumlah karung & berat nota sering baru diketahui setelah bongkar —
     # karena itu boleh diisi di tahap kedua, bukan hanya di tahap pertama.
     muatan = None
-    if baris.trx.arah == logic.KELUAR and muatan_jenis:
+    if baris.trx.arah == logic.KELUAR:
+        try:
+            from app.timbangan import klien_produksi
+            data_muatan = await klien_produksi.muatan_pengiriman(transaksi_id)
+        except klien_produksi.ProduksiTakTersedia as e:
+            return redirect(f"/tiket/{transaksi_id}", err=f"Muatan dari Produksi belum bisa dibaca: {e}")
         muatan = []
-        for i, kode in enumerate(muatan_jenis):
-            kode = kode.strip().upper()
-            if not kode:
-                continue
+        for item in data_muatan.get("muatan", []):
+            kode = str(item.get("jenis_kode") or "").strip().upper()
             aturan_muatan = await service.aturan_untuk(db, kode)
             if aturan_muatan.arah not in (logic.KELUAR, logic.BEBAS):
-                return redirect(f"/tiket/{transaksi_id}", err="Komoditas ini bukan barang keluar.")
-            jumlah = int(_angka(muatan_karung[i] if i < len(muatan_karung) else "0"))
-            tara_bawaan = (await service.tara_disarankan(
+                return redirect(f"/tiket/{transaksi_id}", err=f"Aturan timbang untuk {item.get('nama') or kode} belum tersedia.")
+            tara_baris = (await service.tara_disarankan(
                 db, supplier_id=None, aturan=aturan_muatan
             ))[0]
-            tara_baris = _angka(muatan_tara[i] if i < len(muatan_tara) else "", tara_bawaan)
-            if jumlah < 0 or tara_baris < 0:
-                return redirect(f"/tiket/{transaksi_id}", err="Jumlah karung dan tara tidak boleh negatif.")
             muatan.append(service.InputMuatan(
-                jenis_kode=kode, jumlah_karung=jumlah,
-                tara_per_karung_kg=tara_baris,
+                jenis_kode=kode,
+                jumlah_karung=int(item.get("jumlah_karung") or 0),
+                tara_per_karung_kg=float(tara_baris),
             ))
         if not muatan:
-            return redirect(f"/tiket/{transaksi_id}", err="Isi minimal satu baris komoditas.")
+            return redirect(f"/tiket/{transaksi_id}", err="Perintah Produksi belum memiliki muatan yang tercatat.")
     elif jumlah_karung or berat_acuan_kg:
         lama = baris.trx.muatan[0] if baris.trx.muatan else None
         muatan = [service.InputMuatan(
@@ -899,6 +896,32 @@ async def simpan_timbang_kedua(
             ok="Tersimpan. Tiket masih terbuka — selesaikan setelah jumlah "
                "karung pasti.",
         )
+    if baris.trx.arah == logic.KELUAR:
+        if not akun.akun_id:
+            return redirect(
+                f"/transaksi/{trx.id}",
+                err="Timbangan tersimpan. Akun ini belum tertaut ke akun Produksi, jadi verifikasi otomatis belum dapat mencatat pelakunya.",
+            )
+        try:
+            hasil = await klien_produksi.selesaikan_pengiriman(
+                transaksi_id, akun.akun_id,
+            )
+            if not hasil.get("selesai"):
+                return redirect(
+                    f"/transaksi/{trx.id}",
+                    err=("Timbangan tersimpan. PERINGATAN: "
+                         + str(hasil.get("peringatan") or "verifikasi Produksi masih menunggu pemeriksaan.")
+                         + " Perintah tetap menunggu pemeriksaan di Produksi."),
+                )
+            return redirect(
+                f"/transaksi/{trx.id}",
+                ok=f"Timbangan tersimpan; {hasil.get('kode_perintah')} tertaut dan terverifikasi otomatis.",
+            )
+        except klien_produksi.ProduksiTakTersedia as e:
+            return redirect(
+                f"/transaksi/{trx.id}",
+                err=f"Timbangan tersimpan, tetapi verifikasi otomatis Produksi gagal: {e}",
+            )
     return redirect(f"/transaksi/{trx.id}", ok="Timbangan selesai dan tersimpan.")
 
 

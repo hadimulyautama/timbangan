@@ -35,7 +35,7 @@ def terkonfigurasi() -> bool:
     return bool(settings.produksi_api_url and settings.produksi_api_token)
 
 
-async def _minta(metode: str, path: str) -> dict:
+async def _minta(metode: str, path: str, *, operator_akun_id: int | None = None) -> dict:
     if not terkonfigurasi():
         raise ProduksiTakTersedia(
             "Sambungan ke sistem produksi belum diatur (PRODUKSI_API_URL/TOKEN)."
@@ -43,14 +43,21 @@ async def _minta(metode: str, path: str) -> dict:
     url = settings.produksi_api_url.rstrip("/") + path
     try:
         async with httpx.AsyncClient(timeout=settings.produksi_api_timeout) as c:
-            r = await c.request(
-                metode, url, headers={"X-Internal-Token": settings.produksi_api_token},
-            )
+            headers = {"X-Internal-Token": settings.produksi_api_token}
+            if operator_akun_id is not None:
+                headers["X-Operator-Akun"] = str(int(operator_akun_id))
+            r = await c.request(metode, url, headers=headers)
         r.raise_for_status()
         return r.json()
     except httpx.HTTPStatusError as e:
         kode = e.response.status_code
         log.warning("API produksi menolak %s (%s)", path, kode)
+        if kode == 409:
+            try:
+                detail = e.response.json().get("detail")
+            except (ValueError, AttributeError):
+                detail = None
+            raise ProduksiTakTersedia(str(detail or "Data pengiriman belum cocok.")) from e
         if kode in (403, 404):
             raise ProduksiTakTersedia(
                 "Sistem produksi menolak permintaan (token/API internal belum aktif)."
@@ -77,3 +84,16 @@ async def mulai_sinkron_kontak() -> bool:
 async def status_sinkron_kontak() -> dict:
     """Keadaan sekarang: terkonfigurasi, sedang berjalan, hasil/gagal terakhir."""
     return await _minta("GET", "/internal/kledo-kontak/status")
+
+
+async def muatan_pengiriman(tiket_id: int) -> dict:
+    """Baca daftar muatan nyata pada perintah Produksi untuk tiket keluar."""
+    return await _minta("GET", f"/internal/pengiriman/tiket/{int(tiket_id)}/muatan")
+
+
+async def selesaikan_pengiriman(tiket_id: int, operator_akun_id: int) -> dict:
+    """Minta Produksi menautkan tiket dan memverifikasi transaksi keluar."""
+    return await _minta(
+        "POST", f"/internal/pengiriman/tiket/{int(tiket_id)}/verifikasi",
+        operator_akun_id=operator_akun_id,
+    )

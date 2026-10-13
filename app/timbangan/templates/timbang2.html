@@ -54,7 +54,7 @@
 
   {# Setelah bongkar, jumlah karung sudah pasti. Di sinilah biasanya angka
      yang tadi dikosongkan akhirnya diisi. #}
-  {% if not transfer %}
+  {% if masuk %}
     <div class="kartu">
       <div class="kartu__judul">
         {{ 'Nota supplier' if masuk else 'Surat jalan' }}
@@ -78,51 +78,22 @@
     <div class="kartu__judul">Muatan</div>
     <div style="display:flex;flex-direction:column;gap:14px">
       {% if trx.arah == KELUAR %}
-        <div class="bantu">Satu tiket boleh memuat beberapa komoditas. Tara dihitung per komoditas, lalu dijumlahkan untuk hasil timbang seluruh truk.</div>
-        <div id="baris-muatan" style="display:flex;flex-direction:column;gap:12px">
-          {% set baris_muatan = trx.muatan if trx.muatan else [none] %}
-          {% for item in baris_muatan %}
-            <div class="kartu baris-muatan" style="margin:0;padding:12px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
-              <div class="grup" style="grid-column:1/-1">
-                <div class="lbl">Komoditas</div>
-                <select class="fld pilih-komoditas" name="muatan_jenis" required>
-                  <option value="">— pilih komoditas —</option>
-                  {% for j in jenis_muatan %}
-                    <option value="{{ j.kode }}" data-tara="{{ tara_muatan.get(j.kode, 0) }}"
-                      {{ 'selected' if item and item.jenis_kode == j.kode else '' }}>{{ j.nama }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-              <div class="grup">
-                <div class="lbl">Jumlah karung</div>
-                <input class="fld" name="muatan_karung" type="number" min="0" step="1" inputmode="numeric"
-                  value="{{ item.jumlah_karung if item else '' }}" placeholder="0 untuk curah">
-              </div>
-              <div class="grup">
-                <div class="lbl">Tara per karung (kg)</div>
-                <input class="fld tara-komoditas" name="muatan_tara" type="text" inputmode="decimal"
-                  value="{{ '%.3f'|format(item.tara_per_karung_kg) if item else '' }}"
-                  placeholder="Pilih komoditas" data-berat>
-              </div>
-              <button type="button" class="tbl halus buang-muatan" {% if loop.first %}hidden{% endif %}>Hapus baris</button>
-            </div>
-          {% endfor %}
-        </div>
-        <button type="button" class="tbl halus" id="tambah-muatan">＋ Tambah komoditas</button>
-        <template id="templat-muatan">
-          <div class="kartu baris-muatan" style="margin:0;padding:12px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <div class="grup" style="grid-column:1/-1">
-              <div class="lbl">Komoditas</div>
-              <select class="fld pilih-komoditas" name="muatan_jenis" required>
-                <option value="">— pilih komoditas —</option>
-                {% for j in jenis_muatan %}<option value="{{ j.kode }}" data-tara="{{ tara_muatan.get(j.kode, 0) }}">{{ j.nama }}</option>{% endfor %}
-              </select>
-            </div>
-            <div class="grup"><div class="lbl">Jumlah karung</div><input class="fld" name="muatan_karung" type="number" min="0" step="1" inputmode="numeric" placeholder="0 untuk curah"></div>
-            <div class="grup"><div class="lbl">Tara per karung (kg)</div><input class="fld tara-komoditas" name="muatan_tara" type="text" inputmode="decimal" placeholder="Pilih komoditas" data-berat></div>
-            <button type="button" class="tbl halus buang-muatan">Hapus baris</button>
+        {% if integrasi_error %}
+          <div class="bantu peringatan">Muatan belum dapat dimuat dari Produksi: {{ integrasi_error }}</div>
+        {% elif integrasi_muatan %}
+          <div class="bantu">Muatan berasal dari catatan barang yang benar-benar dimuat di Produksi. Di sini cukup timbang truk bermuatan.</div>
+          <div class="kartu" style="margin:0;padding:12px">
+            <strong>{{ integrasi_muatan.kode_perintah }}</strong>
+            <div>{{ integrasi_muatan.pelanggan }} · {{ integrasi_muatan.nomor_polisi }}</div>
+            <ul style="margin:8px 0 0;padding-left:20px">
+              {% for item in integrasi_muatan.muatan %}
+                <li>{{ item.nama }} · {{ item.berat_kg|int }} kg{% if item.jumlah_karung %} · {{ item.jumlah_karung }} karung{% endif %}</li>
+              {% endfor %}
+            </ul>
           </div>
-        </template>
+        {% else %}
+          <div class="bantu peringatan">Belum ada perintah Produksi yang cocok. Pastikan barang sudah dicatat dimuat, pelanggan dan nomor polisi sama.</div>
+        {% endif %}
       {% else %}
       {# Wajib untuk barang masuk: taranya dihitung per karung, jadi tanpa
          angka ini selisihnya keliru. Tombol Simpan sementara memakai
@@ -169,27 +140,7 @@
   {% endif %}
 </form>
 
-{% if trx.arah == KELUAR %}
-<script>
-  (function () {
-    var wadah = document.getElementById('baris-muatan');
-    var tmpl = document.getElementById('templat-muatan');
-    if (!wadah || !tmpl) return;
-    document.getElementById('tambah-muatan').addEventListener('click', function () {
-      wadah.appendChild(tmpl.content.cloneNode(true));
-    });
-    wadah.addEventListener('change', function (e) {
-      if (!e.target.matches('.pilih-komoditas')) return;
-      var tara = e.target.selectedOptions[0] && e.target.selectedOptions[0].dataset.tara;
-      var input = e.target.closest('.baris-muatan').querySelector('.tara-komoditas');
-      if (input && tara !== undefined) input.value = tara;
-    });
-    wadah.addEventListener('click', function (e) {
-      if (e.target.matches('.buang-muatan')) e.target.closest('.baris-muatan').remove();
-    });
-  })();
-</script>
-{% endif %}
+
 
   {# ── HAPUS TIKET YANG BELUM DITIMBANG KEDUA ──
      Keputusan pemilik 30 September 2026: "jika masih timbang pertama dan
@@ -227,8 +178,7 @@
         <button type="submit" class="tbl bahaya">Hapus tiket</button>
       </form>
     </details>
-  {% endif %}
-
+{% endif %}
   {# Truk yang batal bongkar tetap meninggalkan jejak — tiketnya ditutup
      dengan alasan, bukan dihapus agar daftar terlihat rapi.
 
