@@ -277,6 +277,9 @@ JENIS_AWAL: tuple[AturanJenis, ...] = (
         ambang_jenis=AMBANG_PER_KARUNG, ambang_nilai=0.05,
         ambang_arah=ARAH_KURANG_SAJA,
         rahasia=False, cetak_bukti=True,
+        # Pembelian beras putih dapat masuk melalui Jasa; Produksi akan
+        # menetapkan mutu Medium dan karung 50 kg polos saat penerimaan.
+        boleh_jasa=True,
     ),
     AturanJenis(
         kode="BERAS", nama="Beras", arah=KELUAR, acuan=ACUAN_SURAT_JALAN,
