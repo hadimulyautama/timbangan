@@ -84,6 +84,8 @@
   {% if bebas %}
     {{ isian('pihak_nama', PIHAK_LABEL[BEBAS], '', '', 'text',
              'Boleh perorangan maupun perusahaan', true, true) }}
+  {% elif aturan.arah == KELUAR %}
+    <div class="bantu">Pelanggan ditentukan pada perintah barang keluar di Produksi.</div>
   {% elif transfer %}
     {# Tidak ada pihak lawan — yang perlu diketahui barangnya berpindah dari
        mana ke mana. Ditulis bebas, tanpa master lokasi tersendiri. #}
@@ -273,7 +275,8 @@
       </div>
     </div>
   {% elif not bebas %}
-    {# Kartu ini hanya isi dokumennya. Muatan punya kartunya sendiri. #}
+    {# Pengiriman mengikuti perintah Produksi, tanpa surat jalan manual. #}
+    {% if aturan.arah != KELUAR %}
     <div class="kartu">
       <div class="kartu__judul">
         {{ 'Nota supplier' if masuk else 'Surat jalan' }}
@@ -291,6 +294,8 @@
         Boleh dikosongkan sekarang dan diisi saat timbang kedua.
       </div>
     </div>
+
+    {% endif %}
 
     {# Muatan berdiri sendiri, di luar kartu nota.
        Nomor dan berat adalah isi kertas yang dibawa sopir; jumlah karung

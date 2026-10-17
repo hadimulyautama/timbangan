@@ -3020,11 +3020,15 @@ async def test_barang_masuk_hanya_menawarkan_supplier(klien):
     assert "Toko Beras Handoko" not in form      # pelanggan tidak muncul
 
 
-async def test_pengiriman_hanya_menawarkan_pelanggan(klien):
+async def test_pengiriman_pelanggan_ditentukan_di_produksi(klien):
     await _tambah_pelanggan("Toko Beras Handoko")
     await login(klien)
     form = (await klien.get(f"{PREFIX}/timbang/BERAS")).text
-    assert "Toko Beras Handoko" in form
+    assert "Toko Beras Handoko" not in form
+    assert 'name="supplier_id"' not in form
+    assert 'name="pihak_nama"' not in form
+    assert 'name="berat_acuan_kg"' not in form
+    assert 'name="nomor_acuan"' not in form
     assert "H. Anton" not in form                # supplier tidak muncul
 
 
@@ -4597,11 +4601,13 @@ async def test_pengiriman_langsung_timbang_tanpa_memilih_komoditas_dan_muatan_ca
     assert 'Truk kosong' in form
     assert 'name="jumlah_karung"' not in form and 'name="tara_per_karung_kg"' not in form
     await klien.post(f'{PREFIX}/timbang/PENGIRIMAN',data={
-        'kunci':kode_dari(form),'berat_kg':'6000','supplier_id':'1',
+        'kunci':kode_dari(form),'berat_kg':'6000',
         'nomor_polisi':'H 9313 IC','nama_sopir':'Timbul'})
     tiket=await klien.get(f'{PREFIX}/tiket')
     tid=int(re.search(r'/tiket/(\d+)',tiket.text).group(1))
     form2=(await klien.get(f'{PREFIX}/tiket/{tid}')).text
+    assert 'name="berat_acuan_kg"' not in form2
+    assert 'name="nomor_acuan"' not in form2
     for nama in ('Beras laminasi 25 kg','Beras putih 50 kg','Menir 50 kg','Bekatul curah'):
         assert nama in form2
     await klien.post(f'{PREFIX}/tiket/{tid}',data={
@@ -4611,3 +4617,5 @@ async def test_pengiriman_langsung_timbang_tanpa_memilih_komoditas_dan_muatan_ca
     assert len(trx.muatan)==4 and trx.jumlah_karung==13
     assert abs(float(trx.total_tara_kg)-1.01)<0.0001
     assert abs(float(trx.berat_barang_kg)-450)<0.0001
+    assert float(trx.berat_acuan_kg)==450
+    assert trx.pelanggan_id is None

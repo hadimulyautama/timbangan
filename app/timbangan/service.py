@@ -1418,6 +1418,9 @@ def _wajib_pihak(arah: str, *, punya_id: bool, pihak_nama: str | None,
     "Salah satu dari dua" tidak bisa dinyatakan HTML, jadi pagarnya memang
     harus di sini — bukan sekadar `required` di isian.
     """
+    # Pengiriman memperoleh pelanggan dari perintah barang keluar Produksi.
+    if arah == logic.KELUAR and not jasa:
+        return
     # Pada tiket jasa yang ditagih bukan "pemasok" melainkan PEMILIK barangnya,
     # dan sebutan yang salah di sini menyuruh petugas mencari nama di daftar
     # yang keliru.

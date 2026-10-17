@@ -862,6 +862,7 @@ async def simpan_timbang_kedua(
                 return redirect(f"/tiket/{transaksi_id}", err="Tara kemasan dari Produksi belum tersedia. Perbarui Produksi dan periksa Pengaturan Tara kemasan.")
             muatan.append(service.InputMuatan(
                 jenis_kode=kode,
+                berat_acuan_kg=float(item.get("berat_kg") or 0),
                 jumlah_karung=int(item.get("jumlah_karung") or 0),
                 tara_per_karung_kg=float(item['tara_per_karung_kg']),
                 catatan=item.get('nama'),

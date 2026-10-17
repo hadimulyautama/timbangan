@@ -64,7 +64,7 @@
 
   {# Setelah bongkar, jumlah karung sudah pasti. Di sinilah biasanya angka
      yang tadi dikosongkan akhirnya diisi. #}
-  {% if masuk or trx.arah in (RETUR_MASUK, RETUR_KELUAR, KELUAR) %}
+  {% if masuk or trx.arah in (RETUR_MASUK, RETUR_KELUAR) %}
     <div class="kartu">
       <div class="kartu__judul">
         {{ 'Nota supplier' if masuk else 'Surat jalan' }}
@@ -104,7 +104,7 @@
             </ul>
           </div>
         {% else %}
-          <div class="bantu peringatan">Belum ada perintah Produksi yang cocok. Pastikan barang sudah dicatat dimuat, pelanggan dan nomor polisi sama.</div>
+          <div class="bantu peringatan">Belum ada perintah Produksi yang cocok. Pastikan tiket armada sudah dipilih pada perintah barang keluar dan barang sudah dicatat dimuat.</div>
         {% endif %}
       {% else %}
       {# Wajib untuk barang masuk: taranya dihitung per karung, jadi tanpa
