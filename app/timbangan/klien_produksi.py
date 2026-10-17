@@ -97,3 +97,8 @@ async def selesaikan_pengiriman(tiket_id: int, operator_akun_id: int) -> dict:
         "POST", f"/internal/pengiriman/tiket/{int(tiket_id)}/verifikasi",
         operator_akun_id=operator_akun_id,
     )
+
+
+async def muatan_retur(tiket_id: int) -> dict:
+    """Jumlah karung dan tara per kemasan yang dicatat saat bongkar di Produksi."""
+    return await _minta("GET", f"/internal/retur/tiket/{int(tiket_id)}/muatan")

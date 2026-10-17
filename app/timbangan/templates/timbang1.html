@@ -297,6 +297,9 @@
        Tetap ada di layar ini: kadang jumlahnya sudah pasti sejak truk datang.
        Bila belum, ia bisa diisi di timbang kedua. Yang tidak boleh hanya
        kosong di kedua-duanya — dijaga saat menyelesaikan penimbangan. #}
+    {% if aturan.arah in (RETUR_MASUK, KELUAR) %}
+      <div class="kartu bantu">Jumlah karung dan tara per kemasan mengikuti catatan barang di Produksi. Pos Timbang mengambilnya otomatis saat timbang kedua.</div>
+    {% else %}
     <div class="kartu">
       <div class="kartu__judul">Muatan</div>
       <div style="display:flex;flex-direction:column;gap:14px">
@@ -317,6 +320,7 @@
                  false, false, 'inputmode="decimal" enterkeyhint="done" data-berat') }}
       </div>
     </div>
+    {% endif %}
   {% else %}
     {{ berat('tara_lain_kg', 'Tara (bila ada)', '0', '', false) }}
 

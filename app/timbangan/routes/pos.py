@@ -528,11 +528,17 @@ async def simpan_timbang_pertama(
             nomor_acuan=nomor_acuan.strip() or None,
         )]
 
+    aturan = await service.aturan_untuk(db, jenis_kode)
+    if aturan.arah in (logic.RETUR_MASUK, logic.KELUAR):
+        for m in muatan:
+            m.jumlah_karung = 0
+            m.tara_per_karung_kg = 0
+
     data = service.InputTimbang(
         # `kode` sengaja tak dikirim: server yang menerbitkannya,
         # atomik, saat menyimpan.
         kunci=kunci.strip() or None,
-        arah=(await service.aturan_untuk(db, jenis_kode)).arah,
+        arah=aturan.arah,
         jenis_kode=jenis_kode,
         berat_kg=_angka(berat_kg),
         waktu_operator=_waktu_operator(waktu),
@@ -804,6 +810,12 @@ async def form_timbang_kedua(
             integrasi_muatan = await klien_produksi.muatan_pengiriman(transaksi_id)
         except klien_produksi.ProduksiTakTersedia as e:
             integrasi_error = str(e)
+    if baris.trx.arah == logic.RETUR_MASUK:
+        try:
+            from app.timbangan import klien_produksi
+            integrasi_muatan = await klien_produksi.muatan_retur(transaksi_id)
+        except klien_produksi.ProduksiTakTersedia as e:
+            integrasi_error = str(e)
     return render(
         request, "timbang2.html",
         b=baris, aturan=aturan, sekarang=sekarang(),
@@ -845,18 +857,47 @@ async def simpan_timbang_kedua(
         for item in data_muatan.get("muatan", []):
             kode = str(item.get("jenis_kode") or "").strip().upper()
             aturan_muatan = await service.aturan_untuk(db, kode)
-            if aturan_muatan.arah not in (logic.KELUAR, logic.BEBAS):
+            if aturan_muatan.arah not in (logic.MASUK, logic.KELUAR, logic.BEBAS):
                 return redirect(f"/tiket/{transaksi_id}", err=f"Aturan timbang untuk {item.get('nama') or kode} belum tersedia.")
-            tara_baris = (await service.tara_disarankan(
-                db, supplier_id=None, aturan=aturan_muatan
-            ))[0]
+            if item.get('tara_per_karung_kg') is None:
+                return redirect(f"/tiket/{transaksi_id}", err="Tara kemasan dari Produksi belum tersedia. Perbarui Produksi dan periksa Pengaturan Tara kemasan.")
             muatan.append(service.InputMuatan(
                 jenis_kode=kode,
                 jumlah_karung=int(item.get("jumlah_karung") or 0),
-                tara_per_karung_kg=float(tara_baris),
+                tara_per_karung_kg=float(item['tara_per_karung_kg']),
+                catatan=item.get('nama'),
+                kualitas_id=item.get('kualitas_id'),
+                merek_produk_id=item.get('merek_produk_id'),
+                packaging_material_id=item.get('packaging_material_id'),
+                package_size_id=item.get('package_size_id'),
             ))
         if not muatan:
             return redirect(f"/tiket/{transaksi_id}", err="Perintah Produksi belum memiliki muatan yang tercatat.")
+    elif baris.trx.arah == logic.RETUR_MASUK:
+        # Produksi menyimpan rincian dengan mengunci tiket yang sama. Kunci
+        # SEBELUM membaca API supaya rincian yang tampil bukan snapshot lama
+        # yang sempat diubah ketika perhitungan disimpan.
+        await service.ambil_kode_terkunci(db, baris.trx.kode)
+        try:
+            from app.timbangan import klien_produksi
+            data_retur = await klien_produksi.muatan_retur(transaksi_id)
+        except klien_produksi.ProduksiTakTersedia as e:
+            return redirect(f"/tiket/{transaksi_id}", err=f"Rincian retur dari Produksi belum bisa dibaca: {e}")
+        lama = baris.trx.muatan[0] if baris.trx.muatan else None
+        muatan = [service.InputMuatan(
+            jenis_kode=baris.trx.jenis_kode,
+            jumlah_karung=int(item['jumlah_karung']),
+            tara_per_karung_kg=float(item['tara_per_karung_kg']),
+            berat_acuan_kg=_angka(berat_acuan_kg, float(lama.berat_acuan_kg) if lama else 0) if i == 0 else 0,
+            nomor_acuan=(nomor_acuan.strip() or (lama.nomor_acuan if lama else None)) if i == 0 else None,
+            catatan=item.get('nama'),
+            kualitas_id=item.get('quality_id'),
+            merek_produk_id=item.get('merek_produk_id'),
+            packaging_material_id=item.get('packaging_material_id'),
+            package_size_id=item.get('package_size_id'),
+        ) for i, item in enumerate(data_retur.get('muatan', []))]
+        if not muatan:
+            return redirect(f"/tiket/{transaksi_id}", err="Rincian retur belum diisi di Produksi.")
     elif jumlah_karung or berat_acuan_kg:
         lama = baris.trx.muatan[0] if baris.trx.muatan else None
         muatan = [service.InputMuatan(

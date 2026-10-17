@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Supplier
 from app.timbangan import format as fmt
-from app.timbangan import klien_produksi, service, setelan
+from app.timbangan import klien_produksi, service, setelan, kemasan_tara
 from app.timbangan import versi as _versi
 from app.timbangan.config import tsettings
 from app.timbangan.db import get_db, hari_ini
@@ -153,6 +153,7 @@ async def pengaturan(
     return render(
         request, "pengaturan.html",
         jumlah=jumlah,
+        tara_kemasan=await kemasan_tara.daftar(db) if akun.is_admin else None,
         # Pintu darurat pembuatan Super Admin pertama — tertutup sendiri
         # begitu ada satu yang aktif. Lihat `security.butuh_super_atau_pertama`.
         boleh_kelola_pengguna=akun.is_admin and not await ada_super_aktif(db),
@@ -577,3 +578,22 @@ async def ubah_status_pengguna(
     except service.LayananError as e:
         return redirect("/pengguna", err=str(e))
     return await _pulang_kelola(db, akun, f"{orang.nama} kini {status}.")
+
+@router.post('/pengaturan/tara-kemasan')
+async def simpan_tara_kemasan(
+    request: Request,
+    tara_id: int = Form(...),
+    tara_per_karung_kg: str = Form(...),
+    akun: TimbanganAkun = Depends(butuh_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    from sqlalchemy.exc import DBAPIError
+    try:
+        nilai = await kemasan_tara.simpan(db, akun=akun, tara_id=tara_id,
+            teks=tara_per_karung_kg, ip=request.client.host if request.client else None)
+    except service.LayananError as exc:
+        return redirect('/pengaturan', err=str(exc))
+    except DBAPIError:
+        await db.rollback()
+        return redirect('/pengaturan', err='Master tara kemasan belum tersedia. Pastikan pembaruan Produksi sudah diterapkan.')
+    return redirect('/pengaturan', ok=f'Tara kemasan tersimpan: {fmt.angka(nilai,4)} kg per karung.')

@@ -2484,6 +2484,14 @@ async def koreksi_transaksi(
                      "nomor_polisi", "timbang1_waktu"}
     disentuh = {k for k in perubahan if k in IKUT_KE_BATCH
                 and getattr(trx, k) != perubahan[k]}
+    if trx.arah == logic.RETUR_MASUK:
+        # Stok retur sudah menggunakan bobot DAN kemasan ini. Berbeda dari
+        # batch pembelian, tidak ada poller yang menyusulkan koreksinya.
+        disentuh.update(k for k in perubahan if k in dapat_diubah
+                        and k not in {"catatan", "nama_sopir"}
+                        and getattr(trx, k) != perubahan[k])
+        if muatan is not None:
+            disentuh.add("muatan")
     if disentuh:
         await pastikan_bebas_tautan(
             db, trx, tindakan="Mengoreksi " + ", ".join(sorted(disentuh)))

@@ -3639,7 +3639,7 @@ async def test_retur_supplier_menawarkan_supplier_bukan_pelanggan(klien):
     assert "Toko Beras Handoko" not in form
 
 
-async def test_alur_retur_pelanggan_sampai_hasil(klien):
+async def test_alur_retur_pelanggan_sampai_hasil(klien, muatan_retur_uji):
     """Datang bermuatan, pulang kosong — dan nomornya berawalan RTP."""
     pid = await _tambah_pelanggan("Toko Beras Handoko")
     await login(klien)
@@ -4359,7 +4359,7 @@ async def test_alur_jasa_pelanggan_baru_ketik_bebas_kini_ditolak(klien):
     ],
 )
 async def test_retur_petunjuk_berat_dan_dokumen_timbang_kedua(
-    klien, jenis, pertama, kedua, label_pertama, label_kedua,
+    klien, jenis, pertama, kedua, label_pertama, label_kedua, muatan_retur_uji,
 ):
     """Ikuti label yang dilihat petugas, lalu lengkapi dokumen di tahap dua.
 
@@ -4367,6 +4367,7 @@ async def test_retur_petunjuk_berat_dan_dokumen_timbang_kedua(
     akibatnya petunjuk retur pelanggan yang terbalik tidak pernah tertangkap.
     Dokumen retur boleh menyusul di timbang kedua, seperti janji tahap satu.
     """
+    muatan_retur_uji(100, 0.25)
     pid = await _tambah_pelanggan('Toko Retur')
     await login(klien)
     form = (await klien.get(f'{PREFIX}/timbang/{jenis}')).text
@@ -4392,3 +4393,162 @@ async def test_retur_petunjuk_berat_dan_dokumen_timbang_kedua(
     assert 'Timbangan selesai dan tersimpan.' in r.text
     assert '2.975 kg' in r.text
     assert 'SJ-RETUR-SUSULAN' in r.text
+
+
+@pytest.fixture
+def muatan_retur_uji(monkeypatch):
+    from app.timbangan import klien_produksi
+    def pasang(karung=100, tara=0):
+        async def baca(tid):
+            return {'kode_tiket': str(tid), 'muatan': [dict(nama='Menir · 25 kg',
+                jumlah_karung=karung, tara_per_karung_kg=str(tara), berat_kg='3000')]}
+        monkeypatch.setattr(klien_produksi, 'muatan_retur', baca)
+    pasang()
+    return pasang
+
+
+async def test_retur_karung_dan_tara_hanya_dari_produksi(klien, monkeypatch):
+    from app.timbangan import klien_produksi
+    async def baca(tid):
+        return {'muatan': [dict(nama='Karung besar', jumlah_karung=40, tara_per_karung_kg='0.25'),
+                           dict(nama='Karung kecil', jumlah_karung=20, tara_per_karung_kg='0.1')]}
+    monkeypatch.setattr(klien_produksi, 'muatan_retur', baca)
+    await login(klien)
+    form = (await klien.get(f'{PREFIX}/timbang/RETUR_PELANGGAN')).text
+    assert 'name="jumlah_karung"' not in form
+    assert 'name="tara_per_karung_kg"' not in form
+    r = await klien.post(f'{PREFIX}/timbang/RETUR_PELANGGAN', data={
+        'kunci': kode_dari(form), 'berat_kg': '9000', 'supplier_id': '1',
+        'nomor_polisi': 'AD 9 ZZ', 'nama_sopir': 'Slamet',
+        'jumlah_karung': '999', 'tara_per_karung_kg': '999',
+    })
+    tiket = await klien.get(f'{PREFIX}/tiket')
+    tid = int(re.search(r'/tiket/(\d+)', tiket.text).group(1))
+    form2 = (await klien.get(f'{PREFIX}/tiket/{tid}')).text
+    assert '40 karung' in form2 and '20 karung' in form2
+    assert 'name="jumlah_karung"' not in form2
+    assert 'name="tara_per_karung_kg"' not in form2
+    r = await klien.post(f'{PREFIX}/tiket/{tid}', data={
+        'berat_kg':'6000', 'jumlah_karung':'999', 'tara_per_karung_kg':'999',
+    })
+    assert 'Timbangan selesai dan tersimpan.' in r.text
+    trx = await trx_oleh_id(tid)
+    assert trx.jumlah_karung == 60
+    assert float(trx.total_tara_kg) == 12
+    assert float(trx.berat_barang_kg) == 2988
+
+
+async def test_retur_tidak_selesai_bila_rincian_produksi_belum_ada(klien,monkeypatch):
+    from app.timbangan import klien_produksi
+    async def gagal(tid):
+        raise klien_produksi.ProduksiTakTersedia('Rincian retur belum diisi di Produksi.')
+    monkeypatch.setattr(klien_produksi,'muatan_retur',gagal)
+    await login(klien)
+    form=(await klien.get(f'{PREFIX}/timbang/RETUR_PELANGGAN')).text
+    await klien.post(f'{PREFIX}/timbang/RETUR_PELANGGAN',data={
+        'kunci':kode_dari(form),'berat_kg':'9000','supplier_id':'1',
+        'nomor_polisi':'AD 9 ZZ','nama_sopir':'Slamet',
+    })
+    tiket=await klien.get(f'{PREFIX}/tiket')
+    tid=int(re.search(r'/tiket/(\d+)',tiket.text).group(1))
+    r=await klien.post(f'{PREFIX}/tiket/{tid}',data={'berat_kg':'6000'})
+    assert 'Rincian retur belum diisi di Produksi.' in r.text
+    assert (await trx_oleh_id(tid)).status_tiket == TIKET_TERBUKA
+
+
+async def test_retur_yang_sudah_masuk_stok_tidak_bisa_diubah_bobotnya(klien,muatan_retur_uji):
+    from sqlalchemy import text, select
+    from app.timbangan.models import TimbanganTransaksi
+    await login(klien)
+    form=(await klien.get(f'{PREFIX}/timbang/RETUR_PELANGGAN')).text
+    await klien.post(f'{PREFIX}/timbang/RETUR_PELANGGAN',data={
+        'kunci':kode_dari(form),'berat_kg':'9000','supplier_id':'1',
+        'nomor_polisi':'AD 9 ZZ','nama_sopir':'Slamet',
+    })
+    tiket=await klien.get(f'{PREFIX}/tiket')
+    tid=int(re.search(r'/tiket/(\d+)',tiket.text).group(1))
+    await klien.post(f'{PREFIX}/tiket/{tid}',data={'berat_kg':'6000'})
+    async with database.SessionLocal() as db:
+        await db.execute(text('CREATE TABLE customer_returns (id INTEGER PRIMARY KEY, timbangan_transaksi_id INTEGER, kode VARCHAR(24))'))
+        await db.execute(text("INSERT INTO customer_returns VALUES (1,:tid,'RET-UJI')"),{'tid':tid})
+        await db.commit()
+        trx=await db.get(TimbanganTransaksi,tid)
+        admin=(await db.execute(select(TimbanganAkun).where(TimbanganAkun.username=='wahid'))).scalar_one()
+        with pytest.raises(service.LayananError,match='RET-UJI'):
+            await service.koreksi_transaksi(db,akun=admin,trx=trx,perubahan={'timbang2_kg':6100},alasan='Uji penguncian retur')
+
+
+async def _master_tara_kemasan():
+    from sqlalchemy import text
+    from hmu_core import PackagingMaterial, PackageSize
+    async with database.SessionLocal() as db:
+        material=PackagingMaterial(kode='laminasi',nama='Karung laminasi',aktif=True)
+        size=PackageSize(ukuran_kg=25,aktif=True)
+        db.add_all([material,size]);await db.flush()
+        await db.execute(text('CREATE TABLE kemasan_tara (id INTEGER PRIMARY KEY, packaging_material_id INTEGER,package_size_id INTEGER,tara_per_karung_kg NUMERIC(10,4),updated_at DATETIME)'))
+        await db.execute(text('INSERT INTO kemasan_tara VALUES(1,:m,:s,0.08,CURRENT_TIMESTAMP)'),{'m':material.id,'s':size.id})
+        await db.commit()
+
+
+async def test_pengaturan_tara_kemasan_bersama_bisa_diubah_admin(klien):
+    from sqlalchemy import text
+    await _master_tara_kemasan()
+    await login(klien,'wahid')
+    r=await klien.get(f'{PREFIX}/pengaturan')
+    assert 'Tara kemasan' in r.text
+    assert 'Karung laminasi' in r.text and '25 kg' in r.text
+    r=await klien.post(f'{PREFIX}/pengaturan/tara-kemasan',data={
+        'tara_id':'1','tara_per_karung_kg':'0,09'})
+    assert 'Tara kemasan tersimpan' in r.text
+    async with database.SessionLocal() as db:
+        assert float(await db.scalar(text('SELECT tara_per_karung_kg FROM kemasan_tara WHERE id=1')))==0.09
+        assert await db.scalar(text("SELECT COUNT(*) FROM timbangan_audit WHERE aksi='UBAH_TARA_KEMASAN'"))==1
+
+
+async def test_pengaturan_tara_kemasan_ditolak_untuk_petugas(klien):
+    await login(klien)
+    r=await klien.post(f'{PREFIX}/pengaturan/tara-kemasan',data={
+        'tara_id':'1','tara_per_karung_kg':'0.09'})
+    assert r.status_code==403
+
+
+@pytest.mark.parametrize('nilai',['-0.01','NaN','Infinity','1001','0.00001',''])
+async def test_pengaturan_tara_kemasan_tolak_angka_tidak_sah(klien,nilai):
+    from sqlalchemy import text
+    await _master_tara_kemasan()
+    await login(klien,'wahid')
+    await klien.post(f'{PREFIX}/pengaturan/tara-kemasan',data={
+        'tara_id':'1','tara_per_karung_kg':nilai})
+    async with database.SessionLocal() as db:
+        assert float(await db.scalar(text('SELECT tara_per_karung_kg FROM kemasan_tara WHERE id=1')))==0.08
+
+
+@pytest.mark.parametrize('kode_muatan',['MENIR','BERAS_PK','GABAH_KERING'])
+async def test_pengiriman_tara_dari_jenis_ukuran_kemasan_produksi(klien,monkeypatch,kode_muatan):
+    from app.timbangan import klien_produksi
+    async def baca(tid):
+        return {'kode_perintah':'OUT-UJI','pelanggan':'Toko Uji','nomor_polisi':'AD 9 ZZ',
+                'muatan':[
+                    {'jenis_kode':'BERAS','nama':'Laminasi 25 kg','jumlah_karung':100,'tara_per_karung_kg':'0.08','berat_kg':2500},
+                    {'jenis_kode':kode_muatan,'nama':'Putih 50 kg','jumlah_karung':40,'tara_per_karung_kg':'0.07','berat_kg':2000},
+                ]}
+    monkeypatch.setattr(klien_produksi,'muatan_pengiriman',baca)
+    await login(klien)
+    form=(await klien.get(f'{PREFIX}/timbang/BERAS')).text
+    assert 'name="jumlah_karung"' not in form
+    assert 'name="tara_per_karung_kg"' not in form
+    await klien.post(f'{PREFIX}/timbang/BERAS',data={
+        'kunci':kode_dari(form),'berat_kg':'6000','supplier_id':'1',
+        'nomor_polisi':'AD 9 ZZ','nama_sopir':'Slamet',
+    })
+    tiket=await klien.get(f'{PREFIX}/tiket')
+    tid=int(re.search(r'/tiket/(\d+)',tiket.text).group(1))
+    form2=(await klien.get(f'{PREFIX}/tiket/{tid}')).text
+    assert '0.08 kg tara/karung' in form2 and '0.07 kg tara/karung' in form2
+    await klien.post(f'{PREFIX}/tiket/{tid}',data={'berat_kg':'10510.8',
+        'jumlah_karung':'999','tara_per_karung_kg':'999'})
+    trx=await trx_oleh_id(tid)
+    assert trx.status_tiket==TIKET_SELESAI
+    assert trx.jumlah_karung==140
+    assert float(trx.total_tara_kg)==10.8
+    assert float(trx.berat_barang_kg)==4500

@@ -77,7 +77,16 @@
   <div class="kartu">
     <div class="kartu__judul">Muatan</div>
     <div style="display:flex;flex-direction:column;gap:14px">
-      {% if trx.arah == KELUAR %}
+      {% if trx.arah == RETUR_MASUK %}
+        {% if integrasi_error %}
+          <div class="bantu peringatan">{{ integrasi_error }}</div>
+        {% elif integrasi_muatan %}
+          <div class="bantu">Rincian dari Produksi. Di sini cukup isi berat truk kosong.</div>
+          {% for item in integrasi_muatan.muatan %}
+            <div><b>{{ item.nama }}</b><br>{{ item.jumlah_karung }} karung × {{ item.tara_per_karung_kg }} kg tara/karung</div>
+          {% endfor %}
+        {% endif %}
+      {% elif trx.arah == KELUAR %}
         {% if integrasi_error %}
           <div class="bantu peringatan">Muatan belum dapat dimuat dari Produksi: {{ integrasi_error }}</div>
         {% elif integrasi_muatan %}
@@ -87,7 +96,7 @@
             <div>{{ integrasi_muatan.pelanggan }} · {{ integrasi_muatan.nomor_polisi }}</div>
             <ul style="margin:8px 0 0;padding-left:20px">
               {% for item in integrasi_muatan.muatan %}
-                <li>{{ item.nama }} · {{ item.berat_kg|int }} kg{% if item.jumlah_karung %} · {{ item.jumlah_karung }} karung{% endif %}</li>
+                <li>{{ item.nama }} · {{ item.berat_kg|int }} kg{% if item.jumlah_karung %} · {{ item.jumlah_karung }} karung × {{ item.tara_per_karung_kg }} kg tara/karung{% endif %}</li>
               {% endfor %}
             </ul>
           </div>
@@ -124,7 +133,7 @@
   </div>
 
   <button type="submit" name="aksi" value="selesai" class="tbl blok"
-          data-sibuk="Menghitung…">
+          data-sibuk="Menghitung…" {% if trx.arah == RETUR_MASUK and not integrasi_muatan %}disabled{% endif %}>
     Selesaikan penimbangan
   </button>
 

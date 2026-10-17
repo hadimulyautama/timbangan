@@ -52,6 +52,13 @@ async def pastikan_bebas_tautan(db: AsyncSession, trx, *, tindakan: str) -> None
     from app.timbangan.service import LayananError
 
     kode = await batch_tertaut(db, getattr(trx, "id", None))
+    if getattr(trx, "arah", None) == "RETUR_MASUK":
+        # Retur yang sudah diterima menjadi sumber stok. Mengubah bobot atau
+        # kemasannya sesudah itu akan membuat kedua aplikasi berselisih.
+        retur = (await db.execute(text("""
+            SELECT kode FROM customer_returns WHERE timbangan_transaksi_id = :tid
+        """), {"tid": trx.id})).scalars().all()
+        kode.extend(retur)
     if not kode:
         return
     raise LayananError(
