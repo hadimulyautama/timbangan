@@ -4,7 +4,7 @@
 {% set trx = b.trx %}
 {% set masuk = trx.arah == MASUK %}
 {% set transfer = trx.arah == TRANSFER %}
-{% set bongkar = masuk or transfer %}
+{% set bongkar = timbang_pertama_bermuatan(trx.arah) %}
 {% set m = trx.muatan[0] if trx.muatan else None %}
 
 {% block judul %}Timbang 2 · {{ trx.nomor_polisi or trx.kode }}{% endblock %}
@@ -54,7 +54,7 @@
 
   {# Setelah bongkar, jumlah karung sudah pasti. Di sinilah biasanya angka
      yang tadi dikosongkan akhirnya diisi. #}
-  {% if masuk %}
+  {% if masuk or trx.arah in (RETUR_MASUK, RETUR_KELUAR) %}
     <div class="kartu">
       <div class="kartu__judul">
         {{ 'Nota supplier' if masuk else 'Surat jalan' }}
@@ -103,6 +103,7 @@
                'text',
                ('Kosongkan bila muatannya curah' if transfer else
                 'Dihitung saat bongkar, bukan disalin dari nota.' if masuk else
+                'Dihitung saat bongkar, bukan disalin dari surat jalan.' if bongkar else
                 'Dihitung saat muat, bukan disalin dari surat jalan.'),
                masuk, false, 'inputmode="numeric" enterkeyhint="next"') }}
       {{ isian('tara_per_karung_kg', 'Tara per karung',

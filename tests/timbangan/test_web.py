@@ -4347,3 +4347,48 @@ async def test_alur_jasa_pelanggan_baru_ketik_bebas_kini_ditolak(klien):
         assert ada is None, (
             "tiket tetap tersimpan walau pelanggan tak dipilih dari daftar "
             "Kledo — pintu ketik-bebas belum benar-benar tertutup")
+
+
+@pytest.mark.parametrize(
+    'jenis,pertama,kedua,label_pertama,label_kedua',
+    [
+        ('RETUR_PELANGGAN', '9000', '6000',
+         'Berat truk bermuatan', 'Berat truk kosong'),
+        ('RETUR_SUPPLIER', '6000', '9000',
+         'Berat truk kosong', 'Berat truk bermuatan'),
+    ],
+)
+async def test_retur_petunjuk_berat_dan_dokumen_timbang_kedua(
+    klien, jenis, pertama, kedua, label_pertama, label_kedua,
+):
+    """Ikuti label yang dilihat petugas, lalu lengkapi dokumen di tahap dua.
+
+    Uji lama langsung mengirim angka yang benar tanpa membaca label layar;
+    akibatnya petunjuk retur pelanggan yang terbalik tidak pernah tertangkap.
+    Dokumen retur boleh menyusul di timbang kedua, seperti janji tahap satu.
+    """
+    pid = await _tambah_pelanggan('Toko Retur')
+    await login(klien)
+    form = (await klien.get(f'{PREFIX}/timbang/{jenis}')).text
+    assert f'<div class="lbl">{label_pertama}</div>' in form
+    r = await klien.post(f'{PREFIX}/timbang/{jenis}', data={
+        'kunci': kode_dari(form), 'berat_kg': pertama,
+        'supplier_id': str(pid) if jenis == 'RETUR_PELANGGAN' else '1',
+        'nomor_polisi': 'AD 9 ZZ', 'nama_sopir': 'Slamet',
+    })
+    assert 'Timbang pertama tersimpan.' in r.text
+    tiket = await klien.get(f'{PREFIX}/tiket')
+    trx_id = int(re.search(r'/tiket/(\d+)', tiket.text).group(1))
+    form2 = (await klien.get(f'{PREFIX}/tiket/{trx_id}')).text
+    assert f'<div class="lbl">{label_kedua}</div>' in form2
+    assert 'name="nomor_acuan"' in form2
+    assert 'name="berat_acuan_kg"' in form2
+    r = await klien.post(f'{PREFIX}/tiket/{trx_id}', data={
+        'berat_kg': kedua, 'jumlah_karung': '100',
+        'tara_per_karung_kg': '0.25',
+        'nomor_acuan': 'SJ-RETUR-SUSULAN', 'berat_acuan_kg': '2975',
+        'aksi': 'selesai',
+    })
+    assert 'Timbangan selesai dan tersimpan.' in r.text
+    assert '2.975 kg' in r.text
+    assert 'SJ-RETUR-SUSULAN' in r.text

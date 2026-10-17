@@ -10,9 +10,9 @@
 {% set bebas = aturan.arah == BEBAS %}
 {% set transfer = aturan.arah == TRANSFER %}
 {# Datang bermuatan, ditimbang ulang setelah dibongkar. #}
-{% set bongkar = masuk or transfer %}
+{% set bongkar = timbang_pertama_bermuatan(aturan.arah) %}
 {# Pengiriman: timbang pertama adalah truk KOSONG. #}
-{% set trx_keluar = aturan.arah == KELUAR %}
+{% set trx_keluar = not bongkar %}
 
 {% block judul %}Timbang 1 · {{ aturan.nama }}{{ ' · JASA' if jasa }}{% endblock %}
 {% block bar_judul %}{{ 'Timbang pertama — JASA' if jasa else 'Timbang pertama' }}{% endblock %}
