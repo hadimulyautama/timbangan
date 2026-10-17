@@ -1021,7 +1021,8 @@ async def _pasang_muatan(
             jenis_kode=m.jenis_kode,
             nomor_acuan=(m.nomor_acuan or None),
             jumlah_karung=int(m.jumlah_karung or 0),
-            tara_per_karung_kg=float(m.tara_per_karung_kg or 0),
+            tara_per_karung_kg=(0 if trx.arah in (logic.RETUR_MASUK, logic.RETUR_KELUAR)
+                               else float(m.tara_per_karung_kg or 0)),
             berat_acuan_kg=float(m.berat_acuan_kg or 0),
             tara_standar_id=m.tara_standar_id,
             catatan=m.catatan,
@@ -1851,7 +1852,8 @@ async def simpan_timbang_pertama(
     trx.kendaraan_id = kendaraan.id if kendaraan else None
     trx.nomor_polisi = normalisasi_nopol(data.nomor_polisi)
     trx.nama_sopir = data.nama_sopir
-    trx.tara_lain_kg = float(data.tara_lain_kg or 0)
+    trx.tara_lain_kg = (0 if data.arah in (logic.RETUR_MASUK, logic.RETUR_KELUAR)
+                        else float(data.tara_lain_kg or 0))
     trx.catatan = data.catatan
     trx.perangkat_kode = data.perangkat_kode or akun.perangkat_kode
     trx.dibuat_offline = bool(data.dibuat_offline)

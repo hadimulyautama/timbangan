@@ -77,15 +77,8 @@
   <div class="kartu">
     <div class="kartu__judul">Muatan</div>
     <div style="display:flex;flex-direction:column;gap:14px">
-      {% if trx.arah == RETUR_MASUK %}
-        {% if integrasi_error %}
-          <div class="bantu peringatan">{{ integrasi_error }}</div>
-        {% elif integrasi_muatan %}
-          <div class="bantu">Rincian dari Produksi. Di sini cukup isi berat truk kosong.</div>
-          {% for item in integrasi_muatan.muatan %}
-            <div><b>{{ item.nama }}</b><br>{{ item.jumlah_karung }} karung × {{ item.tara_per_karung_kg }} kg tara/karung</div>
-          {% endfor %}
-        {% endif %}
+      {% if trx.arah in (RETUR_MASUK, RETUR_KELUAR) %}
+        <div class="bantu">Retur tanpa potongan tara. Berat barang adalah selisih berat truk bermuatan dan kosong.</div>
       {% elif trx.arah == KELUAR %}
         {% if integrasi_error %}
           <div class="bantu peringatan">Muatan belum dapat dimuat dari Produksi: {{ integrasi_error }}</div>
@@ -133,7 +126,7 @@
   </div>
 
   <button type="submit" name="aksi" value="selesai" class="tbl blok"
-          data-sibuk="Menghitung…" {% if trx.arah == RETUR_MASUK and not integrasi_muatan %}disabled{% endif %}>
+          data-sibuk="Menghitung…">
     Selesaikan penimbangan
   </button>
 

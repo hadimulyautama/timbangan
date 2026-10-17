@@ -4391,7 +4391,7 @@ async def test_retur_petunjuk_berat_dan_dokumen_timbang_kedua(
         'aksi': 'selesai',
     })
     assert 'Timbangan selesai dan tersimpan.' in r.text
-    assert '2.975 kg' in r.text
+    assert '3.000 kg' in r.text
     assert 'SJ-RETUR-SUSULAN' in r.text
 
 
@@ -4407,7 +4407,7 @@ def muatan_retur_uji(monkeypatch):
     return pasang
 
 
-async def test_retur_karung_dan_tara_hanya_dari_produksi(klien, monkeypatch):
+async def test_retur_tanpa_tara_meski_ada_kiriman_lama(klien, monkeypatch):
     from app.timbangan import klien_produksi
     async def baca(tid):
         return {'muatan': [dict(nama='Karung besar', jumlah_karung=40, tara_per_karung_kg='0.25'),
@@ -4425,7 +4425,7 @@ async def test_retur_karung_dan_tara_hanya_dari_produksi(klien, monkeypatch):
     tiket = await klien.get(f'{PREFIX}/tiket')
     tid = int(re.search(r'/tiket/(\d+)', tiket.text).group(1))
     form2 = (await klien.get(f'{PREFIX}/tiket/{tid}')).text
-    assert '40 karung' in form2 and '20 karung' in form2
+    assert 'Retur tanpa potongan tara' in form2
     assert 'name="jumlah_karung"' not in form2
     assert 'name="tara_per_karung_kg"' not in form2
     r = await klien.post(f'{PREFIX}/tiket/{tid}', data={
@@ -4433,12 +4433,11 @@ async def test_retur_karung_dan_tara_hanya_dari_produksi(klien, monkeypatch):
     })
     assert 'Timbangan selesai dan tersimpan.' in r.text
     trx = await trx_oleh_id(tid)
-    assert trx.jumlah_karung == 60
-    assert float(trx.total_tara_kg) == 12
-    assert float(trx.berat_barang_kg) == 2988
+    assert float(trx.total_tara_kg) == 0
+    assert float(trx.berat_barang_kg) == 3000
 
 
-async def test_retur_tidak_selesai_bila_rincian_produksi_belum_ada(klien,monkeypatch):
+async def test_retur_bisa_selesai_tanpa_menunggu_rincian_produksi(klien,monkeypatch):
     from app.timbangan import klien_produksi
     async def gagal(tid):
         raise klien_produksi.ProduksiTakTersedia('Rincian retur belum diisi di Produksi.')
@@ -4452,8 +4451,8 @@ async def test_retur_tidak_selesai_bila_rincian_produksi_belum_ada(klien,monkeyp
     tiket=await klien.get(f'{PREFIX}/tiket')
     tid=int(re.search(r'/tiket/(\d+)',tiket.text).group(1))
     r=await klien.post(f'{PREFIX}/tiket/{tid}',data={'berat_kg':'6000'})
-    assert 'Rincian retur belum diisi di Produksi.' in r.text
-    assert (await trx_oleh_id(tid)).status_tiket == TIKET_TERBUKA
+    assert 'Timbangan selesai dan tersimpan.' in r.text
+    assert (await trx_oleh_id(tid)).status_tiket == TIKET_SELESAI
 
 
 async def test_retur_yang_sudah_masuk_stok_tidak_bisa_diubah_bobotnya(klien,muatan_retur_uji):

@@ -341,10 +341,9 @@ JENIS_AWAL: tuple[AturanJenis, ...] = (
     # untuk peristiwa yang jarang, dan tiap komoditas baru kelak harus
     # didaftarkan dua kali lagi.
     #
-    # TARA MANUAL: barang retur kembali dalam karung asalnya, tetapi bisa juga
-    # sudah pecah atau tercampur. Menetapkan tara per komoditas di sini akan
-    # menghitung tara yang tidak ada barangnya. Operator mengetik apa yang ia
-    # lihat.
+    # Retur tidak dipotong tara (keputusan pemilik 17 Oktober 2026).
+    # Kolom sumber_tara lama tetap dapat dibaca, tetapi hitung() menjamin
+    # potongan nol untuk kedua arah retur, termasuk kiriman halaman lama.
     #
     # AMBANG PER TON, bukan per karung: retur tidak selalu utuh berkarung, dan
     # ambang per karung pada muatan curah (jumlah karung 0) berarti ambang nol
@@ -485,7 +484,10 @@ def hitung(
 
     netto = bermuatan - kosong
     karung = sum(b.jumlah_karung for b in baris)
-    total_tara = sum(b.tara_kg for b in baris) + float(tara_lain_kg or 0)
+    # Keputusan pemilik: retur dicatat langsung dari selisih jembatan,
+    # tanpa potongan kemasan. Pengiriman tetap menggunakan master tara.
+    total_tara = (0.0 if aturan.arah in (RETUR_MASUK, RETUR_KELUAR)
+                  else sum(b.tara_kg for b in baris) + float(tara_lain_kg or 0))
     barang = netto - total_tara
     if barang < 0:
         raise ValidasiError("Tara lebih besar daripada netto timbangan.")

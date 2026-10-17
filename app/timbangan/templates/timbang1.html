@@ -297,7 +297,9 @@
        Tetap ada di layar ini: kadang jumlahnya sudah pasti sejak truk datang.
        Bila belum, ia bisa diisi di timbang kedua. Yang tidak boleh hanya
        kosong di kedua-duanya — dijaga saat menyelesaikan penimbangan. #}
-    {% if aturan.arah in (RETUR_MASUK, KELUAR) %}
+    {% if aturan.arah in (RETUR_MASUK, RETUR_KELUAR) %}
+      <div class="kartu bantu">Retur tanpa potongan tara. Berat barang adalah selisih berat truk bermuatan dan kosong.</div>
+    {% elif aturan.arah == KELUAR %}
       <div class="kartu bantu">Jumlah karung dan tara per kemasan mengikuti catatan barang di Produksi. Pos Timbang mengambilnya otomatis saat timbang kedua.</div>
     {% else %}
     <div class="kartu">

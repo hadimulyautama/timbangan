@@ -35,7 +35,7 @@ BASE_DIR = Path(__file__).parent
 PREFIX = "/timbangan"
 
 # Dinaikkan bila CSS/JS berubah, supaya perangkat tidak memakai berkas lama.
-VERSI = "47"
+VERSI = "48"
 
 #: Warna tiap status. Dipisahkan dari `logic` karena ini urusan tampilan.
 NADA_STATUS = {
@@ -77,7 +77,9 @@ def ringkas_aturan(aturan: logic.AturanJenis) -> str:
     """
     bagian = []
     tara = aturan.tara_default()
-    if aturan.sumber_tara == logic.TARA_MANUAL:
+    if aturan.arah in (logic.RETUR_MASUK, logic.RETUR_KELUAR):
+        bagian.append("tanpa potongan tara")
+    elif aturan.sumber_tara == logic.TARA_MANUAL:
         bagian.append("tara diisi manual")
     elif tara:
         bagian.append(f"tara {fmt.angka(tara, 3)} kg/karung")

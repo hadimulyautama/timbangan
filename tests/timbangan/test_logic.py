@@ -400,3 +400,12 @@ def test_nota_terisi_tetap_dikontrol_seperti_biasa():
     )
     assert jauh.selisih_kg == 1_000
     assert jauh.status != L.TANPA_KONTROL
+
+
+@pytest.mark.parametrize('kode',['RETUR_PELANGGAN','RETUR_SUPPLIER'])
+def test_retur_tidak_memotong_tara_meski_kiriman_lama_memuatnya(kode):
+    hasil=L.hitung(aturan=jenis(kode),berat_bermuatan_kg=9000,berat_kosong_kg=6000,
+        muatan=[L.BarisMuatan(jenis_kode=kode,jumlah_karung=100,tara_per_karung_kg=0.25,berat_acuan_kg=3000)],
+        tara_lain_kg=50)
+    assert hasil.total_tara_kg==0
+    assert hasil.berat_barang_kg==3000
