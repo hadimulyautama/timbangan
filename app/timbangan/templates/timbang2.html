@@ -36,6 +36,12 @@
     </div>
   </div>
 
+{% if boleh_koreksi %}
+  <a href="{{ PREFIX }}/transaksi/{{ trx.id }}/koreksi" class="tbl halus blok">
+    Koreksi data tiket (plat / sopir)
+  </a>
+{% endif %}
+
 <form method="post" action="{{ PREFIX }}/tiket/{{ trx.id }}"
       style="display:flex;flex-direction:column;gap:14px">
 

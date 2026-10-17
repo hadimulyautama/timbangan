@@ -815,6 +815,7 @@ async def form_timbang_kedua(
         b=baris, aturan=aturan, sekarang=sekarang(),
         tara=tara, asal_tara=asal,
         integrasi_muatan=integrasi_muatan, integrasi_error=integrasi_error,
+        boleh_koreksi=service.boleh_mengubah(baris.trx, akun)[0],
         kembali=f"{PREFIX}/tiket",
     )
 

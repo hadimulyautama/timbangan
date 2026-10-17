@@ -4551,3 +4551,28 @@ async def test_pengiriman_tara_dari_jenis_ukuran_kemasan_produksi(klien,monkeypa
     assert trx.jumlah_karung==140
     assert float(trx.total_tara_kg)==10.8
     assert float(trx.berat_barang_kg)==4500
+
+
+async def test_timbang_kedua_punya_akses_koreksi_plat_tiket_terbuka(klien):
+    await login(klien)
+    form = (await klien.get(f'{PREFIX}/timbang/GABAH_BASAH')).text
+    r = await klien.post(f'{PREFIX}/timbang/GABAH_BASAH', data={
+        'kunci':kode_dari(form),'berat_kg':'9000','supplier_id':'1',
+        'nomor_polisi':'H 8238 IC','nama_sopir':'Timbul',
+    })
+    assert 'Timbang pertama tersimpan' in r.text
+    tiket = await klien.get(f'{PREFIX}/tiket')
+    tid = int(re.search(r'/tiket/(\d+)', tiket.text).group(1))
+    halaman = (await klien.get(f'{PREFIX}/tiket/{tid}')).text
+    assert f'href="{PREFIX}/transaksi/{tid}/koreksi"' in halaman
+    assert 'Koreksi data tiket (plat / sopir)' in halaman
+    koreksi = await klien.get(f'{PREFIX}/transaksi/{tid}/koreksi')
+    assert 'name="nomor_polisi"' in koreksi.text
+    r = await klien.post(f'{PREFIX}/transaksi/{tid}/koreksi', data={
+        'nomor_polisi':'H 9313 IC','asli_nomor_polisi':'H 8238 IC',
+        'alasan':'Salah ketik nomor polisi',
+    })
+    assert 'Koreksi tersimpan' in r.text
+    t = await trx_oleh_id(tid)
+    assert t.nomor_polisi == 'H 9313 IC'
+    assert t.timbang2_kg is None
