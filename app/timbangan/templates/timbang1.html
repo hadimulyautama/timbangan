@@ -19,7 +19,11 @@
 {% block bar_sub %}{{ akun.nama }}{% endblock %}
 
 {% block konteks %}
-  {{ konteks_jenis(aturan, PREFIX ~ ('/' if jasa else '/pilih/' ~ aturan.arah)) }}
+  {% if aturan.arah == KELUAR %}
+    <div class="kartu bantu">Catat armada dan berat truk kosong. Produksi akan memilih tiket ini; rincian barang dan kemasan diambil otomatis setelah selesai dimuat.</div>
+  {% else %}
+    {{ konteks_jenis(aturan, PREFIX ~ ('/' if jasa else '/pilih/' ~ aturan.arah)) }}
+  {% endif %}
   {% if jasa %}
     {# Disebut di kepala layar, bukan cuma di judul. Satu-satunya hal yang
        membedakan tiket ini dari barang masuk biasa adalah PEMILIKNYA, dan

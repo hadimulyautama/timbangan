@@ -304,6 +304,8 @@ async def pilih_jenis(
     ):
         return redirect("/", err="Arah barang tidak dikenal.")
 
+    if arah == logic.KELUAR:
+        return redirect("/timbang/PENGIRIMAN")
     jenis = await service.daftar_jenis(db, arah=arah)
     if arah != logic.BEBAS:
         jenis = [j for j in jenis if j.arah == arah]
@@ -330,6 +332,8 @@ async def form_timbang_pertama(
     except service.LayananError as e:
         return redirect("/", err=str(e))
 
+    if aturan.arah == logic.KELUAR and aturan.kode != "PENGIRIMAN":
+        return redirect("/timbang/PENGIRIMAN")
     tara, asal = await service.tara_disarankan(db, supplier_id=None, aturan=aturan)
     # Daftar mengikuti arah: barang masuk hanya supplier, pengiriman
     # hanya pelanggan. Lihat `service.PIHAK_ARAH`.

@@ -12,7 +12,11 @@
 {% block bar_sub %}{{ trx.nomor_polisi or trx.kode }}{% endblock %}
 
 {% block konteks %}
-  {{ konteks_jenis(aturan) }}
+  {% if trx.arah == KELUAR %}
+    <div class="kartu bantu">Pengiriman · rincian muatan dan tara mengikuti Produksi.</div>
+  {% else %}
+    {{ konteks_jenis(aturan) }}
+  {% endif %}
   {{ tahap(2,
            'Truk bermuatan' if bongkar else 'Truk kosong',
            'Setelah bongkar' if bongkar else 'Setelah muat') }}
@@ -60,7 +64,7 @@
 
   {# Setelah bongkar, jumlah karung sudah pasti. Di sinilah biasanya angka
      yang tadi dikosongkan akhirnya diisi. #}
-  {% if masuk or trx.arah in (RETUR_MASUK, RETUR_KELUAR) %}
+  {% if masuk or trx.arah in (RETUR_MASUK, RETUR_KELUAR, KELUAR) %}
     <div class="kartu">
       <div class="kartu__judul">
         {{ 'Nota supplier' if masuk else 'Surat jalan' }}

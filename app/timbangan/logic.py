@@ -365,6 +365,15 @@ JENIS_AWAL: tuple[AturanJenis, ...] = (
         ambang_arah=ARAH_SIMETRIS,
         rahasia=False, cetak_bukti=True,
     ),
+    # Pengiriman mewakili satu truk, bukan satu komoditas. Rincian dan tara
+    # tiap kemasan baru diambil dari muatan Produksi pada timbang kedua.
+    AturanJenis(
+        kode="PENGIRIMAN", nama="Pengiriman", arah=KELUAR,
+        acuan=ACUAN_SURAT_JALAN, sumber_tara=TARA_MANUAL,
+        ambang_jenis=AMBANG_PER_KARUNG, ambang_nilai=0.07,
+        ambang_arah=ARAH_TIDAK_BOLEH_KURANG,
+        rahasia=True, cetak_bukti=True,
+    ),
 )
 
 JENIS_PETA: dict[str, AturanJenis] = {j.kode: j for j in JENIS_AWAL}

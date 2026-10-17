@@ -4576,3 +4576,38 @@ async def test_timbang_kedua_punya_akses_koreksi_plat_tiket_terbuka(klien):
     t = await trx_oleh_id(tid)
     assert t.nomor_polisi == 'H 9313 IC'
     assert t.timbang2_kg is None
+
+
+async def test_pengiriman_langsung_timbang_tanpa_memilih_komoditas_dan_muatan_campuran(klien, monkeypatch):
+    from app.timbangan import klien_produksi
+    async def muatan(tid):
+        return {'kode_perintah':'OUT-CAMPUR','pelanggan':'Toko Uji','nomor_polisi':'H 9313 IC',
+                'muatan':[
+                    {'jenis_kode':'BERAS','nama':'Beras laminasi 25 kg','jumlah_karung':10,'tara_per_karung_kg':0.08,'berat_kg':250},
+                    {'jenis_kode':'BERAS','nama':'Beras putih 50 kg','jumlah_karung':2,'tara_per_karung_kg':0.07,'berat_kg':100},
+                    {'jenis_kode':'MENIR','nama':'Menir 50 kg','jumlah_karung':1,'tara_per_karung_kg':0.07,'berat_kg':50},
+                    {'jenis_kode':'BEKATUL','nama':'Bekatul curah','jumlah_karung':0,'tara_per_karung_kg':0,'berat_kg':50},
+                ]}
+    monkeypatch.setattr(klien_produksi,'muatan_pengiriman',muatan)
+    await login(klien)
+    beranda=(await klien.get(f'{PREFIX}/')).text
+    assert f'href="{PREFIX}/timbang/PENGIRIMAN"' in beranda
+    form=(await klien.get(f'{PREFIX}/pilih/KELUAR')).text
+    assert 'Pilih komoditas' not in form
+    assert 'Truk kosong' in form
+    assert 'name="jumlah_karung"' not in form and 'name="tara_per_karung_kg"' not in form
+    await klien.post(f'{PREFIX}/timbang/PENGIRIMAN',data={
+        'kunci':kode_dari(form),'berat_kg':'6000','supplier_id':'1',
+        'nomor_polisi':'H 9313 IC','nama_sopir':'Timbul'})
+    tiket=await klien.get(f'{PREFIX}/tiket')
+    tid=int(re.search(r'/tiket/(\d+)',tiket.text).group(1))
+    form2=(await klien.get(f'{PREFIX}/tiket/{tid}')).text
+    for nama in ('Beras laminasi 25 kg','Beras putih 50 kg','Menir 50 kg','Bekatul curah'):
+        assert nama in form2
+    await klien.post(f'{PREFIX}/tiket/{tid}',data={
+        'berat_kg':'6451.01','jumlah_karung':'999','tara_per_karung_kg':'999'})
+    trx=await trx_oleh_id(tid)
+    assert trx.jenis_kode=='PENGIRIMAN' and trx.status_tiket==TIKET_SELESAI
+    assert len(trx.muatan)==4 and trx.jumlah_karung==13
+    assert abs(float(trx.total_tara_kg)-1.01)<0.0001
+    assert abs(float(trx.berat_barang_kg)-450)<0.0001
