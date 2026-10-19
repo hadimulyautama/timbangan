@@ -140,15 +140,20 @@
     Selesaikan penimbangan
   </button>
 
-  {% if masuk %}
+  {% if masuk or trx.arah == "KELUAR" %}
     <button type="submit" name="aksi" value="sementara" formnovalidate
             class="tbl halus blok" data-sibuk="Menyimpan…">
       Simpan sementara
     </button>
     <div class="bantu" style="text-align:center;margin-top:-4px">
+      {% if trx.arah == "KELUAR" %}
+      Berat tersimpan dan tiket tetap terbuka. Nama pelanggan mengikuti perintah
+      Produksi saat tiket armada dipilih; tidak perlu diisi di sini.
+      {% else %}
       Angkanya tersimpan dan tiket tetap terbuka. Dipakai saat bongkar belum
       rampung sehingga jumlah karung belum pasti — selisih baru dihitung
       ketika penimbangan diselesaikan.
+      {% endif %}
     </div>
   {% endif %}
 </form>

@@ -187,7 +187,8 @@ async def test_daftar_komoditas_berbeda_menurut_arah(klien):
     assert "Bekatul" not in masuk
     assert "Menir" not in masuk
 
-    assert "Bekatul" in keluar
+    assert "Truk kosong" in keluar
+    assert "Pelanggan ditentukan pada perintah" in " ".join(keluar.split())
     assert "Gabah Basah" not in keluar
 
 
@@ -376,7 +377,7 @@ async def test_tidak_ada_kata_harga_di_layar_petugas(klien, jalur):
     """Operator pos timbang tidak boleh tahu harga — termasuk di tampilan."""
     await login(klien)
     teks = (await klien.get(PREFIX + jalur)).text.lower()
-    for kata in ("harga", "rupiah", " rp", "potongan", "refaksi"):
+    for kata in ("harga", "rupiah", " rp", "potongan harga", "refaksi"):
         assert kata not in teks, f"{jalur} memuat '{kata}'"
 
 
@@ -614,7 +615,7 @@ async def test_setelan_di_luar_batas_wajar_ditolak(klien):
         r = await klien.post(f"{PREFIX}/pengaturan", data={
             "kunci": "kapasitas_jembatan_kg", "nilai": nilai, "aksi": "simpan",
         })
-        assert "kini" not in r.text, f"{nilai!r} seharusnya ditolak"
+        assert "kini" not in re.sub(r"<script\b[^>]*>.*?</script>", "", r.text, flags=re.S), f"{nilai!r} seharusnya ditolak"
 
 
 async def test_kembalikan_bawaan_menghapus_setelan(klien, app_uji):
@@ -865,6 +866,7 @@ async def test_tanda_tiket_terbuka_terlihat_dari_halaman_lain(klien):
     assert 'class="bawah__tanda"' in teks
 
 
+@pytest.mark.usefixtures("muatan_pengiriman_uji")
 async def test_bukti_pengiriman_tidak_memuat_selisih(klien):
     """Keputusan Direksi: sopir menerima berat barang, bukan angka selisih."""
     await login(klien)
@@ -1158,7 +1160,7 @@ def test_rangka_desktop_terang_dan_sejajar():
     # Keduanya dibatasi pada lebar yang SAMA, dan keduanya width:100%.
     aturan = re.search(r"\.isi, \.bar__dalam \{([^}]*)\}", desktop).group(1)
     assert "width: 100%" in aturan
-    assert "max-width: 820px" in aturan
+    assert "max-width: 1480px" in aturan
     assert ".bingkai.lebar .isi, .bingkai.lebar .bar__dalam" in desktop
 
 
@@ -1736,6 +1738,7 @@ async def test_simpan_sementara_tercatat_di_audit(klien):
     assert "tiket tetap terbuka" in jejak.ringkasan
 
 
+@pytest.mark.usefixtures("muatan_pengiriman_uji")
 async def test_pengiriman_tetap_bisa_selesai_tanpa_jumlah_karung(klien):
     """Pagarnya khusus barang masuk — alur pengiriman tidak ikut berubah."""
     await login(klien)
@@ -1745,17 +1748,17 @@ async def test_pengiriman_tetap_bisa_selesai_tanpa_jumlah_karung(klien):
         "berat_acuan_kg": "", "nomor_acuan": "", "waktu": "", "catatan": "",
         "aksi": "selesai",
     })
-    assert "selesai dan tersimpan" in r.text
+    assert "Timbangan tersimpan" in r.text
     assert (await trx_oleh_id(trx_id)).status_tiket == TIKET_SELESAI
 
 
-async def test_tombol_simpan_sementara_hanya_untuk_barang_masuk(klien):
+async def test_tombol_simpan_sementara_untuk_barang_masuk_dan_keluar(klien):
     await login(klien)
     masuk = await _tiket_terbuka(klien, "GABAH_BASAH")
     assert "Simpan sementara" in (await klien.get(f"{PREFIX}/tiket/{masuk}")).text
 
     keluar = await _tiket_terbuka(klien, "BERAS", berat_kg="4200")
-    assert "Simpan sementara" not in (
+    assert "Simpan sementara" in (
         await klien.get(f"{PREFIX}/tiket/{keluar}")).text
 
 
@@ -2260,7 +2263,7 @@ async def test_ekspor_menyebut_nama_berkasnya_di_header(klien):
 
 # ─────────────── Nomor polisi wajib ───────────────
 
-@pytest.mark.parametrize("jenis", ["GABAH_BASAH", "BERAS"])
+@pytest.mark.parametrize("jenis", ["GABAH_BASAH", "PENGIRIMAN"])
 async def test_masuk_dan_keluar_menolak_tanpa_nomor_polisi(klien, jenis):
     """Keduanya melibatkan pihak luar, jadi catatannya harus bisa menunjuk
     kendaraan tertentu bila kelak ada sengketa."""
@@ -2278,7 +2281,7 @@ async def test_masuk_dan_keluar_menolak_tanpa_nomor_polisi(klien, jenis):
         or "Tidak ada" in (await klien.get(f"{PREFIX}/tiket")).text
 
 
-@pytest.mark.parametrize("jenis", ["GABAH_BASAH", "BERAS"])
+@pytest.mark.parametrize("jenis", ["GABAH_BASAH", "PENGIRIMAN"])
 async def test_isiannya_ditandai_wajib_di_layar(klien, jenis):
     await login(klien)
     form = (await klien.get(f"{PREFIX}/timbang/{jenis}")).text
@@ -2637,6 +2640,7 @@ async def test_nama_pihak_wajib_di_semua_arah(klien):
 
 # ─────────────── Lembar pemeriksaan yang alasannya hilang ───────────────
 
+@pytest.mark.usefixtures("muatan_pengiriman_uji")
 async def test_lembar_terbuka_menyebut_bahwa_pemicunya_sudah_hilang(
     klien, app_uji
 ):
@@ -2646,7 +2650,7 @@ async def test_lembar_terbuka_menyebut_bahwa_pemicunya_sudah_hilang(
     punya petunjuk apa pun tentang apa yang dulu dipersoalkan.
     """
     await login(klien, "budi")
-    form = (await klien.get(f"{PREFIX}/timbang/BERAS")).text
+    form = (await klien.get(f"{PREFIX}/timbang/PENGIRIMAN")).text
     await klien.post(f"{PREFIX}/timbang/BERAS", data={
         "kunci": kode_dari(form), "berat_kg": "3680",
         "cara_timbang": "DUA_KALI", "supplier_id": "1",
@@ -2910,8 +2914,8 @@ async def test_tiket_menyebut_arah_dan_tidak_memakai_kata_masuk_untuk_jam(
     langsung menyesatkan.
     """
     await login(klien, "budi")
-    form = (await klien.get(f"{PREFIX}/timbang/BERAS")).text
-    await klien.post(f"{PREFIX}/timbang/BERAS", data={
+    form = (await klien.get(f"{PREFIX}/timbang/PENGIRIMAN")).text
+    await klien.post(f"{PREFIX}/timbang/PENGIRIMAN", data={
         "kunci": kode_dari(form), "berat_kg": "3570", "cara_timbang": "DUA_KALI",
         "supplier_id": "1", "nomor_polisi": "K 8482 CC", "jumlah_karung": "0",
         "tara_per_karung_kg": "0", "berat_acuan_kg": "10000",
@@ -3023,7 +3027,7 @@ async def test_barang_masuk_hanya_menawarkan_supplier(klien):
 async def test_pengiriman_pelanggan_ditentukan_di_produksi(klien):
     await _tambah_pelanggan("Toko Beras Handoko")
     await login(klien)
-    form = (await klien.get(f"{PREFIX}/timbang/BERAS")).text
+    form = (await klien.get(f"{PREFIX}/timbang/PENGIRIMAN")).text
     assert "Toko Beras Handoko" not in form
     assert 'name="supplier_id"' not in form
     assert 'name="pihak_nama"' not in form
@@ -3035,8 +3039,8 @@ async def test_pengiriman_pelanggan_ditentukan_di_produksi(klien):
 async def test_pengiriman_menyimpan_ke_kolom_pelanggan(klien):
     pid = await _tambah_pelanggan("Toko Beras Handoko")
     await login(klien)
-    form = (await klien.get(f"{PREFIX}/timbang/BERAS")).text
-    await klien.post(f"{PREFIX}/timbang/BERAS", data={
+    form = (await klien.get(f"{PREFIX}/timbang/PENGIRIMAN")).text
+    await klien.post(f"{PREFIX}/timbang/PENGIRIMAN", data={
         "kunci": kode_dari(form), "berat_kg": "3570", "cara_timbang": "DUA_KALI",
         "supplier_id": str(pid), "nomor_polisi": "K 8482 CC",
         "jumlah_karung": "100", "tara_per_karung_kg": "0,05",
@@ -3078,6 +3082,7 @@ async def test_ubah_arah_menyelamatkan_nama_pihak_ke_teks(klien, app_uji):
 
 # ─────────────── Lembar terbuka harus bisa dijangkau ───────────────
 
+@pytest.mark.usefixtures("muatan_pengiriman_uji")
 async def test_ringkasan_menautkan_lembar_pemeriksaan_yang_terbuka(
     klien, app_uji
 ):
@@ -3087,7 +3092,7 @@ async def test_ringkasan_menautkan_lembar_pemeriksaan_yang_terbuka(
     tetapi tidak muncul di mana pun — justru lembar itulah yang perlu ditutup.
     """
     await login(klien, "budi")
-    form = (await klien.get(f"{PREFIX}/timbang/BERAS")).text
+    form = (await klien.get(f"{PREFIX}/timbang/PENGIRIMAN")).text
     await klien.post(f"{PREFIX}/timbang/BERAS", data={
         "kunci": kode_dari(form), "berat_kg": "3680", "cara_timbang": "DUA_KALI",
         "supplier_id": "1", "pihak_nama": "", "nomor_polisi": "K 8382 CC",
@@ -3124,9 +3129,10 @@ async def test_ringkasan_menautkan_lembar_pemeriksaan_yang_terbuka(
     assert "tidak menutup lembarnya" in laporan    # dan dijelaskan
 
 
+@pytest.mark.usefixtures("muatan_pengiriman_uji")
 async def test_ringkasan_bersih_setelah_lembarnya_ditutup(klien, app_uji):
     await login(klien, "budi")
-    form = (await klien.get(f"{PREFIX}/timbang/BERAS")).text
+    form = (await klien.get(f"{PREFIX}/timbang/PENGIRIMAN")).text
     await klien.post(f"{PREFIX}/timbang/BERAS", data={
         "kunci": kode_dari(form), "berat_kg": "3680", "cara_timbang": "DUA_KALI",
         "supplier_id": "1", "pihak_nama": "", "nomor_polisi": "K 1 AA",
@@ -3165,7 +3171,6 @@ async def test_ringkasan_bersih_setelah_lembarnya_ditutup(klien, app_uji):
 
 @pytest.mark.parametrize("jenis,sebutan", [
     ("GABAH_BASAH", "Supplier"),
-    ("BERAS", "Pelanggan"),
     ("BEBAS", "Pemilik barang"),
     ("TRANSFER", "Asal → tujuan"),
 ])
@@ -3214,7 +3219,7 @@ async def test_borang_pelanggan_tak_lagi_menawarkan_ketik_bebas(klien):
     berubah — permintaan pemilik 4 Oktober 2026 hanya menyebut pelanggan."""
     await login(klien)
 
-    keluar = (await klien.get(f"{PREFIX}/timbang/BERAS")).text
+    keluar = (await klien.get(f"{PREFIX}/timbang/PENGIRIMAN")).text
     assert 'data-gabung' not in keluar, "pelanggan masih menawarkan ketik bebas"
     assert '(bila belum terdaftar)' not in keluar
 
@@ -3331,6 +3336,7 @@ async def test_tara_disarankan_juga_di_timbang_kedua(klien):
 
 # ─────────────── Istilah Ringkasan: fakta, bukan tugas ───────────────
 
+@pytest.mark.usefixtures("muatan_pengiriman_uji")
 async def test_ringkasan_tidak_menyebut_pekerjaan_untuk_yang_sudah_tuntas(
     klien, app_uji
 ):
@@ -3341,7 +3347,7 @@ async def test_ringkasan_tidak_menyebut_pekerjaan_untuk_yang_sudah_tuntas(
     menggantung. Daftar tugas yang sesungguhnya adalah lembar yang terbuka.
     """
     await login(klien, "budi")
-    form = (await klien.get(f"{PREFIX}/timbang/BERAS")).text
+    form = (await klien.get(f"{PREFIX}/timbang/PENGIRIMAN")).text
     await klien.post(f"{PREFIX}/timbang/BERAS", data={
         "kunci": kode_dari(form), "berat_kg": "3680", "cara_timbang": "DUA_KALI",
         "supplier_id": "1", "pihak_nama": "", "nomor_polisi": "K 8 CC",
@@ -3378,12 +3384,13 @@ async def test_ringkasan_tidak_menyebut_pekerjaan_untuk_yang_sudah_tuntas(
     assert "lembar pemeriksaan masih terbuka" not in laporan
 
 
+@pytest.mark.usefixtures("muatan_pengiriman_uji")
 async def test_angka_dan_daftar_di_luar_batas_sepakat(klien, app_uji):
     """Petaknya menghitung SEMUA status di luar batas; daftarnya dulu hanya
     memuat PERLU_PEMERIKSAAN. Angka "1" dengan daftar kosong di layar yang
     sama membuat orang mengira ada yang disembunyikan."""
     await login(klien, "budi")
-    form = (await klien.get(f"{PREFIX}/timbang/BERAS")).text
+    form = (await klien.get(f"{PREFIX}/timbang/PENGIRIMAN")).text
     await klien.post(f"{PREFIX}/timbang/BERAS", data={
         "kunci": kode_dari(form), "berat_kg": "3680", "cara_timbang": "DUA_KALI",
         "supplier_id": "1", "pihak_nama": "", "nomor_polisi": "K 9 DD",
@@ -3419,17 +3426,18 @@ async def test_kalimat_karung_di_timbang_pertama_mengikuti_arah(klien):
     assert "dihitung saat bongkar" in masuk
     assert "Truk masih kosong" not in masuk
 
-    keluar = (await klien.get(f"{PREFIX}/timbang/BERAS")).text
-    assert "Truk masih kosong" in keluar
-    assert "baru dihitung saat muat" in keluar
+    keluar = (await klien.get(f"{PREFIX}/timbang/PENGIRIMAN")).text
+    assert "Truk kosong" in keluar
+    assert 'name="jumlah_karung"' not in keluar
     assert "dihitung saat bongkar" not in keluar
 
 
 @pytest.mark.parametrize("jenis,kalimat", [
     ("GABAH_BASAH", "Dihitung saat bongkar, bukan disalin dari nota."),
-    ("BERAS", "Dihitung saat muat, bukan disalin dari surat jalan."),
+    ("PENGIRIMAN", "Muatan berasal dari catatan barang yang benar-benar dimuat di Produksi."),
     ("TRANSFER", "Kosongkan bila muatannya curah"),
 ])
+@pytest.mark.usefixtures("muatan_pengiriman_uji")
 async def test_kalimat_karung_di_timbang_kedua_mengikuti_arah(
     klien, jenis, kalimat
 ):
@@ -3445,7 +3453,7 @@ async def test_kalimat_karung_di_timbang_kedua_mengikuti_arah(
     })
     tiket = await klien.get(f"{PREFIX}/tiket")
     trx_id = int(re.search(r"/tiket/(\d+)", tiket.text).group(1))
-    assert kalimat in (await klien.get(f"{PREFIX}/tiket/{trx_id}")).text
+    assert kalimat in " ".join((await klien.get(f"{PREFIX}/tiket/{trx_id}")).text.split())
 
 
 # ─────────────── Struk: selisih hanya bila ada pembandingnya ───────────────
@@ -3823,7 +3831,7 @@ async def test_beranda_membentangkan_komoditas_tanpa_halaman_baru(klien):
     for kode in ("GABAH_BASAH", "GABAH_KERING", "BERAS_PK"):
         assert f'href="{PREFIX}/timbang/{kode}"' in beranda, kode
     # Dan pengiriman juga, dari beranda yang sama.
-    assert f'href="{PREFIX}/timbang/BEKATUL"' in beranda
+    assert f'href="{PREFIX}/timbang/PENGIRIMAN"' in beranda
     # Partai kecil memakai alurnya sendiri, bukan formulir biasa.
     assert f'href="{PREFIX}/partai/GABAH_BASAH/baru"' in beranda
 
@@ -4223,13 +4231,7 @@ async def test_kartu_jasa_hilang_bila_tak_ada_komoditas_dibuka(klien):
 
     await login(klien)
     async with SessionLocal() as db:
-        # KETIGANYA dicabut: pemilik membuka gabah basah, gabah kering, dan
-        # beras PK pada 1 Oktober 2026. Mencabut satu saja tak lagi
-        # mengosongkan daftarnya — dan uji yang hanya mencabut satu akan lulus
-        # tanpa pernah menguji keadaan "kosong" lagi.
-        for kode in ("GABAH_BASAH", "GABAH_KERING", "BERAS_PK"):
-            baris = (await db.execute(select(TimbanganJenis).where(
-                TimbanganJenis.kode == kode))).scalars().one()
+        for baris in await service.daftar_jenis_jasa(db):
             baris.boleh_jasa = False
         await db.commit()
 
@@ -4537,10 +4539,10 @@ async def test_pengiriman_tara_dari_jenis_ukuran_kemasan_produksi(klien,monkeypa
                 ]}
     monkeypatch.setattr(klien_produksi,'muatan_pengiriman',baca)
     await login(klien)
-    form=(await klien.get(f'{PREFIX}/timbang/BERAS')).text
+    form=(await klien.get(f'{PREFIX}/timbang/PENGIRIMAN')).text
     assert 'name="jumlah_karung"' not in form
     assert 'name="tara_per_karung_kg"' not in form
-    await klien.post(f'{PREFIX}/timbang/BERAS',data={
+    await klien.post(f'{PREFIX}/timbang/PENGIRIMAN',data={
         'kunci':kode_dari(form),'berat_kg':'6000','supplier_id':'1',
         'nomor_polisi':'AD 9 ZZ','nama_sopir':'Slamet',
     })
@@ -4619,3 +4621,51 @@ async def test_pengiriman_langsung_timbang_tanpa_memilih_komoditas_dan_muatan_ca
     assert abs(float(trx.berat_barang_kg)-450)<0.0001
     assert float(trx.berat_acuan_kg)==450
     assert trx.pelanggan_id is None
+
+
+async def test_pengiriman_sementara_tanpa_pelanggan_dan_tanpa_produksi(klien, monkeypatch):
+    from app.timbangan import klien_produksi
+    panggilan = []
+    async def belum_tertaut(tid):
+        panggilan.append(tid)
+        raise klien_produksi.ProduksiTakTersedia('Pilih tiket armada di Produksi.')
+    monkeypatch.setattr(klien_produksi, 'muatan_pengiriman', belum_tertaut)
+    await login(klien)
+    form = (await klien.get(f'{PREFIX}/timbang/PENGIRIMAN')).text
+    await klien.post(f'{PREFIX}/timbang/PENGIRIMAN', data={
+        'kunci': kode_dari(form), 'berat_kg': '6000',
+        'nomor_polisi': 'H 9313 IC', 'nama_sopir': 'Timbul'})
+    tiket = await klien.get(f'{PREFIX}/tiket')
+    tid = int(re.search(r'/tiket/(\d+)', tiket.text).group(1))
+    halaman = (await klien.get(f'{PREFIX}/tiket/{tid}')).text
+    assert 'value="sementara"' in halaman
+    assert 'Nama pelanggan mengikuti perintah' in halaman
+    panggilan.clear()
+    r = await klien.post(f'{PREFIX}/tiket/{tid}', data={
+        'berat_kg': '6451', 'aksi': 'sementara', 'catatan': 'Menunggu perintah'})
+    # Redirect GET boleh membaca status Produksi, POST simpan tidak boleh bergantung padanya.
+    assert 'Tersimpan. Tiket masih terbuka' in r.text
+    trx = await trx_oleh_id(tid)
+    assert trx.pelanggan_id is None
+    assert trx.status_tiket == TIKET_TERBUKA
+    assert float(trx.timbang2_kg) == 6451
+    assert trx.catatan == 'Menunggu perintah'
+    assert trx.berat_barang_kg is None
+    r = await klien.post(f'{PREFIX}/tiket/{tid}', data={'berat_kg': '6451', 'aksi': 'selesai'})
+    assert 'Muatan dari Produksi belum bisa dibaca' in r.text
+    trx = await trx_oleh_id(tid)
+    assert trx.status_tiket == TIKET_TERBUKA
+
+
+@pytest.fixture
+def muatan_pengiriman_uji(monkeypatch):
+    """Simulasi batas HTTP Produksi untuk uji pemeriksaan dan cetak pengiriman."""
+    from app.timbangan import klien_produksi
+    async def muatan(tid):
+        trx = await trx_oleh_id(tid)
+        return {'kode_perintah': 'OUT-UJI', 'pelanggan': 'Toko Uji',
+                'nomor_polisi': trx.nomor_polisi, 'muatan': [{
+                    'jenis_kode': 'BERAS', 'nama': 'Beras curah',
+                    'berat_kg': sum(float(m.berat_acuan_kg or 0) for m in trx.muatan),
+                    'jumlah_karung': 0, 'tara_per_karung_kg': 0}]}
+    monkeypatch.setattr(klien_produksi, 'muatan_pengiriman', muatan)

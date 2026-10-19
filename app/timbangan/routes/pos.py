@@ -846,7 +846,9 @@ async def simpan_timbang_kedua(
     # Jumlah karung & berat nota sering baru diketahui setelah bongkar —
     # karena itu boleh diisi di tahap kedua, bukan hanya di tahap pertama.
     muatan = None
-    if baris.trx.arah == logic.KELUAR:
+    # Simpan sementara hanya menyimpan bacaan jembatan; pelanggan dan muatan
+    # boleh menyusul dari Produksi. Gangguan jaringan tidak boleh menahan ini.
+    if baris.trx.arah == logic.KELUAR and aksi != "sementara":
         try:
             from app.timbangan import klien_produksi
             data_muatan = await klien_produksi.muatan_pengiriman(transaksi_id)
@@ -884,7 +886,7 @@ async def simpan_timbang_kedua(
             berat_acuan_kg=_angka(berat_acuan_kg, float(lama.berat_acuan_kg) if lama else 0),
             nomor_acuan=nomor_acuan.strip() or (lama.nomor_acuan if lama else None),
         )]
-    elif jumlah_karung or berat_acuan_kg:
+    elif baris.trx.arah != logic.KELUAR and (jumlah_karung or berat_acuan_kg):
         lama = baris.trx.muatan[0] if baris.trx.muatan else None
         muatan = [service.InputMuatan(
             jenis_kode=baris.trx.jenis_kode,
@@ -920,8 +922,7 @@ async def simpan_timbang_kedua(
     if aksi == "sementara":
         return redirect(
             f"/tiket/{transaksi_id}",
-            ok="Tersimpan. Tiket masih terbuka — selesaikan setelah jumlah "
-               "karung pasti.",
+            ok="Tersimpan. Tiket masih terbuka — selesaikan setelah muatan dan timbang kedua sudah pasti.",
         )
     if baris.trx.arah == logic.KELUAR:
         if not akun.akun_id:
