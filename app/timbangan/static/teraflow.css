@@ -29,3 +29,13 @@ body.padiflow-ui.pd-timbang .bawah__logo--gelap {filter:brightness(2.8) saturate
 
 body.padiflow-ui.pd-timbang .pembuka {background:#f1f5fa; color:#243247}
 body.padiflow-ui.pd-timbang .pembuka__sub {color:#5c6c82}
+
+/* Header ponsel berada di bawah status bar saat dibuka dari layar utama iOS.
+   Padding komponen bersama menimpa safe area bawaan app.css. */
+@media (max-width:899px) {
+  body.padiflow-ui.pd-timbang .bar {
+    padding-top: calc(10px + env(safe-area-inset-top, 0px));
+    padding-left: calc(16px + env(safe-area-inset-left, 0px));
+    padding-right: calc(16px + env(safe-area-inset-right, 0px));
+  }
+}
