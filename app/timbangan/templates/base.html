@@ -4,9 +4,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>{% block judul %}Pos Timbang{% endblock %} · {{ PERUSAHAAN }}</title>
+  <title>TeraFlow · {% block judul %}Pos Timbang{% endblock %} · {{ PERUSAHAAN }}</title>
 
-  <meta name="theme-color" content="#3a352c">
+  <meta name="theme-color" content="#f1f5fa">
   {# Layar penuh saat dipasang ke layar depan iPhone maupun Android. #}
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -21,7 +21,7 @@
         href="{{ PREFIX }}/static/ikon-192.png?v={{ VERSI }}">
   <link rel="icon" type="image/svg+xml"
         href="{{ PREFIX }}/static/ikon.svg?v={{ VERSI }}">
-  <meta name="apple-mobile-web-app-title" content="Pos Timbang">
+  <meta name="apple-mobile-web-app-title" content="TeraFlow">
 
   {# Tema disimpan per perangkat, mengikuti pola portal dan Pos Produksi. #}
   <meta name="color-scheme" content="light dark">
@@ -86,6 +86,7 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="{{ PREFIX }}/static/app.css?v={{ VERSI }}">
   <link rel="stylesheet" href="{{ PREFIX }}/static/komponen-portal.css?v={{ VERSI }}">
+  <link rel="stylesheet" href="{{ PREFIX }}/static/teraflow.css?v={{ VERSI }}">
 </head>
 {# `segar_otomatis` sengaja OPT-IN per halaman, bukan berlaku di mana-mana.
    Menyegarkan di sini berarti memuat ulang halaman, dan reload MEMBUANG yang
@@ -108,7 +109,7 @@
 <div class="pembuka" id="pembuka" hidden aria-hidden="true">
   <img class="pembuka__lambang" src="{{ PREFIX }}/static/ikon.svg"
        width="132" height="132" alt="">
-  <div class="pembuka__nama">Pos Timbang</div>
+  <div class="pembuka__nama">TeraFlow</div>
   <div class="pembuka__sub">{{ PERUSAHAAN }}</div>
   <div class="pembuka__tunggu">Menyiapkan…</div>
 </div>
@@ -198,9 +199,9 @@
   <nav class="bawah" id="menu-timbang" aria-label="Navigasi utama">
     {# Hanya tampak saat bilah ini berubah jadi sidebar di layar lebar. #}
     <div class="bawah__kepala">
-      <img class="bawah__logo bawah__logo--terik" src="{{ PREFIX }}/static/padiflow-logo-terang.png?v={{ VERSI }}" alt="PadiFlow">
-      <img class="bawah__logo bawah__logo--gelap" src="{{ PREFIX }}/static/padiflow-logo-gelap.png?v={{ VERSI }}" alt="PadiFlow">
-      <span class="bawah__app">Pos Timbang</span>
+      <img class="bawah__logo bawah__logo--terik" src="{{ PREFIX }}/static/teraflow-logo.png?v={{ VERSI }}" alt="TeraFlow">
+      <img class="bawah__logo bawah__logo--gelap" src="{{ PREFIX }}/static/teraflow-logo.png?v={{ VERSI }}" alt="TeraFlow">
+      <span class="bawah__app">Pos Timbang · HMU</span>
       <button type="button" class="pd-close" aria-label="Tutup menu">×</button>
     </div>
     <div class="bawah__isi">

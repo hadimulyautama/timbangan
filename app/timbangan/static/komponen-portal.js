@@ -45,7 +45,7 @@
     theme.setAttribute('aria-label', light ? 'Aktifkan mode gelap' : 'Aktifkan mode terang');
     document.documentElement.style.colorScheme = light ? 'light' : 'dark';
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.content = light ? '#f5f5ef' : '#111914';
+    if (meta) meta.content = getComputedStyle(body).getPropertyValue('--pd-bg').trim();
   }
   if (theme) theme.addEventListener('click', () => {
     body.classList.toggle('terik');

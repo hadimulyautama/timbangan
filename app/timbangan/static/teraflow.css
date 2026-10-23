@@ -1,0 +1,28 @@
+/* Identitas TeraFlow. Terpisah dari komponen bersama agar sinkronisasi tetap aman. */
+body.padiflow-ui.pd-timbang {
+  --pd-bg:#101a28; --pd-sheet:#19273a; --pd-ink:#e6edf8;
+  --pd-muted:#b7c7de; --pd-line:#35475f; --pd-soft:#24364d;
+  --tf-accent:#9bbff4; --tf-active:#263e5f; --tf-button-ink:#152337;
+  --pd-blue:var(--tf-accent); --pd-blue-bg:var(--tf-active);
+  --aksi:var(--tf-accent); --aksi-muda:var(--tf-active); --aksi-gelap:#7ba6e6;
+}
+body.padiflow-ui.pd-timbang.terik {
+  --pd-bg:#f1f5fa; --pd-sheet:#fff; --pd-ink:#243247;
+  --pd-muted:#5c6c82; --pd-line:#d8e1ed; --pd-soft:#eaf0f7;
+  --tf-accent:#315d9b; --tf-active:#e5eefb; --tf-button-ink:#fff;
+  --aksi-gelap:#264b7f;
+}
+html:has(body.pd-timbang) {background:#101a28}
+html:has(body.pd-timbang.terik) {background:#f1f5fa}
+body.padiflow-ui.pd-timbang .bawah__app {color:var(--tf-accent)}
+body.padiflow-ui.pd-timbang .bawah__isi>a.aktif {
+  background:var(--tf-active); color:var(--tf-accent);
+  box-shadow:inset 3px 0 var(--tf-accent);
+}
+body.padiflow-ui.pd-timbang .tbl:not(.halus):not(.bahaya),
+body.padiflow-ui.pd-timbang :is(.btn--utama,.tbl.utama,.tbl--utama) {
+  background:var(--tf-accent); border-color:var(--tf-accent); color:var(--tf-button-ink);
+}
+/* Berkas yang sama mempertahankan bentuk logo persis di kedua tema. */
+body.padiflow-ui.pd-timbang .bawah__logo--gelap {filter:brightness(2.8) saturate(.7)}
+@media print {body.padiflow-ui.pd-timbang {background:#fff; color:#202832}}

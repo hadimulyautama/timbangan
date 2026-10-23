@@ -1,13 +1,13 @@
 {
-  "name": "Pos Timbang — PT Hadi Mulya Utama",
-  "short_name": "Pos Timbang",
+  "name": "TeraFlow — Pos Timbang HMU",
+  "short_name": "TeraFlow",
   "description": "Pencatatan dan kontrol timbangan armada",
   "start_url": "/timbangan/",
   "scope": "/timbangan/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#fbf9f4",
-  "theme_color": "#3a352c",
+  "background_color": "#f1f5fa",
+  "theme_color": "#f1f5fa",
   "lang": "id",
   "icons": [
     {
