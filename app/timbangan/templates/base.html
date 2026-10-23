@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="mobile-web-app-capable" content="yes">
-  <link rel="manifest" href="{{ PREFIX }}/static/manifest.json">
+  <link rel="manifest" href="{{ PREFIX }}/static/manifest.json?v={{ VERSI }}">
 
   {# Safari iOS MENGABAIKAN ikon SVG dan ikon di dalam manifest. Tanpa baris
      PNG ini, "Tambahkan ke Layar Utama" memakai potret halaman sebagai ikon. #}
@@ -107,7 +107,7 @@
    dibuka oleh skrip kecil di bawah: kalau JavaScript mati, ia tidak pernah
    muncul, sehingga tak mungkin ada layar yang menutupi aplikasi selamanya. #}
 <div class="pembuka" id="pembuka" hidden aria-hidden="true">
-  <img class="pembuka__lambang" src="{{ PREFIX }}/static/ikon.svg"
+  <img class="pembuka__lambang" src="{{ PREFIX }}/static/ikon.svg?v={{ VERSI }}"
        width="132" height="132" alt="">
   <div class="pembuka__nama">TeraFlow</div>
   <div class="pembuka__sub">{{ PERUSAHAAN }}</div>

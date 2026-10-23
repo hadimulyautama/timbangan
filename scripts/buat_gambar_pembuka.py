@@ -22,9 +22,9 @@ AKAR = pathlib.Path(__file__).resolve().parents[1]
 STATIK = AKAR / "app" / "timbangan" / "static"
 KELUAR = STATIK / "pembuka"
 
-#: Sama dengan `--aksi-muda` di app.css — layar pembuka iOS dan layar pembuka
+#: Sama dengan latar terang di teraflow.css — layar pembuka iOS dan layar pembuka
 #: di dalam aplikasi harus sewarna, kalau tidak pergantiannya terlihat berkedip.
-LATAR = (231, 241, 242)
+LATAR = (241, 245, 250)
 
 #: Selebar lambang di app.css (132 px), dikali kerapatan piksel perangkat.
 LAMBANG_CSS = 132

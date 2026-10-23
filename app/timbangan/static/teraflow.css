@@ -26,3 +26,6 @@ body.padiflow-ui.pd-timbang :is(.btn--utama,.tbl.utama,.tbl--utama) {
 /* Berkas yang sama mempertahankan bentuk logo persis di kedua tema. */
 body.padiflow-ui.pd-timbang .bawah__logo--gelap {filter:brightness(2.8) saturate(.7)}
 @media print {body.padiflow-ui.pd-timbang {background:#fff; color:#202832}}
+
+body.padiflow-ui.pd-timbang .pembuka {background:#f1f5fa; color:#243247}
+body.padiflow-ui.pd-timbang .pembuka__sub {color:#5c6c82}
