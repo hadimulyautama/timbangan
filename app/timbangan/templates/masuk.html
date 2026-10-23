@@ -4,9 +4,9 @@
 
 {% block isi %}
   <div style="text-align:center;padding:36px 0 20px">
-    <img src="{{ PREFIX }}/static/ikon.svg" width="64" height="64" alt="">
-    <h1 style="font-size:22px;margin-top:14px">Pos Timbang</h1>
-    <div class="bantu" style="margin-top:4px">{{ PERUSAHAAN }}</div>
+    <img src="{{ PREFIX }}/static/ikon.svg?v={{ VERSI }}" width="64" height="64" alt="">
+    <h1 style="font-size:22px;margin-top:14px">TeraFlow</h1>
+    <div class="bantu" style="margin-top:4px">Pos Timbang · {{ PERUSAHAAN }}</div>
   </div>
 
   <form method="post" action="{{ PREFIX }}/masuk"

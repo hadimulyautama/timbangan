@@ -39,10 +39,11 @@
   mobile.addEventListener('change', () => setDrawer(false, false));
   setDrawer(false, false);
   function updateTheme() {
-    if (!theme) return;
     const light = body.classList.contains('terik');
-    theme.textContent = light ? '☾' : '☀';
-    theme.setAttribute('aria-label', light ? 'Aktifkan mode gelap' : 'Aktifkan mode terang');
+    if (theme) {
+      theme.textContent = light ? '☾' : '☀';
+      theme.setAttribute('aria-label', light ? 'Aktifkan mode gelap' : 'Aktifkan mode terang');
+    }
     document.documentElement.style.colorScheme = light ? 'light' : 'dark';
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.content = getComputedStyle(body).getPropertyValue('--pd-bg').trim();
