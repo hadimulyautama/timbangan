@@ -1123,7 +1123,7 @@ async def test_format_asing_jatuh_ke_80mm(klien, app_uji):
 
 # ─────────────── Navigasi: bilah bawah di ponsel, sidebar di desktop ───────────────
 
-def test_navigasi_berubah_bentuk_lewat_css_saja():
+def test_navigasi_memakai_satu_markup_di_desktop_dan_ponsel():
     """Satu markup, dua bentuk — bukan dua daftar tautan yang bisa menyimpang."""
     import pathlib
 
@@ -1132,7 +1132,7 @@ def test_navigasi_berubah_bentuk_lewat_css_saja():
     html = (akar / "app/timbangan/templates/base.html").read_text()
 
     # Hanya SATU elemen navigasi di markup.
-    assert html.count('<nav class="bawah">') == 1
+    assert len(re.findall(r'<nav\b[^>]*class="bawah"', html)) == 1
 
     # Di layar lebar ia jadi sidebar, dan isi halaman bergeser menghindarinya.
     assert "@media (min-width: 900px)" in css

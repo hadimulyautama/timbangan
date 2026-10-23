@@ -23,10 +23,8 @@
         href="{{ PREFIX }}/static/ikon.svg?v={{ VERSI }}">
   <meta name="apple-mobile-web-app-title" content="Pos Timbang">
 
-  {# Aplikasi ini hanya punya satu rupa: terang. Tanpa baris ini, peramban di
-     perangkat bermode gelap mengecat kanvas awalnya HITAM sebelum halaman
-     tergambar — kilatan gelap yang membuat orang mengira aplikasinya hang. #}
-  <meta name="color-scheme" content="light">
+  {# Tema disimpan per perangkat, mengikuti pola portal dan Pos Produksi. #}
+  <meta name="color-scheme" content="light dark">
 
   {# Layar pembuka iOS.
      Android mengambil warna & ikonnya dari manifest; iOS TIDAK — ia hanya mau
@@ -87,6 +85,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="{{ PREFIX }}/static/app.css?v={{ VERSI }}">
+  <link rel="stylesheet" href="{{ PREFIX }}/static/komponen-portal.css?v={{ VERSI }}">
 </head>
 {# `segar_otomatis` sengaja OPT-IN per halaman, bukan berlaku di mana-mana.
    Menyegarkan di sini berarti memuat ulang halaman, dan reload MEMBUANG yang
@@ -96,7 +95,7 @@
 
    Jadi hanya layar BACA yang menyalakannya, dan tiap halaman baru harus
    memutuskannya sendiri. Bawaannya diam. #}
-<body data-kelipatan="{{ KELIPATAN_TERA }}"
+<body class="padiflow-ui pd-timbang terik" data-kelipatan="{{ KELIPATAN_TERA }}"
       data-printer="{{ PRINTER_URL }}"
       data-printer-devid="{{ PRINTER_DEVID }}"
       {% block segar_otomatis %}{% endblock %}>
@@ -138,11 +137,18 @@
 })();
 </script>
 
+<script>try { document.body.classList.toggle("terik", localStorage.getItem("pd.tema.timbang") !== "dark"); } catch (_) {}</script>
 <div class="bingkai {% block lebar %}{% endblock %}">
 
   {% block bar %}
   <header class="bar">
    <div class="bar__dalam">
+    {% if akun %}<button type="button" class="pd-menu" aria-label="Buka menu" aria-controls="menu-timbang" aria-expanded="false">☰</button>
+    <div class="pd-shortcuts" aria-label="Akses cepat">
+      <a href="{{ PREFIX }}/pilih/MASUK">↙ Barang Masuk</a>
+      <a href="{{ PREFIX }}/tiket">▤ Tiket</a>
+      <a href="{{ PREFIX }}/transaksi">≡ Catatan</a>
+    </div>{% endif %}
     {% if kembali %}
       <a href="{{ kembali }}" aria-label="Kembali">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -154,6 +160,8 @@
       <div class="bar__judul">{% block bar_judul %}Pos Timbang{% endblock %}</div>
       <div class="bar__sub">{% block bar_sub %}{{ PERUSAHAAN }}{% endblock %}</div>
     </div>
+    <span class="pd-company">{{ PERUSAHAAN }}</span>
+    <button type="button" class="pd-theme" aria-label="Aktifkan mode gelap" title="Ganti tema">☾</button>
     {% if akun %}
       <a href="{{ PREFIX }}/pengaturan" class="bar__avatar"
          title="Pengaturan — {{ akun.nama }}">
@@ -161,6 +169,7 @@
       </a>
     {% endif %}
    </div>
+   {% if akun %}<div class="pd-crumb" aria-label="Breadcrumb"><a href="{{ PREFIX }}/">Pos Timbang</a><span aria-hidden="true"> › </span><strong>{{ self.bar_judul() }}</strong></div>{% endif %}
   </header>
   {% endblock %}
 
@@ -183,29 +192,34 @@
   </main>
 </div>
 
-{# ── Bilah navigasi bawah ──────────────────────────────────────────────
-   Selalu ada dan terjangkau ibu jari. Tanpa ini, kembali ke beranda dari
-   halaman dalam berarti menekan panah kembali berkali-kali — mahal saat
-   truk sedang menunggu di jembatan. #}
+{# Navigasi memakai sidebar desktop dan laci ponsel seperti portal pelanggan. #}
 {% if akun %}
-  <nav class="bawah">
+  <button type="button" class="pd-backdrop" aria-label="Tutup menu" tabindex="-1" hidden></button>
+  <nav class="bawah" id="menu-timbang" aria-label="Navigasi utama">
     {# Hanya tampak saat bilah ini berubah jadi sidebar di layar lebar. #}
-    <div class="bawah__kepala">Pos Timbang</div>
+    <div class="bawah__kepala">
+      <img class="bawah__logo bawah__logo--terik" src="{{ PREFIX }}/static/padiflow-logo-terang.png?v={{ VERSI }}" alt="PadiFlow">
+      <img class="bawah__logo bawah__logo--gelap" src="{{ PREFIX }}/static/padiflow-logo-gelap.png?v={{ VERSI }}" alt="PadiFlow">
+      <span class="bawah__app">Pos Timbang</span>
+      <button type="button" class="pd-close" aria-label="Tutup menu">×</button>
+    </div>
     <div class="bawah__isi">
+      <span class="bawah__label">MENU UTAMA</span>
       <a href="{{ PREFIX }}/" class="{{ 'aktif' if layar == 'beranda' }}">
-        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"
+        <span class="bawah__ikon"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"
              stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 10l9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-          <path d="M9 22V12h6v10"/></svg>
+          <path d="M9 22V12h6v10"/></svg></span>
         Beranda
       </a>
 
+      <span class="bawah__label">OPERASIONAL</span>
       <a href="{{ PREFIX }}/tiket" class="{{ 'aktif' if layar == 'tiket' }}">
         <span style="position:relative;display:flex">
-          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"
+          <span class="bawah__ikon"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"
                stroke-linecap="round" stroke-linejoin="round">
             <path d="M3 7h18v4a2 2 0 0 0 0 4v3H3v-3a2 2 0 0 0 0-4z"/>
-            <path d="M13 7v13"/></svg>
+            <path d="M13 7v13"/></svg></span>
           {% if JUMLAH_TIKET %}
             <span class="bawah__tanda">{{ JUMLAH_TIKET }}</span>
           {% endif %}
@@ -220,20 +234,21 @@
          bersyarat — itu batas yang pemilik tarik sendiri. #}
       <a href="{{ PREFIX }}/transaksi"
          class="{{ 'aktif' if layar in ('daftar', 'rincian', 'koreksi', 'cetak_pilih') }}">
-        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"
+        <span class="bawah__ikon"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"
              stroke-linecap="round" stroke-linejoin="round">
           <path d="M4 4h16v16H4z"/><path d="M8 9h8"/><path d="M8 13h8"/>
-          <path d="M8 17h5"/></svg>
+          <path d="M8 17h5"/></svg></span>
         Catatan
       </a>
 
+      <span class="bawah__label">DATA &amp; PENGATURAN</span>
       {% if akun.is_admin %}
         <a href="{{ PREFIX }}/laporan"
            class="{{ 'aktif' if layar in ('laporan', 'monitoring') }}">
-          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"
+          <span class="bawah__ikon"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"
                stroke-linecap="round" stroke-linejoin="round">
             <path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/>
-            <path d="M22 20H2"/></svg>
+            <path d="M22 20H2"/></svg></span>
           Ringkasan
         </a>
       {% endif %}
@@ -241,14 +256,15 @@
       <a href="{{ PREFIX }}/pengaturan"
          class="{{ 'aktif' if layar in ('pengaturan', 'aturan', 'tara', 'pengguna',
                               'pengguna_ubah', 'akun_saya', 'audit') }}">
-        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"
+        <span class="bawah__ikon"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"
              stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="3"/>
           <path d="M4 12a8 8 0 0 1 .5-2.8L2.8 7.5l2-3.4 2.2.9A8 8 0 0 1 9.6 3.6L10 1.3h4l.4 2.3a8 8 0 0 1 2.6 1.4l2.2-.9 2 3.4-1.7 1.7A8 8 0 0 1 20 12"/>
-          <path d="M20 12a8 8 0 0 1-.5 2.8l1.7 1.7-2 3.4-2.2-.9a8 8 0 0 1-2.6 1.4L14 22.7h-4l-.4-2.3a8 8 0 0 1-2.6-1.4l-2.2.9-2-3.4 1.7-1.7A8 8 0 0 1 4 12"/></svg>
+          <path d="M20 12a8 8 0 0 1-.5 2.8l1.7 1.7-2 3.4-2.2-.9a8 8 0 0 1-2.6 1.4L14 22.7h-4l-.4-2.3a8 8 0 0 1-2.6-1.4l-2.2.9-2-3.4 1.7-1.7A8 8 0 0 1 4 12"/></svg></span>
         Pengaturan
       </a>
     </div>
+    <div class="bawah__akun"><div class="bawah__nama">{{ akun.nama }}</div><div class="bawah__peran">{{ akun.role_label }}</div></div>
     <div class="bawah__ukur" role="separator" tabindex="0"
          aria-orientation="vertical" aria-label="Ubah lebar sidebar"
          title="Tarik untuk mengubah lebar sidebar"></div>
@@ -256,6 +272,7 @@
 {% endif %}
 
 <script src="{{ PREFIX }}/static/app.js?v={{ VERSI }}" defer></script>
+<script src="{{ PREFIX }}/static/komponen-portal.js?v={{ VERSI }}" defer></script>
 <script>
 (function () {
   var pegangan = document.querySelector(".bawah__ukur");

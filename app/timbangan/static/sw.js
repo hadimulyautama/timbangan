@@ -17,6 +17,10 @@ var V = '?v=' + VERSI.slice('timbangan-v'.length);
 // simpanan awal tak pernah cocok dengan permintaan mana pun.
 var RANGKA = [
   PREFIX + '/static/app.css' + V,
+  PREFIX + '/static/komponen-portal.css' + V,
+  PREFIX + '/static/komponen-portal.js' + V,
+  PREFIX + '/static/padiflow-logo-terang.png' + V,
+  PREFIX + '/static/padiflow-logo-gelap.png' + V,
   PREFIX + '/static/app.js' + V,
   PREFIX + '/static/ikon.svg' + V,
   PREFIX + '/static/ikon-180.png' + V,
