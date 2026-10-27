@@ -6,6 +6,10 @@ on:
 jobs:
   regresi:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [layanan, postgres, browser]
     services:
       postgres:
         image: postgres:16
@@ -37,12 +41,20 @@ jobs:
             produksi/requirements*.txt
       - name: Pasang interpreter terpisah
         run: |
+          python -m pip install -r timbangan/requirements.txt -r timbangan/requirements-dev.txt
+          # Modul tes tertentu mengimpor Playwright saat koleksi; binary browser
+          # hanya diperlukan job browser dan tidak menahan dua job lainnya.
+          python -m pip install playwright==1.62.0
+      - name: Pasang interpreter migrasi PadiFlow
+        if: matrix.suite == 'postgres'
+        run: |
           python -m venv produksi/.venv
           produksi/.venv/bin/pip install -r produksi/requirements.txt
-          python -m pip install -r timbangan/requirements.txt -r timbangan/requirements-dev.txt
-          python -m pip install playwright==1.62.0
-          python -m playwright install --with-deps chromium
+      - name: Pasang Chromium
+        if: matrix.suite == 'browser'
+        run: python -m playwright install --with-deps chromium
       - name: Bangun skema kedua rantai tanpa melompati migrasi
+        if: matrix.suite == 'postgres'
         run: |
           (cd produksi && .venv/bin/python -m alembic upgrade 0063_sebab_selisih_timbang)
           (cd timbangan && python -m alembic stamp 0026_timbangan_hapus_pengawas)
@@ -50,9 +62,11 @@ jobs:
           (cd produksi && .venv/bin/python -m alembic upgrade head)
           (cd timbangan && python -m alembic upgrade head)
       - name: Periksa model dan migrasi
+        if: matrix.suite == 'postgres'
         working-directory: timbangan
         run: python -m tests.periksa_skema_bersama
       - name: Regresi layanan dan HTTP
+        if: matrix.suite == 'layanan'
         working-directory: timbangan
         run: |
           python - <<'PYTHON'
@@ -63,9 +77,11 @@ jobs:
           subprocess.run([sys.executable,'-m','pytest','-q',*files,'--junitxml=../bukti/layanan.xml'],check=True)
           PYTHON
       - name: Regresi PostgreSQL dan paket identitas
+        if: matrix.suite == 'postgres'
         working-directory: timbangan
         run: python -m pytest -q tests/pg tests/test_identitas_paket.py --junitxml=../bukti/postgres.xml
       - name: Browser detail retur dan regresi pengiriman
+        if: matrix.suite == 'browser'
         working-directory: timbangan
         run: >-
           python -m pytest -q tests/timbangan/test_rincian_retur_browser.py
@@ -74,5 +90,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: regresi-teraflow83
+          name: regresi-teraflow83-${{ matrix.suite }}
           path: bukti/

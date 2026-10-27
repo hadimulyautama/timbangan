@@ -98,8 +98,15 @@ async def test_snapshot_dipakai_saat_penyelesaian_pg(mesin):
 async def test_pengiriman_tertaut_menahan_void_pg(mesin, status):
     aid, tid, _ = await awal(mesin, "PENGIRIMAN")
     async with mesin() as db:
-        await db.execute(text("CREATE TABLE IF NOT EXISTS outgoing_records (id INTEGER PRIMARY KEY, kode VARCHAR(20), status VARCHAR(20), timbangan_transaksi_id INTEGER)"))
-        await db.execute(text("INSERT INTO outgoing_records VALUES (1,'OUT-AUDIT',:s,:t)"), {"s": status, "t": tid})
+        from hmu_core import User
+        from hmu_identitas import peran as P
+        pelaku = User(nama="Petugas produksi sintetis", role=P.ADMIN)
+        db.add(pelaku)
+        await db.flush()
+        # Mendukung fixture mandiri maupun skema lengkap hasil migrasi PadiFlow.
+        # Nama kolom wajib eksplisit; posisi kolom skema lengkap berbeda.
+        await db.execute(text("CREATE TABLE IF NOT EXISTS outgoing_records (id INTEGER PRIMARY KEY, kode VARCHAR(20), status VARCHAR(20), timbangan_transaksi_id INTEGER, tanggal DATE, waktu TIMESTAMPTZ, input_by INTEGER)"))
+        await db.execute(text("INSERT INTO outgoing_records (id,kode,status,timbangan_transaksi_id,tanggal,waktu,input_by) VALUES (1,'OUT-AUDIT',:s,:t,CURRENT_DATE,now(),:u)"), {"s": status, "t": tid, "u": pelaku.id})
         await db.commit()
         a = await db.get(TimbanganAkun, aid)
         t = await db.get(TimbanganTransaksi, tid)
