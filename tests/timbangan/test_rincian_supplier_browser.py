@@ -37,7 +37,7 @@ async def test_referensi_responsif_keyboard_tanpa_mutasi(klien,alamat_ui,monkeyp
         assert '<script>alert' in await panel.inner_text()
         await page.screenshot(path=str(OUT/f'panel-{width}-{theme}-{role}.png'),full_page=True)
         await page.reload();assert await panel.count()==1
-        await page.get_by_role('link',name='Cetak bukti timbang').click()
+        await page.get_by_role('link',name='Pratinjau & cetak').click()
         assert '/cetak' in page.url and not writes and not errors
         await b.close()
 

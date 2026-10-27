@@ -180,7 +180,7 @@
        berikutnya. #}
     {% if trx.status_tiket == TIKET_SELESAI and trx.status_transaksi != 'VOID' %}
       <a href="{{ PREFIX }}/transaksi/{{ trx.id }}/cetak" class="tbl blok">
-        Cetak bukti timbang
+        Pratinjau & cetak
         {% if cetak %}({{ cetak|length }}× tercetak){% endif %}
       </a>
       {% if tautan_produksi %}

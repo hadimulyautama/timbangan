@@ -61,7 +61,7 @@ async def test_panel_baca_saja_berizin(klien,monkeypatch,status,role):
         assert r.headers['cache-control']=='private, no-store'
         assert rincian_supplier.LABEL[status] in r.text and 'RAHASIA-JANGAN-RENDER' not in r.text
         assert ('/retur-supplier/99' in r.text)==(status!='belum_terhubung')
-        assert 'Cetak bukti timbang' in r.text and 'Koreksi' in r.text
+        assert 'Pratinjau & cetak' in r.text and 'Koreksi' in r.text
         assert ('Hapus permanen' in r.text)==(role==P.SUPERADMIN)
     assert calls==[(tid,aid,'operator:gudang1')]*2
     async with database.SessionLocal() as db:
@@ -94,7 +94,7 @@ async def test_tidak_bocor_dan_tidak_sukses_palsu(klien,monkeypatch,keadaan):
     if keadaan=='total-hilang':d['pengajuan']['total_kg']=None
     await login(klien,'wahid');r=await klien.get(f'/timbangan/transaksi/{tid}')
     assert r.status_code==200 and 'RS-UJI-99' not in r.text and 'MASUK-UJI-800' not in r.text
-    assert 'Cetak bukti timbang' in r.text
+    assert 'Pratinjau & cetak' in r.text
     label='dibatasi' if keadaan in ('403','tanpa-akun') else 'tidak_pasti'
     assert rincian_supplier.LABEL[label] in r.text
     if keadaan=='tanpa-akun':assert not calls
@@ -135,7 +135,7 @@ async def test_supplier_jenis_dilindungi_bobot_dan_batal_tetap(klien,status):
 
 async def test_terbuka_dan_muatan_belum_terbaca_tidak_menghalangi_timbang(klien,monkeypatch):
     tid=await tiket(False);await tautkan();d,c=await sumber(monkeypatch,tid,'belum_terhubung');await login(klien,'wahid')
-    r=await klien.get(f'/timbangan/transaksi/{tid}');assert 'Menunggu timbang kedua' in r.text and 'Cetak bukti timbang' not in r.text
+    r=await klien.get(f'/timbangan/transaksi/{tid}');assert 'Menunggu timbang kedua' in r.text and 'Pratinjau & cetak' not in r.text
     async with database.SessionLocal() as db:
         await tautan(db,tid);a=await db.scalar(select(TimbanganAkun).where(TimbanganAkun.username=='budi'));t=await db.get(TimbanganTransaksi,tid)
         await service.simpan_timbang_kedua(db,akun=a,kode=t.kode,berat_kg=6600,muatan=[service.InputMuatan(jenis_kode='RETUR_SUPPLIER',jumlah_karung=2)])

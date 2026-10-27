@@ -74,9 +74,9 @@ def _baris_berlebar(xml: str) -> list[tuple[str, int]]:
     separuh tempat — dan itu justru baris terpenting: nama perusahaan.
     """
     akar = ElementTree.fromstring(xml)
-    return [((el.text or "").rstrip("\n"),
+    return [(line,
              epos.KOLOM_LEBAR if el.get("dw") == "true" else epos.KOLOM)
-            for el in akar.iter(_RUANG + "text")]
+            for el in akar.iter(_RUANG + "text") for line in (el.text or '').splitlines()]
 
 
 # ─────────────── Lebar kertas ───────────────
@@ -178,11 +178,11 @@ def test_huruf_di_luar_kemampuan_printer_diturunkan_bukan_dibiarkan():
     assert all(ord(c) < 128 for c in teks)
 
 
-def test_tanda_kali_pada_tara_karung_ikut_diturunkan():
+def test_tara_kemasan_menyebut_jumlah_dan_nilai():
     trx = _trx(jumlah_karung=100, total_tara_kg=10, berat_barang_kg=8230)
     teks = "\n".join(_baris(_cetak(trx=trx)))
-    assert "Tara karung" in teks
-    assert "×" not in teks and " x " in teks
+    assert "Tara kemasan 100 karung" in teks
+    assert "- 10,000 kg" in teks and "×" not in teks
 
 
 # ─────────────── Bentuk perintah ───────────────

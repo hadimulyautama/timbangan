@@ -26,24 +26,24 @@ async def test_alasan_sebelum_kertas_dan_audit_setelah_printer(klien,alamat_ui,r
             await asyncio.sleep(.1)
             return await r.fulfill(status=200,content_type='text/xml',body='<response success="false" code="EPTR_COVER_OPEN"/>' if status['gagal'] else '<response success="true"/>')
         await page.route('**/cgi-bin/epos/**',printer)
-        await page.locator('[data-cetak]').evaluate('(a)=>{a.click();a.click()}')
-        await page.wait_for_url(lambda u:'ok=' in str(u));assert len(jobs)==1
+        await page.locator('[data-cp-jalankan]').evaluate('(a)=>{a.click();a.click()}')
+        await page.wait_for_function("document.querySelector('.cp-history').textContent.includes('Cetak ke-1')");assert len(jobs)==1
         # Tanpa alasan/sekadar spasi tidak boleh mengirim permintaan printer.
-        alasan=page.locator('form[data-catat-cetak] [name=alasan]')
+        alasan=page.locator('[name=alasan]')
         for nilai in ['', '   ']:
-            await alasan.fill(nilai);await page.locator('[data-cetak]').click()
+            await alasan.fill(nilai);await page.locator('[data-cp-jalankan]').click()
             assert await page.evaluate("document.activeElement?.name==='alasan'")
             await asyncio.sleep(.15)
             assert len(jobs)==1,'Kertas dapat terkirim sebelum alasan diperiksa'
         await alasan.fill('Uji cetak ulang beralasan')
-        status['gagal']=True;await page.locator('[data-cetak]').click()
-        await page.wait_for_function("document.querySelector('[data-hasil-cetak]').textContent.includes('Penutup printer terbuka')")
+        status['gagal']=True;await page.locator('[data-cp-jalankan]').click()
+        await page.wait_for_function("document.querySelector('[data-cp-status]').textContent.includes('Penutup printer terbuka')")
         assert await alasan.input_value()=='Uji cetak ulang beralasan'
         assert not await alasan.get_attribute('readonly')
         async with database.SessionLocal() as db:assert await db.scalar(select(func.count()).select_from(TimbanganCetak))==1
         status['gagal']=False
         async with page.expect_navigation(wait_until='domcontentloaded'):
-            await page.locator('[data-cetak]').evaluate('(a)=>{a.click();a.click()}')
+            await page.locator('[data-cp-jalankan]').evaluate('(a)=>{a.click();a.click()}')
         assert len(jobs)==3
         async with database.SessionLocal() as db:
             rows=(await db.scalars(select(TimbanganCetak).order_by(TimbanganCetak.urutan))).all()
@@ -63,20 +63,20 @@ async def test_tombol_tetap_terkunci_sampai_pencatatan_cetak_selesai(klien,alama
             if r.request.method=='POST':
                 audit.append(1);await asyncio.sleep(.6)
             await r.continue_()
-        await page.route('**/cgi-bin/epos/**',printer);await page.route(f'**/transaksi/{tid}/cetak',catat)
+        await page.route('**/cgi-bin/epos/**',printer);await page.route(f'**/transaksi/{tid}/cetak/pekerjaan/*/hasil',catat)
         # Pemeriksaan berjalan di halaman lama selama respons POST audit
         # ditunda. Locator Playwright akan menunggu navigasi selesai.
         await page.evaluate("""() => {
             const timer=setInterval(() => {
-                const a=document.querySelector('[data-cetak]');
-                if (!a.textContent.includes('Mencatat cetakan')) return;
+                const a=document.querySelector('[data-cp-jalankan]');
+                if (!document.querySelector('[data-cp-status]').textContent.includes('Menyimpan riwayat')) return;
                 clearInterval(timer);
-                sessionStorage.setItem('uji-kunci-audit',a.dataset.sibuk || '');
+                sessionStorage.setItem('uji-kunci-audit',a.disabled ? '1' : '');
                 a.click();a.click();
             },20);
         }""")
-        await page.locator('[data-cetak]').click()
-        await page.wait_for_url(lambda u:'ok=' in str(u))
+        await page.locator('[data-cp-jalankan]').click()
+        await page.wait_for_function("document.querySelector('.cp-history').textContent.includes('Cetak ke-1')")
         assert await page.evaluate("sessionStorage.getItem('uji-kunci-audit')")=='1'
         assert len(jobs)==len(audit)==1
         async with database.SessionLocal() as db:assert await db.scalar(select(func.count()).select_from(TimbanganCetak))==1

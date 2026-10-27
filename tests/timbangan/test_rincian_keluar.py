@@ -111,7 +111,7 @@ async def test_kondisi_tiket(klien,monkeypatch,keadaan):
     await login(klien)
     r=await klien.get(f'/timbangan/transaksi/{tid}')
     assert r.status_code==200
-    assert ('Cetak bukti timbang' in r.text)==(keadaan=='historis')
+    assert ('Pratinjau & cetak' in r.text)==(keadaan=='historis')
     assert ('Lanjutkan timbang kedua' in r.text)==(keadaan in ('terbuka','gangguan'))
     if keadaan=='terbuka':assert 'belum menjadi snapshot final' in r.text
     if keadaan=='gangguan':assert 'Muatan PadiFlow belum dapat diperiksa' in r.text
@@ -171,7 +171,7 @@ async def test_riwayat_cetak_dan_nilai_batal_tetap_tersedia(klien):
     assert 'Nilai historis sebelum pembatalan' in r.text and '4.000 kg' in r.text
     assert 'Cetak 1 · 80MM' in r.text and 'Cetak 2 · NCR' in r.text
     assert 'Kertas uji rusak' in r.text and 'Miftah' in r.text
-    assert 'Cetak bukti timbang' not in r.text
+    assert 'Pratinjau & cetak' not in r.text
 
 async def test_hasil_nol_sah_berbeda_dengan_pembanding_historis_belum_ada(klien):
     tid=await buat_tiket()

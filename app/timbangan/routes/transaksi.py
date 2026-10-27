@@ -510,18 +510,22 @@ async def pilih_cetak(
     db: AsyncSession = Depends(get_db),
 ):
     """Dua ukuran bukti: struk 80 mm dan lembar setengah NCR."""
+    from app.timbangan import cetak as cetak_bukti
+    from app.timbangan.bukti import baris_angka
     try:
-        b = await _ambil(db, transaksi_id, akun)
-        service.pastikan_boleh_cetak(b.trx)
+        b, aturan, umum = await cetak_bukti.bahan(db, transaksi_id, akun)
+        pending = await cetak_bukti.tertunda(db, transaksi_id, akun)
+        return render(request, "cetak_pilih.html", b=b, aturan=aturan, umum=umum,
+            sidik=cetak_bukti.sidik(umum, akun),
+            baris=baris_angka(b.trx, umum['arah_masuk']),
+            rinci= pengiriman.rincian_bukti(b.trx, berat=epos.tampilkan_selisih(b.trx,aturan)),
+            rinci_ncr=pengiriman.rincian_bukti(b.trx, berat=False),
+            tampil_selisih=epos.tampilkan_selisih(b.trx,aturan),
+            riwayat=await cetak_bukti.riwayat(db,transaksi_id),
+            pekerjaan=cetak_bukti.ringkas(pending) if pending else None,
+            kembali=f"{PREFIX}/transaksi/{transaksi_id}" + ("?"+urlencode({'kembali':_kembali_riwayat(request)}) if _kembali_riwayat(request) else ""))
     except service.LayananError as e:
         return redirect("/transaksi" if akun.is_admin else "/", err=str(e))
-
-    return render(
-        request, "cetak_pilih.html",
-        b=b, aturan=await service.aturan_untuk(db, b.trx.jenis_kode),
-        cetak=await _riwayat_cetak(db, b.trx.id),
-        kembali=_kembali_riwayat(request) or f"{PREFIX}/transaksi/{transaksi_id}",
-    )
 
 
 async def _riwayat_cetak(db: AsyncSession, transaksi_id: int):
@@ -547,37 +551,8 @@ async def _isi_bukti(db, transaksi_id, akun):
     tiap rute akan tertinggal di salah satunya, dan yang tertinggal justru
     jadi satu-satunya pintu yang masih mengeluarkan kertas.
     """
-    b, aturan = await _bahan_cetak(db, transaksi_id, akun)
-    service.pastikan_boleh_cetak(b.trx)
-    return b, aturan, dict(
-        cetakan_ke=await service.cetakan_ke(db, b.trx.id),
-        trx=b.trx, aturan=aturan,
-        pihak=b.pihak_tampil,
-        # ── NAMA YANG MENCETAK, bukan yang menimbang ──
-        #
-        # Keputusan pemilik 30 September 2026: "yang di struk bukan petugas
-        # timbang awal. yang di struk haruslah nama akun siapa yang print."
-        #
-        # Sampai hari ini yang tertera `petugas_bukti_id` — pelaku timbang
-        # TERAKHIR. Pada satu orang keduanya sama, jadi selisihnya tak pernah
-        # terlihat; begitu dua shift berganti di tengah satu tiket, kertasnya
-        # menyebut orang yang tidak sedang berdiri di pos.
-        #
-        # Blok itu ruang TANDA TANGAN, dan yang menandatangani adalah orang
-        # yang menyerahkan kertasnya kepada sopir — yaitu yang menekan cetak.
-        # Nama tercetak yang bukan nama penanda tangan membuat kertasnya
-        # bertentangan dengan dirinya sendiri.
-        #
-        # Siapa yang MENIMBANG tidak hilang: ia tetap tercatat di
-        # `timbang1_petugas_id` / `timbang2_petugas_id` dan terbaca di layar
-        # rincian. Yang berubah cuma isi selembar kertas yang ditandatangani.
-        petugas=akun.nama,
-        muatan=list(b.trx.muatan),
-        perusahaan=tsettings.perusahaan_nama,
-        alamat=tsettings.perusahaan_alamat,
-        telepon=tsettings.perusahaan_telepon,
-        arah_masuk=logic.timbang_pertama_bermuatan(b.trx.arah),
-    )
+    from app.timbangan.cetak import bahan
+    return await bahan(db, transaksi_id, akun)
 
 
 async def _pdf(db, transaksi_id, request, ncr: bool, akun):
@@ -828,3 +803,53 @@ async def catat_cetak(
     except service.LayananError as e:
         return redirect(f"/transaksi/{transaksi_id}/cetak", err=str(e))
     return redirect(f"/transaksi/{transaksi_id}/cetak", ok="Cetak tercatat.")
+
+
+@router.post("/transaksi/{transaksi_id}/cetak/pekerjaan")
+async def siapkan_pekerjaan_cetak(transaksi_id:int,request:Request,akun:TimbanganAkun=Depends(butuh_akun),db:AsyncSession=Depends(get_db)):
+    from app.timbangan import cetak as c
+    try:
+        data=await request.json()
+        if not isinstance(data,dict):raise service.LayananError('Data pekerjaan tidak sah.')
+        j=await c.siapkan(db,transaksi_id,akun,data)
+        return JSONResponse(c.ringkas(j),headers={'Cache-Control':'private, no-store'})
+    except (service.LayananError,ValueError) as e:
+        await db.rollback()
+        return JSONResponse({'error':str(e)},status_code=409)
+
+
+@router.post("/transaksi/{transaksi_id}/cetak/pekerjaan/{kunci}/kirim")
+async def kirim_pekerjaan_cetak(transaksi_id:int,kunci:str,akun:TimbanganAkun=Depends(butuh_akun),db:AsyncSession=Depends(get_db)):
+    from app.timbangan import cetak as c
+    try:
+        j=await c.keluarkan(db,transaksi_id,kunci,akun)
+        return Response(j.konten,media_type='text/xml' if j.keluaran=='printer' else 'application/pdf',headers={'Cache-Control':'private, no-store'})
+    except service.LayananError as e:
+        await db.rollback()
+        return JSONResponse({'error':str(e)},status_code=409)
+
+
+@router.post("/transaksi/{transaksi_id}/cetak/pekerjaan/{kunci}/hasil")
+async def hasil_pekerjaan_cetak(transaksi_id:int,kunci:str,request:Request,akun:TimbanganAkun=Depends(butuh_akun),db:AsyncSession=Depends(get_db)):
+    from app.timbangan import cetak as c
+    try:
+        data=await request.json()
+        j=await c.hasil(db,transaksi_id,kunci,akun,data.get('hasil'),ip=request.client.host if request.client else None)
+        return JSONResponse(c.ringkas(j),headers={'Cache-Control':'private, no-store'})
+    except (service.LayananError,ValueError,AttributeError) as e:
+        await db.rollback()
+        return JSONResponse({'error':str(e)},status_code=409)
+
+
+@router.get("/transaksi/{transaksi_id}/cetak/pekerjaan/{kunci}/berkas")
+async def berkas_pekerjaan_cetak(transaksi_id:int,kunci:str,akun:TimbanganAkun=Depends(butuh_akun),db:AsyncSession=Depends(get_db)):
+    from app.timbangan import cetak as c
+    try:
+        j=await c.milik(db,transaksi_id,kunci,akun)
+        b,a,u=await c.bahan(db,transaksi_id,akun)
+        if j.keluaran!='pdf' or j.status!='pdf_siap' or c.sidik(u,akun)!=j.sidik:
+            raise service.LayananError('Berkas pekerjaan berubah atau tidak tersedia. Tinjau pratinjau terbaru.')
+        nama=b.trx.kode+('-80mm' if j.format=='80MM' else '')+'.pdf'
+        return Response(j.konten,media_type='application/pdf',headers={'Cache-Control':'private, no-store','Content-Disposition':f'inline; filename="{nama}"'})
+    except service.LayananError as e:
+        return JSONResponse({'error':str(e)},status_code=409)

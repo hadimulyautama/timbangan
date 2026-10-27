@@ -26,7 +26,7 @@
     {% if tautan_produksi and not keluar.produksi.perintah %}<a href="{{ tautan_produksi }}">{{ 'Hubungkan ke barang keluar Produksi' if keluar.produksi.kode == 'belum' else 'Periksa pengiriman di PadiFlow' }} →</a>{% if not keluar.produksi.perintah %}<p class="bantu">Pilih transaksi yang sesuai pada form verifikasi Produksi; tidak ada tautan yang dibuat saat membuka halaman.</p>{% endif %}{% endif %}
   </section>
   <div class="dk-aksi tanpa-cetak">
-    {% if final %}<a href="{{ PREFIX }}/transaksi/{{ trx.id }}/cetak" class="tbl">Cetak bukti timbang{% if cetak %} · {{ cetak|length }}×{% endif %}</a>{% elif trx.status_tiket == TIKET_TERBUKA and trx.status_transaksi != 'VOID' %}<a href="{{ PREFIX }}/tiket/{{ trx.id }}" class="tbl">Lanjutkan timbang kedua</a>{% endif %}
+    {% if final %}<a href="{{ PREFIX }}/transaksi/{{ trx.id }}/cetak" class="tbl">Pratinjau & cetak{% if cetak %} · {{ cetak|length }}×{% endif %}</a>{% elif trx.status_tiket == TIKET_TERBUKA and trx.status_transaksi != 'VOID' %}<a href="{{ PREFIX }}/tiket/{{ trx.id }}" class="tbl">Lanjutkan timbang kedua</a>{% endif %}
     <a href="{{ PREFIX }}/pilih/{{ trx.arah }}" class="tbl halus">Timbang berikutnya</a>
     <a href="{{ PREFIX }}/tiket" class="tbl halus">Tiket Aktif{% if JUMLAH_TIKET %} · {{ JUMLAH_TIKET }}{% endif %}</a>
   </div>

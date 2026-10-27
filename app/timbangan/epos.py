@@ -69,8 +69,11 @@ def _sisi(kiri: str, kanan: str, lebar: int = KOLOM) -> str:
     jejak antara label dan angkanya, dan pengirim barang membaca struk ini
     sambil berdiri di samping truk.
     """
+    import textwrap
     kanan = _polos(kanan)
-    kiri = _potong(kiri, max(1, lebar - len(kanan) - 2))
+    kiri = _polos(kiri)
+    if len(kiri)+len(kanan)+2 > lebar:
+        return '\n'.join(textwrap.wrap(kiri,lebar)+textwrap.wrap(kanan,lebar))
     antara = lebar - len(kiri) - len(kanan)
     return kiri + (" " if antara <= 1 else " " + "." * (antara - 2) + " ") + kanan
 
@@ -187,7 +190,9 @@ def struk_timbang(*, trx, aturan, pihak: str, petugas: str, muatan,
         p.append(_teks("-" * KOLOM))
 
     if trx.catatan:
-        p.append(_teks(_potong(trx.catatan, KOLOM)))
+        import textwrap
+        for line in textwrap.wrap(_polos(trx.catatan), KOLOM):
+            p.append(_teks(line))
         p.append(_teks("-" * KOLOM))
 
     # Tanda tangan. Dua kolom berdampingan seperti pada PDF; garisnya dibuat
@@ -209,13 +214,18 @@ def struk_timbang(*, trx, aturan, pihak: str, petugas: str, muatan,
 
     lebar_ttd = KOLOM // 2 - 2
     p.append("<feed line=\"2\"/>")
-    p.append(_teks(_tengah("Petugas timbang", KOLOM // 2)
+    p.append(_teks(_tengah("Petugas pencetak", KOLOM // 2)
                    + _tengah(saksi_label, KOLOM // 2)))
-    p.append("<feed line=\"3\"/>")
+    # 203dpi: ceil(20mm * 203/25.4) = 160 dots, di luar label/nama.
+    p.append('<feed unit="160"/>')
     p.append(_teks(_tengah("_" * lebar_ttd, KOLOM // 2)
                    + _tengah("_" * lebar_ttd, KOLOM // 2)))
-    p.append(_teks(_tengah(petugas or "", KOLOM // 2)
-                   + _tengah(saksi_nama, KOLOM // 2)))
+    # Nama panjang dibungkus di kolomnya sendiri, bukan dipangkas.
+    kiri = textwrap.wrap(_polos(petugas or ''), lebar_ttd) or ['']
+    kanan = textwrap.wrap(_polos(saksi_nama), lebar_ttd) or ['']
+    for n in range(max(len(kiri),len(kanan))):
+        p.append(_teks(_tengah(kiri[n] if n<len(kiri) else '', KOLOM//2)
+                       + _tengah(kanan[n] if n<len(kanan) else '', KOLOM//2)))
     p.append("<feed line=\"1\"/>")
     p.append(_teks("Ditandatangani kedua pihak sebagai bukti", align="center"))
 

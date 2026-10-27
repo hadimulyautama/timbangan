@@ -88,7 +88,7 @@ async def test_kondisi_akses_dan_kegagalan(klien,monkeypatch,keadaan):
     assert r.status_code==200
     if keadaan in ('terbuka','batal','ditutup'):
         assert 'Hasil akhir belum tersedia' in r.text
-        assert 'Cetak bukti timbang' not in r.text
+        assert 'Pratinjau & cetak' not in r.text
     if keadaan in ('gangguan','dilarang','salah-tiket','tanpa-akun'):
         assert 'RET-UJI-4' not in r.text and '70,10 kg' in r.text
     if keadaan=='terbuka':assert 'Lanjutkan timbang kedua' in r.text

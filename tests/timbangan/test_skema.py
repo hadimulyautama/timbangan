@@ -49,6 +49,7 @@ MIGRASI = (
     AKAR / "migrations" / "versions" / "0046_sopir_alias.py",
     AKAR / "migrations" / "versions" / "0047_pengiriman_snapshot.py",
     AKAR / "migrations" / "versions" / "0048_lintasan_transfer.py",
+    AKAR / "migrations" / "versions" / "0049_pekerjaan_cetak.py",
 )
 
 # Daftar di atas DITULIS TANGAN, dan karena itu ia basi tiap kali ada migrasi
@@ -142,8 +143,8 @@ def test_migrasi_membuat_semua_tabel_model(kolom_migrasi):
         f"migrasi belum didaftarkan di MIGRASI: {', '.join(belum)} — "
         "tambahkan, kalau tidak uji ini menjaga skema yang sudah usang")
     assert sorted(kolom_migrasi) == tabel_model()
-    # 18 sejak alias sopir terkonfirmasi (migrasi 0046).
-    assert len(kolom_migrasi) == 18
+    # Pekerjaan cetak terikat konteks menambah satu tabel pada 0049.
+    assert len(kolom_migrasi) == 19
 
 
 @pytest.mark.parametrize("nama", tabel_model())

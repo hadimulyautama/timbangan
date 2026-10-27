@@ -89,7 +89,7 @@ async def test_status_dan_larangan_cetak(klien,kondisi):
         if kondisi=='ditutup':t.status_tiket='DITUTUP_PAKSA';t.tutup_paksa_alasan='Truk sudah pergi uji'
         await db.commit()
     await login(klien);r=await klien.get(f'/timbangan/transaksi/{tid}')
-    assert 'Hasil akhir belum tersedia' in r.text and 'Cetak bukti timbang' not in r.text
+    assert 'Hasil akhir belum tersedia' in r.text and 'Pratinjau & cetak' not in r.text
     if kondisi=='sementara':assert '6.500,00 kg · sementara' in r.text and '0,0858' in r.text
     for fmt in ('80mm','ncr','epos'):
         r=await klien.get(f'/timbangan/transaksi/{tid}/cetak/{fmt}',follow_redirects=False)

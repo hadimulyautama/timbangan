@@ -3256,7 +3256,8 @@ async def hapus_transaksi(
     # Muatan dan foto ikut terhapus lewat cascade relasinya; cetak dan
     # pemeriksaan tidak punya relasi, jadi dihapus di sini. Menghapus muatan
     # dua kali membuat ORM mengira ada baris yang hilang diam-diam.
-    for model in (TimbanganCetak, TimbanganPemeriksaan):
+    from app.timbangan.models import TimbanganPekerjaanCetak
+    for model in (TimbanganPekerjaanCetak, TimbanganCetak, TimbanganPemeriksaan):
         await db.execute(delete(model).where(model.transaksi_id == trx.id))
     await db.execute(delete(ProsesTerpadu).where(
         ProsesTerpadu.aplikasi == "timbangan",
@@ -3969,10 +3970,17 @@ async def catat_cetak(
     alasan: str | None = None,
     format: str = "80MM",
     ip: str | None = None,
+    pekerjaan=None,
 ) -> TimbanganCetak:
     """Catat satu kali cetak. Cetak kedua dan seterusnya wajib beralasan."""
-    pastikan_boleh_cetak(trx)
-    urutan = await cetakan_ke(db, trx.id)
+    from app.timbangan.models import TimbanganPekerjaanCetak
+    trx = await db.scalar(select(TimbanganTransaksi).where(TimbanganTransaksi.id == trx.id).with_for_update().execution_options(populate_existing=True))
+    if pekerjaan is None:
+        pastikan_boleh_cetak(trx)
+        pending = await db.scalar(select(TimbanganPekerjaanCetak.kunci).where(TimbanganPekerjaanCetak.transaksi_id == trx.id, TimbanganPekerjaanCetak.status.in_(['siap','dikirim','pdf_siap'])))
+        if pending:
+            raise LayananError('Selesaikan konfirmasi pekerjaan cetak yang sedang berjalan.')
+    urutan = pekerjaan.urutan if pekerjaan else await cetakan_ke(db, trx.id)
 
     if urutan > 1 and not (alasan or "").strip():
         raise LayananError("Cetak ulang harus disertai alasan.")
@@ -3983,10 +3991,14 @@ async def catat_cetak(
         # Nomor revisi tiket SAAT kertas ini keluar. Sengketa dibuka
         # berbulan-bulan kemudian, dan yang ditanya adalah "lembar mana yang
         # dipegang orang itu" — tanpa angka ini pertanyaannya tak berjawab.
-        revisi=int(trx.jumlah_revisi or 0),
+        revisi=pekerjaan.revisi if pekerjaan else int(trx.jumlah_revisi or 0),
         alasan=(alasan or None), oleh_id=akun.id,
     )
     db.add(baris)
+    if pekerjaan:
+        await db.flush()
+        pekerjaan.cetak_id = baris.id
+        pekerjaan.status = 'berhasil'
     await catat_audit(
         db, akun=akun, aksi="CETAK", entitas="transaksi", entitas_id=trx.kode,
         ringkasan=f"cetak ke-{urutan} ({baris.format}, revisi {baris.revisi})"

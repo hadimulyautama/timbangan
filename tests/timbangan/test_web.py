@@ -898,13 +898,13 @@ async def test_bukti_gabah_tetap_dicetak_dengan_sopir_sebagai_saksi(klien):
     trx_id = await _selesaikan(klien, "GABAH_BASAH")
 
     rincian = (await klien.get(f"{PREFIX}/transaksi/{trx_id}")).text
-    assert "Cetak bukti timbang" in rincian
+    assert "Pratinjau & cetak" in rincian
     assert "Cetak untuk arsip" not in rincian
 
     cetak = teks_pdf(
         (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak/80mm")).content)
-    assert "Sopir (saksi)" in cetak
-    assert "Petugas timbang" in cetak
+    assert "Sopir / saksi" in cetak
+    assert "Petugas pencetak" in cetak
     assert "Ditandatangani kedua pihak" in cetak
     assert "Selisih" not in cetak        # tetap rahasia, hanya beratnya
 
@@ -3516,11 +3516,13 @@ async def test_tautan_cetak_dibuka_bukan_diunduh(klien):
     await login(klien, "budi")
     trx_id = await _selesaikan(klien, "GABAH_BASAH")
     teks = (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak")).text
+    # Pilihan format kini memakai tautan pekerjaan yang sudah disiapkan.
+    # Tautan PDF lama tetap tersedia sebagai fallback tanpa JavaScript.
+    potongan = re.search(r'<a[^>]+data-cp-pdf[^>]*>', teks).group(0)
+    assert "data-unduh" in potongan and 'target="_blank"' in potongan
+    assert "download" not in potongan
     for jalur in ("cetak/80mm", "cetak/ncr"):
-        potongan = teks[max(0, teks.index(jalur) - 200):teks.index(jalur) + 120]
-        assert "data-unduh" in potongan, jalur
-        assert 'target="_blank"' in potongan, jalur
-        assert "download" not in potongan, jalur
+        assert jalur in teks
 
 
 async def test_tautan_csv_tetap_diunduh(klien, app_uji):
@@ -4162,7 +4164,7 @@ async def test_struk_menyebut_akun_yang_mencetak(klien, app_uji):
     await login(klien, "wahid")
     teks = teks_pdf((await klien.get(
         f"{PREFIX}/transaksi/{trx_id}/cetak/80mm")).content)
-    sesudah = teks.split("Petugas timbang")[1][:60]
+    sesudah = teks.split("Petugas pencetak")[1][:60]
     assert "Wahid" in sesudah, sesudah
     assert "Miftah" not in sesudah, sesudah
 
@@ -4170,7 +4172,7 @@ async def test_struk_menyebut_akun_yang_mencetak(klien, app_uji):
     # tetap kertas yang sama di mata pengirim barang.
     ncr = teks_pdf((await klien.get(
         f"{PREFIX}/transaksi/{trx_id}/cetak/ncr")).content)
-    assert "Wahid" in ncr.split("PETUGAS TIMBANG")[1][:60]
+    assert "Wahid" in ncr.split("Petugas pencetak")[1][:60]
 
 
 async def test_siapa_menimbang_tetap_tercatat_meski_tak_tercetak(klien, app_uji):

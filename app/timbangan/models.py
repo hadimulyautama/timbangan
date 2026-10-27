@@ -885,3 +885,24 @@ class TimbanganKiriman(Base):
     sidik: Mapped[str] = mapped_column(String(64), nullable=False)
     jawaban: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class TimbanganPekerjaanCetak(Base):
+    """Konteks pengiriman tetap; bukan catatan bahwa kertas sudah keluar."""
+    __tablename__ = 'timbangan_pekerjaan_cetak'
+    kunci: Mapped[str] = mapped_column(String(64), primary_key=True)
+    transaksi_id: Mapped[int] = mapped_column(ForeignKey('timbangan_transaksi.id'), index=True)
+    oleh_id: Mapped[int] = mapped_column(ForeignKey('timbangan_akun.id'))
+    nama_pencetak: Mapped[str] = mapped_column(String(255))
+    format: Mapped[str] = mapped_column(String(10))
+    keluaran: Mapped[str] = mapped_column(String(10))
+    status: Mapped[str] = mapped_column(String(20), default='siap')
+    sidik: Mapped[str] = mapped_column(String(64))
+    versi_tiket: Mapped[str] = mapped_column(String(100))
+    revisi: Mapped[int] = mapped_column(Integer)
+    urutan: Mapped[int] = mapped_column(Integer)
+    alasan: Mapped[str | None] = mapped_column(Text)
+    konten: Mapped[bytes] = mapped_column(LargeBinary)
+    metode: Mapped[str | None] = mapped_column(String(30))
+    cetak_id: Mapped[int | None] = mapped_column(ForeignKey('timbangan_cetak.id'))
+    waktu: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

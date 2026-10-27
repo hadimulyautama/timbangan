@@ -1,364 +1,99 @@
-"""Bukti timbang sebagai PDF, digambar di server.
+"""Dokumen timbang dari hasil tersimpan, ukuran fisik dan blok utuh.
 
-**Mengapa tidak lewat dialog cetak browser.** Dua hal yang tidak bisa
-dikendalikan dari HTML mana pun:
-
-  · **Kop-kaki browser** — tanggal, jam, nomor halaman, dan URL halaman.
-    Itu setelan dialog cetak, bukan bagian dokumen; CSS tidak bisa
-    mematikannya. Di kertas nota resmi, URL aplikasi tidak punya tempat.
-  · **Ukuran kertas** — `@page { size: ... }` hanya usulan. Yang menentukan
-    adalah pilihan kertas di dialog, dan di ponsel dialog itu sering tidak
-    menawarkan ukuran khusus sama sekali. Hasilnya A4, bukan setengah NCR.
-
-Digambar di sini, ukurannya pasti dan halamannya bersih. Berkasnya bisa
-dicetak maupun dibagikan lewat WhatsApp — keduanya dari satu berkas yang sama.
-
-Seluruhnya MONOKROM: NCR adalah kertas berlapis karbon, lembar keduanya tidak
-punya warna.
+Satu proyeksi angka dipakai bersama ePOS; tata letak tidak menghitung hasil.
+NCR tetap tanpa selisih. PDF panjang membagi halaman, bukan mengecilkan teks.
 """
-from __future__ import annotations
-
 import io
-
+from functools import partial
+from xml.sax.saxutils import escape
 from reportlab.lib.units import mm
-from reportlab.pdfgen import canvas as rl_canvas
-
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib import colors
+from reportlab.pdfgen.canvas import Canvas
+from reportlab.platypus import SimpleDocTemplate,Paragraph,Spacer,Table,TableStyle,KeepTogether,HRFlowable
 from app.timbangan import format as fmt
 from app.timbangan.bukti import baris_angka
 from app.timbangan.pengiriman import rincian_bukti
 
-# Setengah folio, melintang.
-NCR_L, NCR_T = 215 * mm, 165 * mm
-# Struk thermal: lebar kertas 80 mm, area cetak 72 mm. Tingginya menyesuaikan
-# isi — PDF harus punya tinggi tetap, jadi dipakai angka yang cukup longgar.
-STRUK_L = 72 * mm
+NCR_L,NCR_T=215*mm,165*mm
+STRUK_L=80*mm
+TTD_STRUK_MM=20
+TTD_NCR_MM=25
 
-TEBAL = "Helvetica-Bold"
-BIASA = "Helvetica"
+def _tanda_ulang(trx,cetakan_ke):
+    parts=[]
+    if cetakan_ke>1:parts.append(f'CETAKAN ULANG ke-{cetakan_ke}')
+    if int(getattr(trx,'jumlah_revisi',0) or 0):parts.append(f'Revisi {trx.jumlah_revisi}')
+    return ' · '.join(parts)
 
-
-def _potong(c, teks: str, font: str, ukuran: float, lebar: float) -> str:
-    """Pangkas teks yang tidak muat, dengan elipsis — jangan sampai meluber."""
-    if c.stringWidth(teks, font, ukuran) <= lebar:
-        return teks
-    while teks and c.stringWidth(teks + "…", font, ukuran) > lebar:
-        teks = teks[:-1]
-    return teks + "…"
-
-
-def _isian(c, x, y, lebar, label, nilai, *, mono=False):
-    """Label kecil di atas, nilai di atas garis — gaya buku nota."""
-    c.setFont(TEBAL, 5.6)
-    c.setFillGray(0.35)
-    c.drawString(x, y + 4.2 * mm, label.upper())
-    c.setFillGray(0)
-    font = "Courier-Bold" if mono else BIASA
-    c.setFont(font, 8.6)
-    c.drawString(x, y + 1.3 * mm, _potong(c, nilai or "", font, 8.6, lebar))
-    c.setLineWidth(0.5)
-    c.setStrokeGray(0)
-    c.line(x, y, x + lebar, y)
-
-
-def _tanda_ulang(trx, cetakan_ke: int) -> str:
-    """Kalimat "ini bukan lembar pertama", atau kosong bila memang pertama.
-
-    Satu tempat untuk kedua bentuk cetakan. Tanda yang ditulis dua kali akan
-    berbeda bunyinya pada perubahan berikutnya — dan yang berbeda justru jadi
-    satu-satunya lembar yang terlihat mencurigakan padahal sah.
-    """
-    bagian = []
-    if cetakan_ke > 1:
-        bagian.append(f"CETAKAN ULANG ke-{cetakan_ke}")
-    revisi = int(getattr(trx, "jumlah_revisi", 0) or 0)
-    if revisi:
-        bagian.append(f"Revisi {revisi}")
-    return "  ·  ".join(bagian)
-
-
-def bukti_ncr(*, trx, aturan, pihak: str, petugas: str, muatan,
-              perusahaan: str, alamat: str, telepon: str,
-              arah_masuk: bool, cetakan_ke: int = 1) -> bytes:
-    """Lembar setengah NCR 215 × 165 mm.
-
-    Angka selisih TIDAK PERNAH digambar di sini, apa pun komoditasnya —
-    keputusan Direksi 30 Agustus 2026. Lembar ini salinan untuk pihak luar,
-    jadi hasil kontrol internal tidak ikut keluar. Perhatikan bahwa fungsi ini
-    memang tidak menerima parameter selisih sama sekali: kerahasiaannya
-    ditegakkan oleh ketiadaan jalan, bukan oleh percabangan yang bisa keliru.
-    """
-    buf = io.BytesIO()
-    c = rl_canvas.Canvas(buf, pagesize=(NCR_L, NCR_T))
-    c.setTitle(trx.kode)
-
-    M = 8 * mm                       # margin
-    L = NCR_L - 2 * M                # lebar area
-    atas = NCR_T - M
-
-    # ── Kepala ──
-    c.setFont(TEBAL, 13)
-    c.drawString(M, atas - 4.6 * mm, perusahaan.upper())
-    c.setFont(BIASA, 7.4)
-    c.setFillGray(0.28)
-    c.drawString(M, atas - 8.4 * mm, f"{alamat}  ·  {telepon}")
-    c.setFillGray(0)
-
-    # Nomor dalam kotak, di kanan atas
-    kw, kh = 62 * mm, 11 * mm
-    kx, ky = M + L - kw, atas - kh
-    c.setLineWidth(1.2)
-    c.rect(kx, ky, kw, kh)
-    c.setFont(TEBAL, 5.6)
-    c.setFillGray(0.35)
-    c.drawString(kx + 2.5 * mm, ky + kh - 4.4 * mm, "NOMOR")
-    c.setFillGray(0)
-    c.setFont("Courier-Bold", 9.4)
-    c.drawString(kx + 2.5 * mm, ky + 2.6 * mm, trx.kode)
-
-    # ── Judul ──
-    y = atas - 15 * mm
-    c.setLineWidth(2)
-    c.line(M, y, M + L, y)
-    c.setFont(TEBAL, 10.5)
-    judul = "BUKTI TIMBANG"
-    c.drawCentredString(M + L / 2, y - 5.6 * mm, " ".join(judul))
-    tanda = _tanda_ulang(trx, cetakan_ke)
-    if tanda:
-        c.setFont(TEBAL, 7.4)
-        c.drawCentredString(M + L / 2, y - 10 * mm, tanda)
-        y -= 4.4 * mm
-    y -= 8.4 * mm
-    c.setLineWidth(0.7)
-    c.line(M, y, M + L, y)
-
-    # ── Identitas: tiga kolom, gaya isian ──
-    y -= 10 * mm
-    lebar3 = 40 * mm                                  # kolom tanggal / nomor
-    k1 = (L - 2 * 6 * mm - lebar3) / 2                # dua kolom pertama
-    x1, x2, x3 = M, M + k1 + 6 * mm, M + L - lebar3
-
-    _isian(c, x1, y, k1, "Pengirim" if arah_masuk else "Tujuan", pihak)
-    _isian(c, x2, y, k1, "Barang", aturan.nama)
-    _isian(c, x3, y, lebar3, "Tanggal",
-           trx.tanggal.strftime("%d-%m-%Y"), mono=True)
-
-    y -= 11 * mm
-    _isian(c, x1, y, k1, "Nomor polisi", trx.nomor_polisi or "", mono=True)
-    _isian(c, x2, y, k1, "Sopir", trx.nama_sopir or "")
-    _isian(c, x3, y, lebar3, "Nota" if arah_masuk else "Surat jalan",
-           (muatan[0].nomor_acuan if muatan else "") or "", mono=True)
-
-    # ── Tabel angka ──
-    y -= 13 * mm
-    tabel_l = L - 66 * mm            # sisakan ruang tanda tangan di kanan
-    for b in baris_angka(trx, arah_masuk):
-        y -= 7.4 * mm
-        c.setFont(BIASA, 8.2)
-        c.setFillGray(0)
-        c.drawString(M, y, b.label)
-        if b.jam:
-            lb = c.stringWidth(b.label, BIASA, 8.2)
-            c.setFont("Courier", 6.4)
-            c.setFillGray(0.45)
-            c.drawString(M + lb + 1.6 * mm, y, b.jam)
-            c.setFillGray(0)
-        c.setFont("Courier", 8.6)
-        c.drawRightString(M + tabel_l, y, b.nilai)
-        c.setLineWidth(0.3)
-        c.setStrokeGray(0.8)
-        c.line(M, y - 1.8 * mm, M + tabel_l, y - 1.8 * mm)
-
-    # Berat barang — angka yang dicari orang
-    y -= 5.4 * mm
-    c.setLineWidth(1.2)
-    c.setStrokeGray(0)
-    c.line(M, y, M + tabel_l, y)
-    y -= 8.4 * mm
-    c.setFont(TEBAL, 9.6)
-    c.drawString(M, y, "BERAT BARANG")
-    c.setFont("Courier-Bold", 14.5)
-    c.drawRightString(M + tabel_l, y - 0.6 * mm,
-                      f"{fmt.angka(trx.berat_barang_kg)} kg")
-
-    y_berat = y
-
-    # ── Catatan ──
-    y -= 13 * mm
-    _isian(c, M, y, tabel_l, "Catatan",
-           _potong(c, trx.catatan or "", BIASA, 8.6, tabel_l))
-
-    # ── Tanda tangan: mengisi ruang di kanan tabel, sejajar angka utama,
-    #    bukan terdampar di kaki halaman.
-    tx = M + tabel_l + 10 * mm
-    lebar_ttd = (M + L - tx - 6 * mm) / 2
-    ty = M + 17 * mm
-    c.setFont(BIASA, 5.8)
-    c.setFillGray(0.42)
-    c.drawString(tx, ty + 22 * mm,
-                 "Ditandatangani kedua pihak sebagai bukti")
-    c.setFillGray(0)
-    for i, (label, nama) in enumerate((("Petugas timbang", petugas),
-                                       ("Sopir (saksi)", trx.nama_sopir or ""))):
-        x = tx + i * (lebar_ttd + 6 * mm)
-        c.setFont(TEBAL, 5.6)
-        c.setFillGray(0.35)
-        c.drawCentredString(x + lebar_ttd / 2, ty + 17 * mm, label.upper())
-        c.setFillGray(0)
-        c.setLineWidth(0.5)
-        c.setStrokeGray(0)
-        c.line(x, ty, x + lebar_ttd, ty)
-        c.setFont(BIASA, 7.4)
-        c.drawCentredString(x + lebar_ttd / 2, ty - 3.6 * mm,
-                            _potong(c, nama, BIASA, 7.4, lebar_ttd))
-
-    # ── Kaki ──
-    #
-    # SENGAJA tanpa tanggal, jam, nomor halaman, maupun URL. Kertas nota yang
-    # diterima pengirim tidak perlu memuat jejak alat yang membuatnya; kapan
-    # lembar ini dicetak sudah tercatat di jejak audit, tempatnya memang di
-    # sana. Ini pula alasan PDF-nya digambar di server: kop-kaki browser tidak
-    # bisa dimatikan dari HTML.
-    c.setLineWidth(0.4)
-    c.setStrokeGray(0.6)
-    c.line(M, M + 5 * mm, M + L, M + 5 * mm)
-    c.setFont(BIASA, 5.8)
-    c.setFillGray(0.42)
-    c.drawString(M, M + 1.8 * mm,
-                 f"Lembar 1 — {'Pengirim' if arah_masuk else 'Pembeli'}"
-                 f"   ·   Lembar 2 — Arsip pos timbang")
-
-    c.showPage()
-    _lampiran_muatan(c, trx)
-    c.save()
-    return buf.getvalue()
-def bukti_thermal(*, trx, aturan, pihak: str, petugas: str, muatan,
-                  perusahaan: str, alamat: str, telepon: str,
-                  arah_masuk: bool, tampilkan_selisih: bool,
-                  cetakan_ke: int = 1) -> bytes:
-    """Struk 80 mm (area cetak 72 mm), tinggi menyesuaikan isi.
-
-    Berbeda dari lembar NCR, struk ini MASIH mengikuti aturan per komoditas:
-    gabah tanpa selisih (SOP butir 8), beras PK dengan selisih (Sistem Tara
-    butir 9). Karena itu ia menerima `tampilkan_selisih`.
-    """
-    baris = baris_angka(trx, arah_masuk)
-    tanda = _tanda_ulang(trx, cetakan_ke)
-    import textwrap
-    rinci = [r for baris in rincian_bukti(trx, berat=tampilkan_selisih) for r in textwrap.wrap(baris, 47)]
-    tinggi = (58 + 5.2 * len(baris) + (14 if tampilkan_selisih else 0)
-              + (8 if trx.catatan else 0) + (5 if tanda else 0) + 28 + 3.5 * len(rinci)) * mm
-
-    buf = io.BytesIO()
-    c = rl_canvas.Canvas(buf, pagesize=(STRUK_L, tinggi))
-    c.setTitle(trx.kode)
-    M = 4 * mm
-    L = STRUK_L - 2 * M
-    y = tinggi - M
-
-    def tengah(teks, font, ukuran, turun):
-        nonlocal y
-        y -= turun
-        c.setFont(font, ukuran)
-        c.drawCentredString(STRUK_L / 2, y, teks)
-
-    def pasang(kiri, kanan, turun=4.4 * mm, tebal=False):
-        nonlocal y
-        y -= turun
-        c.setFont(TEBAL if tebal else BIASA, 7.4)
-        c.drawString(M, y, kiri)
-        c.setFont("Courier-Bold" if tebal else "Courier", 7.6)
-        c.drawRightString(M + L, y, kanan)
-
-    def garis(putus=True):
-        nonlocal y
-        y -= 2.4 * mm
-        c.setLineWidth(0.4)
-        c.setDash(1, 2) if putus else c.setDash()
-        c.line(M, y, M + L, y)
-        c.setDash()
-
-    tengah(perusahaan, TEBAL, 9.4, 5 * mm)
-    tengah(alamat, BIASA, 6.6, 3.6 * mm)
-    tengah(telepon, BIASA, 6.6, 3.2 * mm)
-    garis()
-    tengah("B U K T I   T I M B A N G", TEBAL, 7.6, 5 * mm)
-    if tanda:
-        tengah(tanda, TEBAL, 6.8, 3.6 * mm)
-    garis()
-
-    pasang("No.", trx.kode)
-    pasang("Tanggal", trx.tanggal.strftime("%d-%m-%Y"))
-    pasang("Pengirim" if arah_masuk else "Pihak", _potong(c, pihak, "Courier", 7.6, 40 * mm))
-    pasang("Nomor polisi", trx.nomor_polisi or "-")
-    if trx.nama_sopir:
-        pasang("Sopir", _potong(c, trx.nama_sopir, "Courier", 7.6, 40 * mm))
-    pasang("Barang", _potong(c, aturan.nama, "Courier", 7.6, 40 * mm))
-    if muatan and muatan[0].nomor_acuan:
-        pasang("Nota" if arah_masuk else "Surat jalan", muatan[0].nomor_acuan)
-    garis()
-
-    for b in baris:
-        pasang(b.label + (f" {b.jam}" if b.jam else ""), b.nilai)
-    garis(putus=False)
-    pasang("BERAT BARANG", f"{fmt.angka(trx.berat_barang_kg)} kg",
-           turun=5.6 * mm, tebal=True)
-
-    if tampilkan_selisih:
-        garis()
-        pasang("Menurut dokumen", f"{fmt.angka(trx.berat_acuan_kg)} kg")
-        pasang("Selisih", fmt.kg_tanda(trx.selisih_kg, 2))
-
-    if trx.catatan:
-        garis()
-        y -= 4 * mm
-        c.setFont(BIASA, 6.6)
-        c.drawString(M, y, _potong(c, trx.catatan, BIASA, 6.6, L))
-
+def _bukti(*,trx,aturan,pihak,petugas,muatan,perusahaan,alamat,telepon,arah_masuk,cetakan_ke=1,ncr=False,tampilkan_selisih=False):
+    lebar=NCR_L if ncr else STRUK_L
+    margin=(8 if ncr else 4)*mm
+    isi=lebar-2*margin
+    ukuran=9 if ncr else 8
+    gaya=ParagraphStyle('isi',fontName='Helvetica',fontSize=ukuran,leading=ukuran*1.3,spaceAfter=0,splitLongWords=True)
+    tengah=ParagraphStyle('tengah',parent=gaya,alignment=1)
+    judul=ParagraphStyle('judul',parent=tengah,fontName='Helvetica-Bold',fontSize=12 if ncr else 10,leading=14)
+    def p(v,style=gaya):return Paragraph(escape(str(v or '')).replace('\n','<br/>'),style)
+    story=[p(perusahaan,judul),p(alamat,tengah),p(telepon,tengah),Spacer(1,3*mm),p('BUKTI TIMBANG',judul)]
+    tanda=_tanda_ulang(trx,cetakan_ke)
+    if tanda:story.append(p(tanda,tengah))
+    story += [Spacer(1,2*mm),HRFlowable(width='100%',thickness=.8),Spacer(1,2*mm)]
+    def tabel(rows,rasio=.56):
+        t=Table([[p(a),p(b)] for a,b in rows],colWidths=[isi*rasio,isi*(1-rasio)],hAlign='LEFT')
+        t.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),('LEFTPADDING',(0,0),(-1,-1),0),('RIGHTPADDING',(0,0),(0,-1),5),('RIGHTPADDING',(1,0),(1,-1),0),('BOTTOMPADDING',(0,0),(-1,-1),4),('TOPPADDING',(0,0),(-1,-1),2)]))
+        return t
+    ident=[('Nomor tiket',trx.kode),('Tanggal',trx.tanggal.strftime('%d-%m-%Y')),('Pengirim' if arah_masuk else 'Pihak',pihak),('Kegiatan',aturan.nama)]
+    if not getattr(trx,'partai',False):ident += [('Nomor polisi',trx.nomor_polisi or '-'),('Sopir',trx.nama_sopir or '-')]
+    if muatan and muatan[0].nomor_acuan:ident.append(('Nota' if arah_masuk else 'Surat jalan',muatan[0].nomor_acuan))
+    story.append(tabel(ident,.40))
+    story += [Spacer(1,2*mm),HRFlowable(width='100%',thickness=.5)]
+    rows=[(b.label+(f' · {b.jam}' if b.jam else ''),b.nilai) for b in baris_angka(trx,arah_masuk)]
+    story.append(tabel(rows))
+    story += [HRFlowable(width='100%',thickness=1),tabel([('BERAT BARANG',f'{fmt.angka(trx.berat_barang_kg)} kg')])]
+    if tampilkan_selisih and not ncr:
+        story.append(tabel([('Menurut dokumen',f'{fmt.angka(trx.berat_acuan_kg)} kg'),('Selisih',fmt.kg_tanda(trx.selisih_kg,2))]))
+    rinci=rincian_bukti(trx,berat=tampilkan_selisih and not ncr)
     if rinci:
-        garis()
-        c.setFont(BIASA, 6.4)
-        for baris in rinci:
-            y -= 3.5 * mm
-            c.drawString(M, y, baris)
-
-    # Tanda tangan
-    y -= 12 * mm
-    for i, (label, nama) in enumerate((("Petugas timbang", petugas),
-                                       ("Sopir (saksi)", trx.nama_sopir or ""))):
-        x = M + i * (L / 2)
-        c.setFont(BIASA, 6.2)
-        c.drawCentredString(x + L / 4, y + 9 * mm, label)
-        c.setLineWidth(0.4)
-        c.line(x + 2 * mm, y, x + L / 2 - 2 * mm, y)
-        c.setFont(BIASA, 6.2)
-        c.drawCentredString(x + L / 4, y - 3.4 * mm,
-                            _potong(c, nama, BIASA, 6.2, L / 2 - 4 * mm))
-
-    y -= 8 * mm
-    c.setFont(BIASA, 5.8)
-    c.setFillGray(0.42)
-    c.drawCentredString(STRUK_L / 2, y,
-                        "Ditandatangani kedua pihak sebagai bukti")
-
-    c.showPage()
-    c.save()
+        story += [Spacer(1,3*mm),HRFlowable(width='100%',thickness=.5)]
+        for line in rinci:story += [p(line),Spacer(1,1.2*mm)]
+    if trx.catatan:story += [Spacer(1,3*mm),p('Catatan: '+trx.catatan)]
+    partai=getattr(trx,'partai',False)
+    saksi=pihak if partai else trx.nama_sopir or ''
+    label=('Pengirim' if arah_masuk else 'Pihak') if partai else 'Sopir / saksi'
+    # Spacer sendiri berukuran fisik: label dan nama tidak ikut dihitung.
+    jarak=(TTD_NCR_MM if ncr else TTD_STRUK_MM)*mm
+    sig=Table([[p('Petugas pencetak',tengah),p(label,tengah)],
+               [Spacer(1,jarak),Spacer(1,jarak)],
+               [p(petugas,tengah),p(saksi,tengah)]],colWidths=[isi/2,isi/2])
+    sig.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),('TOPPADDING',(0,0),(-1,-1),2),('BOTTOMPADDING',(0,0),(-1,-1),2),('LINEABOVE',(0,2),(-1,2),.5,colors.black),('LEFTPADDING',(0,0),(-1,-1),5),('RIGHTPADDING',(0,0),(-1,-1),5)]))
+    story.append(KeepTogether([Spacer(1,5*mm),sig,Spacer(1,3*mm),p('Ditandatangani kedua pihak sebagai bukti',tengah)]))
+    # Ukur seluruh flowable; tinggi struk dinamis. Dokumen sangat panjang
+    # berpaginasi dengan ukuran baca tetap dan blok tanda tangan tak terbelah.
+    tinggi=NCR_T
+    if not ncr:
+        h=0
+        for f in story:
+            if isinstance(f,KeepTogether):
+                h+=sum(x.wrap(isi,100000)[1] for x in f._content)
+            else:h+=f.wrap(isi,100000)[1]
+        tinggi=min(500*mm,max(100*mm,h+2*margin+14))
+    buf=io.BytesIO()
+    doc=SimpleDocTemplate(buf,pagesize=(lebar,tinggi),leftMargin=margin,rightMargin=margin,topMargin=margin,bottomMargin=margin,title=trx.kode,author=perusahaan,pageCompression=1,invariant=1)
+    def halaman(canvas, dok):
+        if not ncr:return
+        canvas.saveState()
+        canvas.setFont('Helvetica',6)
+        # Petunjuk distribusi lembar NCR lama tetap tersedia di setiap halaman.
+        canvas.drawString(margin,3*mm,f"Lembar 1 - {'Pengirim' if arah_masuk else 'Pembeli'}   ·   Lembar 2 - Arsip pos timbang")
+        if dok.page>1:
+            canvas.drawString(margin,NCR_T-4*mm,f'Lampiran bukti timbang - {trx.kode} · revisi {int(getattr(trx,"jumlah_revisi",0) or 0)}')
+        canvas.restoreState()
+    doc.build(story,canvasmaker=partial(Canvas,invariant=1),onFirstPage=halaman,onLaterPages=halaman)
     return buf.getvalue()
 
+def bukti_ncr(**kwargs):
+    return _bukti(**kwargs,ncr=True)
 
-def _lampiran_muatan(c, trx):
-    import textwrap
-    rinci = [r for baris in rincian_bukti(trx, berat=False) for r in textwrap.wrap(baris, 100)]
-    if not rinci:return
-    y = 0
-    for baris in rinci:
-        if y < 15 * mm:
-            if y:c.showPage()
-            c.setPageSize((NCR_L, NCR_T))
-            y = NCR_T - 12 * mm
-            c.setFont(TEBAL, 9)
-            c.drawString(8 * mm, y, 'Lampiran muatan - ' + trx.kode)
-            y -= 8 * mm
-        c.setFont(BIASA, 8)
-        c.drawString(8 * mm, y, baris)
-        y -= 4.5 * mm
-    c.showPage()
+def bukti_thermal(**kwargs):
+    return _bukti(**kwargs,ncr=False)

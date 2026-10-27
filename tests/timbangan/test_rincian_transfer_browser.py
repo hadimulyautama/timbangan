@@ -137,7 +137,7 @@ async def test_cetak_pdf_printer_sintetis_dan_audit(klien,alamat_ui,role):
     async with async_playwright() as pw:
         browser,ctx,page=await browser_uji(pw,klien,alamat_ui)
         await buka(page,alamat_ui+f'/timbangan/transaksi/{tid}')
-        await page.get_by_role('link',name='Cetak bukti timbang',exact=True).click()
+        await page.get_by_role('link',name='Pratinjau & cetak',exact=True).click()
         await page.locator('[data-cetak]').wait_for(state='visible')
         assert await page.locator('[data-cetak]').count()==1
         for fmt in ('80mm','ncr'):

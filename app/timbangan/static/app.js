@@ -687,9 +687,10 @@
           // Halaman itu bukan berkas CSV yang berhasil diunduh.
           throw new Error('Ekspor belum tersedia; periksa sesi dan coba lagi.');
         }
+        if (tautan.dataset.dokumen === 'pdf' && !/application\/pdf/i.test(r.headers.get('Content-Type') || '')) throw new Error('PDF belum tersedia; periksa sesi dan versi tiket.');
         var cocok = cd.match(/filename="?([^"]+)"?/);
         return r.blob().then(function (blob) {
-          return { blob: blob, nama: cocok ? cocok[1] : 'unduhan.csv' };
+          return { blob: blob, nama: cocok ? cocok[1] : (tautan.dataset.nama || 'unduhan.csv') };
         });
       })
       .then(function (hasil) {
@@ -786,19 +787,19 @@
 
   /* Kirim satu perintah cetak. `sumber` adalah alamat di server ini yang
    * menyusun perintahnya — perangkat tidak pernah menyusun sendiri. */
-  function cetakKePrinter(sumber) {
+  function cetakKePrinter(sumber, perintahSiap) {
     var alamat = alamatPrinter();
     if (!alamat) {
       return Promise.reject(
         KirimGagal('Printer belum disetel di perangkat ini.', true));
     }
 
-    return fetch(sumber, { credentials: 'same-origin' })
+    var persiapan = perintahSiap != null ? Promise.resolve(perintahSiap) : fetch(sumber, { credentials: 'same-origin' })
       .then(function (r) {
         if (!r.ok) { throw new Error('Gagal menyiapkan struk (' + r.status + ').'); }
         return r.text();
-      })
-      .then(function (perintah) {
+      });
+    return persiapan.then(function (perintah) {
         var devid = document.body.dataset.printerDevid || 'local_printer';
         var tujuan = alamat + '/cgi-bin/epos/service.cgi?devid=' +
                      encodeURIComponent(devid) + '&timeout=10000';
@@ -821,22 +822,27 @@
           // Baik permintaan yang ditolak maupun yang menggantung sampai batas
           // waktu berujung di sini, dan keduanya bermuara pada hal yang sama:
           // browser ini belum diizinkan menghubungi printer.
-          throw KirimGagal(
+          var gagal = KirimGagal(
             err && err.name === 'AbortError'
               ? 'Printer tidak menjawab dalam ' + (TENGGAT_MS / 1000) +
                 ' detik. Biasanya izin jaringan lokal belum diberikan, atau ' +
                 'perangkat ini ada di jaringan yang berbeda.'
               : 'Perangkat ini belum bisa menghubungi printer di ' + alamat + '.',
             true);
+          gagal.belumPasti = true;
+          throw gagal;
         });
       })
       .then(function (jawaban) {
         if (/success="true"/.test(jawaban)) { return true; }
         var kode = (jawaban.match(/code="([^"]*)"/) || [])[1] || '';
-        throw new Error(ARTI_GAGAL[kode] ||
-          ('Printer menolak mencetak' + (kode ? ' (' + kode + ')' : '') + '.'));
+        var gagal = new Error(ARTI_GAGAL[kode] || ('Hasil printer belum dapat dipastikan' + (kode ? ' ('+kode+')' : '') + '.'));
+        gagal.belumPasti = !ARTI_GAGAL[kode];
+        throw gagal;
       });
   }
+
+  window.TeraFlowPrinter = { alamat: alamatPrinter, kirim: cetakKePrinter };
 
   /* Tombol cetak. `data-cetak` berisi alamat penyusun perintah di server. */
   document.addEventListener('click', function (e) {
