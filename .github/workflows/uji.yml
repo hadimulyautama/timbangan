@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: hadimulyautama/penggilingan-beras
-          ref: 00bdbbed79efb4d86db2070f5ba07fdb165a2194
+          ref: 676798dc7db48dc80fcd71a7f0e1dcdf7c99b7ee
           path: produksi
       - uses: actions/setup-python@v5
         with:
