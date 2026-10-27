@@ -1,0 +1,15 @@
+  {% if akun.is_admin and versi and versi.keadaan == 'tertinggal' %}
+    <div class="pesan pesan--err" role="alert" data-uji="skema-tertinggal">
+      <b>Migrasi belum dijalankan — jalankan <code>alembic upgrade head</code>.</b>
+      Basis data masih di revisi {{ versi.revisi }}, kode ini sudah
+      {{ versi.head }}. Sampai selaras, sebagian pencatatan akan gagal dengan
+      galat yang tak menyebut sebabnya.
+    </div>
+  {% elif akun.is_admin and versi and versi.keadaan == 'kode_lama' %}
+    <div class="pesan pesan--err" role="alert" data-uji="kode-lama">
+      <b>Kode yang berjalan lebih lama dari basis datanya.</b>
+      Basis data di revisi {{ versi.revisi }} yang tak dikenal kode ini
+      ({{ versi.head }}) — deploy terbaru belum sampai ke sini, atau layanan
+      ini belum dimulai ulang.
+    </div>
+  {% endif %}

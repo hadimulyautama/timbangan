@@ -95,6 +95,10 @@
   {% if layar in ('timbang1','timbang2') %}<link rel="stylesheet" href="{{ PREFIX }}/static/formulir.css?v={{ VERSI }}">{% endif %}
 {% if retur_supplier %}<link rel="stylesheet" href="{{ PREFIX }}/static/rincian-supplier.css?v={{ VERSI }}">{% endif %}
 {% if keluar or retur or masuk or transfer %}<link rel="stylesheet" href="{{ PREFIX }}/static/rincian-keluar.css?v={{ VERSI }}">{% endif %}
+{% if layar in ('pengaturan','printer','akun_saya') %}
+<link rel="stylesheet" href="{{ PREFIX }}/static/pengaturan.css?v={{ VERSI }}">
+<script src="{{ PREFIX }}/static/pengaturan.js?v={{ VERSI }}"></script>
+{% endif %}
 </head>
 {# `segar_otomatis` sengaja OPT-IN per halaman, bukan berlaku di mana-mana.
    Menyegarkan di sini berarti memuat ulang halaman, dan reload MEMBUANG yang
@@ -264,7 +268,7 @@
 
       <a href="{{ PREFIX }}/pengaturan"
          class="{{ 'aktif' if layar in ('pengaturan', 'aturan', 'tara', 'pengguna',
-                              'pengguna_ubah', 'akun_saya', 'audit') }}">
+                              'pengguna_ubah', 'akun_saya', 'audit', 'printer') }}">
         <span class="bawah__ikon"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"
              stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="3"/>

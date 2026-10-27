@@ -1,0 +1,14 @@
+{% macro parameter(daftar) %}
+  {% for p in daftar %}
+    <div style="padding:9px 0{% if not loop.last %};border-bottom:1px solid var(--garis){% endif %}">
+      <div class="baris" style="padding:0">
+        <span>{{ p.nama }}</span>
+        <b style="font-family:var(--teks);font-size:14px;text-align:right">
+          {{ p.nilai }}</b>
+      </div>
+      <div class="bantu" style="margin-top:3px">{{ p.arti }}</div>
+      <div class="bantu" style="font-family:var(--mono);font-size:11px;
+                                margin-top:2px">{{ p.env }}</div>
+    </div>
+  {% endfor %}
+{% endmacro %}

@@ -1,0 +1,39 @@
+<div class="kartu"><h2 class="kartu__judul">Pemantauan pihak</h2>
+{{ pintu('/monitoring', 'Status pemantauan pihak', jumlah.supplier|string + ' pihak terdaftar · aktif, pantau, investigasi', 'Admin ke atas') }}</div>
+  {% if akun.is_admin %}
+    <div class="kartu">
+      <div class="kartu__judul">Kontak Kledo</div>
+      <p class="bantu">Pembaruan dijalankan di PadiFlow. Permintaan diterima belum berarti pembaruan selesai.</p>
+      <form method="post" action="{{ PREFIX }}/pengaturan/kledo-kontak">
+        <button type="submit" class="tbl kecil"
+                {{ 'disabled' if kledo.tak_terjangkau or not kledo.terkonfigurasi or kledo.sedang_berjalan }}>
+          {{ 'Sedang berjalan…' if kledo.sedang_berjalan else 'Perbarui kontak' }}
+        </button>
+      </form>
+      <a class="tbl halus kecil" href="{{ PREFIX }}/pengaturan?bagian=pihak">Muat ulang status</a>
+      <div class="bantu" style="margin-top:8px">
+        {%- if kledo.tak_terjangkau %}
+          <b>Tak bisa menghubungi sistem produksi.</b> {{ kledo.tak_terjangkau }}
+        {%- elif not kledo.terkonfigurasi %}
+          <b>Kledo belum tersambung.</b> <code>KLEDO_API_KEY</code> belum
+          diisi di service produksi — minta yang mengelola Railway
+          mengisinya. Sampai itu diisi, kontak vendor &amp; pelanggan baru
+          di Kledo tidak ikut masuk ke daftar pos timbang.
+        {%- elif kledo.sedang_berjalan %}
+          Memperbarui kontak Kledo di produksi,
+          berhalaman-halaman — bisa beberapa menit. Muat ulang halaman ini
+          sebentar lagi untuk melihat hasilnya.
+        {%- elif kledo.gagal_terakhir %}
+          Percobaan terakhir ({{ kledo.selesai_pada|tgl_jam }}) gagal:
+          {{ kledo.gagal_terakhir }}
+        {%- elif kledo.hasil_terakhir %}
+          {{ kledo.hasil_terakhir }}
+          <br><span style="font-size:12px">selesai {{ kledo.selesai_pada|tgl_jam }}</span>
+        {%- else %}
+          Belum pernah dijalankan sejak layanan produksi terakhir
+          dinyalakan. Berjalan juga otomatis tiap tengah malam, dan lewat
+          tombol serupa di Pos Produksi.
+        {%- endif %}
+      </div>
+    </div>
+  {% endif %}

@@ -891,7 +891,9 @@
       })
       .catch(function (err) {
         pulihkanCetak();
-        lapor(err.message, 'err', err.penyiapan);
+        lapor(err.belumPasti
+          ? 'Hasil cetak belum dapat dipastikan. Periksa kertas sebelum mencoba lagi. ' + err.message
+          : err.message, 'err', err.penyiapan);
       });
   });
 
@@ -942,10 +944,12 @@
             'Matikan mode penyamaran, lalu ulangi.', 'err');
       return;
     }
-    lapor('Alamat printer disimpan di perangkat ini. Sekarang coba uji cetak.',
+    var laporan = document.querySelector('[data-laporan-printer]');
+    if (laporan) { laporan.hidden = true; laporan.textContent = ''; }
+    lapor('Alamat printer disimpan di browser ini. Sambungan belum diperiksa.',
           'ok');
     document.querySelectorAll('[data-alamat-printer]').forEach(function (el) {
-      el.textContent = alamatPrinter();
+      el.textContent = alamatPrinter() || '(belum disetel)';
     });
     document.querySelectorAll('a[data-buka-printer]').forEach(function (a) {
       a.href = alamatPrinter() || '#';

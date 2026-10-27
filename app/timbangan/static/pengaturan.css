@@ -1,0 +1,28 @@
+/* Kategori memakai token TeraFlow; layar lama tetap memakai formulir dan rutenya. */
+body:has([data-pengaturan]) main.isi {max-width:1100px}
+.set-halaman {width:100%;min-width:0;max-width:1060px;margin-inline:auto;overflow-wrap:anywhere}
+.set-halaman h1 {font-size:clamp(25px,3vw,34px);line-height:1.2;margin:0 0 12px}
+.set-halaman h2 {font-size:19px}
+.set-halaman .kartu {margin:20px 0;padding:22px}
+.set-kembali {display:inline-flex;align-items:center;min-height:44px;margin-bottom:12px;font-weight:600}
+.set-halaman .set-kategori {padding:0;overflow:hidden}
+.set-kategori__baris {display:grid;grid-template-columns:46px minmax(0,1fr) 16px;align-items:center;gap:16px;padding:23px;text-decoration:none;color:var(--tinta);border-bottom:1px solid var(--garis)}
+.set-kategori__baris:last-child {border-bottom:0}
+.set-kategori__baris:hover {background:var(--pd-soft)}
+.set-kategori__baris strong {display:block;font-size:18px;font-weight:650}
+.set-kategori__baris small {display:block;color:var(--tinta-4);font-size:14px;margin-top:4px;line-height:1.5}
+.set-ikon {display:grid;place-items:center;width:44px;height:44px;border-radius:12px;background:var(--pd-soft);color:var(--aksi)}
+.set-ikon svg {width:24px;height:24px}
+.set-pintu {margin:10px 0;gap:14px}
+.set-pintu .lencana {margin-top:8px;white-space:normal}
+.set-halaman .baris {gap:14px;align-items:flex-start}
+.set-halaman .baris b {min-width:0;overflow-wrap:anywhere;text-align:right}
+.set-halaman form {min-width:0}
+.set-halaman .sat {min-width:0}
+.set-halaman .fld {min-width:0;max-width:100%}
+.set-halaman summary {cursor:pointer;min-height:44px;line-height:1.5;font-weight:600}
+.set-halaman details[open]>summary {margin-bottom:16px}
+.set-halaman a:focus-visible,.set-halaman button:focus-visible,.set-halaman summary:focus-visible {outline:3px solid var(--aksi);outline-offset:3px}
+.set-halaman .tbl {white-space:normal;height:auto;min-height:44px}
+@media(min-width:1000px){body:has([data-pengaturan]) .isi{max-width:1100px}}
+@media(max-width:480px){.set-halaman .kartu{padding:16px}.set-halaman .set-kategori{padding:0}.set-kategori__baris{grid-template-columns:38px minmax(0,1fr) 12px;gap:12px;padding:18px 14px}.set-ikon{width:36px;height:40px}.set-kategori__baris strong{font-size:16px}.set-kategori__baris small{font-size:13px}.set-halaman .baris{flex-wrap:wrap}.set-halaman .baris b{text-align:left}.set-halaman form{flex-wrap:wrap}.set-halaman .baris>span{min-width:0}}

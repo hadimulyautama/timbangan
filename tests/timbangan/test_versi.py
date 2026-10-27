@@ -81,7 +81,7 @@ async def test_baris_versi_muncul_di_pengaturan(klien):
     head = skema._head_dari_berkas()
     for siapa in ("budi", "wahid"):
         await _masuk(klien, siapa)
-        html = (await klien.get(f"{PREFIX}/pengaturan")).text
+        html = (await klien.get(f"{PREFIX}/pengaturan?bagian=sistem")).text
         assert 'data-uji="baris-versi"' in html
         assert f"Versi {VERSI} · deadbee · migrasi {head}" in " ".join(html.split()), siapa
         assert 'role="alert"' not in html
@@ -96,13 +96,13 @@ async def test_peringatan_bila_alembic_version_turun_satu_revisi(klien, sesi):
         await db.commit()
 
     await _masuk(klien, "wahid")                      # admin
-    html = (await klien.get(f"{PREFIX}/pengaturan")).text
+    html = (await klien.get(f"{PREFIX}/pengaturan?bagian=sistem")).text
     assert 'data-uji="skema-tertinggal"' in html
     assert "alembic upgrade head" in html
     assert turun in html and f"(kode: {head})" in html
 
     await _masuk(klien, "budi")                       # petugas: tak perlu tahu
-    html = (await klien.get(f"{PREFIX}/pengaturan")).text
+    html = (await klien.get(f"{PREFIX}/pengaturan?bagian=sistem")).text
     assert 'data-uji="skema-tertinggal"' not in html
     assert 'data-uji="baris-versi"' in html
 
@@ -151,6 +151,6 @@ def test_pos_timbang_memang_tak_memakai_potongan_versi_paket():
         "ke potongan paket dan hapus uji ini")
     # Dan baris versinya tetap satu bentuk dengan yang lain: itulah yang
     # dibacakan pemilik dari ponsel, jadi bentuknya tak boleh menyimpang.
-    html = (AKAR / "app/timbangan/templates/pengaturan.html").read_text()
+    html = (AKAR / "app/timbangan/templates/pengaturan/sistem.html").read_text()
     assert 'data-uji="baris-versi"' in html
     assert "Versi {{ versi.versi }} · {{ versi.komit or 'commit ?' }} ·" in html

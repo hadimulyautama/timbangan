@@ -496,7 +496,7 @@ async def test_pengaturan_mendaftar_parameter_beserta_nilainya(klien, app_uji):
     """Katalog harus menyebut nilai yang benar-benar berlaku, bukan contoh."""
     await _jadi_super(app_uji)
     await login(klien, "wahid")
-    teks = (await klien.get(f"{PREFIX}/pengaturan")).text
+    teks = (await klien.get(f"{PREFIX}/pengaturan?bagian=operasional")).text
 
     # Admin melihatnya sebagai kotak isian berisi angka mentah.
     assert "Kapasitas jembatan timbang" in teks
@@ -505,18 +505,18 @@ async def test_pengaturan_mendaftar_parameter_beserta_nilainya(klien, app_uji):
     assert "Transaksi terkunci setelah" in teks and 'value="24"' in teks
     assert "Tiket ditandai lama setelah" in teks and 'value="12"' in teks
     assert "Ukuran maksimum satu foto" in teks and 'value="4"' in teks
-    assert TELEPON_UJI in teks
+    assert TELEPON_UJI in (await klien.get(f"{PREFIX}/pengaturan?bagian=sistem")).text
     from app.timbangan import logic
-    assert f"{len(logic.JENIS_AWAL)} komoditas aktif" in teks
+    assert f"{len(logic.JENIS_AWAL)} komoditas aktif" in (await klien.get(f"{PREFIX}/pengaturan?bagian=aturan")).text
 
 
 async def test_bukan_admin_melihat_nilai_terbaca_tanpa_kotak_isian(klien):
     """Petugas boleh tahu batas yang berlaku, tetapi tidak mengubahnya."""
     await login(klien)                       # budi — petugas
-    teks = (await klien.get(f"{PREFIX}/pengaturan")).text
+    teks = (await klien.get(f"{PREFIX}/pengaturan?bagian=operasional")).text
     assert "20.000 kg" in teks               # pemisah ribuan, mudah dibaca
     assert 'name="nilai"' not in teks
-    assert "Hanya Admin yang dapat mengubah bagian ini." in teks
+    assert "Hanya Super Admin yang dapat mengubah bagian ini." in teks
 
 
 async def test_pengaturan_tidak_pernah_menampilkan_kunci_sesi(klien):
@@ -525,7 +525,7 @@ async def test_pengaturan_tidak_pernah_menampilkan_kunci_sesi(klien):
     from app.timbangan.config import tsettings
 
     await login(klien, "wahid")
-    teks = (await klien.get(f"{PREFIX}/pengaturan")).text
+    teks = (await klien.get(f"{PREFIX}/pengaturan?bagian=sistem")).text
     assert "Kunci penanda sesi" in teks
     if tsettings.secret_key:
         assert tsettings.secret_key not in teks
@@ -539,16 +539,16 @@ async def test_pengaturan_menyembunyikan_baris_di_luar_peran(klien):
     await login(klien)                       # budi — petugas
     teks = (await klien.get(f"{PREFIX}/pengaturan")).text
 
-    assert "Akun ini" in teks
+    assert "Akun saya" in teks
     assert "Aturan komoditas" in teks
     assert "Pengguna &amp; perangkat" not in teks
-    assert "Tara standar" not in teks
+    assert 'href="/timbangan/tara"' not in teks
     assert "Sesi &amp; keamanan" not in teks
 
 
 async def test_pengaturan_memuat_tombol_keluar(klien):
     await login(klien)
-    teks = (await klien.get(f"{PREFIX}/pengaturan")).text
+    teks = (await klien.get(f"{PREFIX}/pengaturan?bagian=akun")).text
     assert f'action="{PREFIX}/keluar"' in teks
     assert ">Keluar<" in teks
 
@@ -624,14 +624,14 @@ async def test_kembalikan_bawaan_menghapus_setelan(klien, app_uji):
     await klien.post(f"{PREFIX}/pengaturan", data={
         "kunci": "jam_kunci_otomatis", "nilai": "48", "aksi": "simpan",
     })
-    teks = (await klien.get(f"{PREFIX}/pengaturan")).text
+    teks = (await klien.get(f"{PREFIX}/pengaturan?bagian=operasional")).text
     assert 'value="48"' in teks and "disetel dari layar" in teks
 
     r = await klien.post(f"{PREFIX}/pengaturan", data={
         "kunci": "jam_kunci_otomatis", "aksi": "bawaan", "nilai": "",
     })
     assert "kembali ke bawaan 24 jam" in r.text
-    assert 'value="24"' in (await klien.get(f"{PREFIX}/pengaturan")).text
+    assert 'value="24"' in (await klien.get(f"{PREFIX}/pengaturan?bagian=operasional")).text
 
 
 async def test_bukan_admin_tidak_bisa_menyetel(klien):
@@ -2466,7 +2466,7 @@ async def test_setelan_terbaca_admin_tapi_tanpa_kotak_isian(klien, app_uji):
     """Admin tetap perlu tahu batas yang berlaku — hanya tidak mengubahnya."""
     await _jadi_super(app_uji, "miftah")
     await login(klien, "wahid")
-    teks = (await klien.get(f"{PREFIX}/pengaturan")).text
+    teks = (await klien.get(f"{PREFIX}/pengaturan?bagian=operasional")).text
     assert "20.000" in teks
     assert "wewenang Super Admin" in teks
     assert 'name="kunci"' not in teks            # formulirnya tidak ada
@@ -4515,7 +4515,7 @@ async def test_pengaturan_tara_kemasan_bersama_bisa_diubah_admin(klien):
     from sqlalchemy import text
     await _master_tara_kemasan()
     await login(klien,'wahid')
-    r=await klien.get(f'{PREFIX}/pengaturan')
+    r=await klien.get(f'{PREFIX}/pengaturan?bagian=aturan')
     assert 'Tara kemasan' in r.text
     assert 'Karung laminasi' in r.text and '25 kg' in r.text
     r=await klien.post(f'{PREFIX}/pengaturan/tara-kemasan',data={

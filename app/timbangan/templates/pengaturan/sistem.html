@@ -1,0 +1,29 @@
+<div class="kartu"><h2 class="kartu__judul">Operasional</h2>
+{{ pintu('/pengaturan?bagian=operasional', 'Alat & batas operasional', 'Kapasitas, kelipatan tera, waktu penguncian, dan batas foto', 'Ubah · Super Admin' if akun.is_super else 'Lihat saja') }}</div>
+  <div class="kartu">
+    <div class="kartu__judul">Identitas pada bukti timbang</div>
+    {{ parameter(bukti) }}
+    <div class="bantu" style="margin-top:10px">
+      {{ sumber_label['environment'] }}.
+    </div>
+  </div>
+
+  {% if akun.is_admin %}
+    <div class="kartu">
+      <div class="kartu__judul">Sesi &amp; keamanan</div>
+      {{ parameter(sesi) }}
+      <div class="bantu" style="margin-top:10px">
+        {{ sumber_label['environment'] }}.
+      </div>
+    </div>
+  {% endif %}
+
+<div class="kartu"><h2 class="kartu__judul">Versi aplikasi</h2>  {% if versi %}
+    <div class="bantu" data-uji="baris-versi"
+         style="text-align:center;margin-top:20px;font-family:var(--mono);font-size:11px">
+      Versi {{ versi.versi }} · {{ versi.komit or 'commit ?' }} ·
+      migrasi {{ versi.revisi or '?' }}{% if versi.keadaan != 'selaras' %} (kode: {{ versi.head or '?' }}){% endif %}
+    </div>
+  {% endif %}
+
+</div>

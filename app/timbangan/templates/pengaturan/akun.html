@@ -1,0 +1,59 @@
+{% from "macros.html" import isian %}
+<div class="kartu"><h2 class="kartu__judul">Profil akun</h2>
+
+  <form method="post" action="{{ PREFIX }}/akun"
+        style="display:flex;flex-direction:column;gap:14px">
+
+    {% if orang.tertaut %}
+      <div class="baris"><span>Nama</span><b>{{ orang.nama }}</b></div>
+      <div class="baris"><span>Nama pengguna</span><b>{{ orang.username }}</b></div>
+      <div class="bantu">
+        Akun Anda <b>akun bersama</b> — sama di Pos Produksi dan aplikasi lain.
+        Nama diubah di Pos Produksi (Pengaturan); sandi yang diganti di sini
+        berlaku di semua aplikasi.
+      </div>
+    {% else %}
+    {{ isian('nama', 'Nama lengkap', orang.nama, '', 'text',
+             'Nama ini yang muncul di catatan timbang dan bukti cetak.',
+             true, true) }}
+    {{ isian('username', 'Nama pengguna', orang.username, '', 'text',
+             'Huruf kecil tanpa spasi. Mengubahnya mengubah cara Anda masuk '
+             'lain kali.', true, true, 'autocapitalize="none"') }}
+    {% endif %}
+
+    <div class="kartu">
+      <div class="kartu__judul">Ganti sandi</div>
+      {{ isian('sandi_lama', 'Sandi sekarang', '', '', 'password',
+               'Hanya perlu diisi bila Anda ingin mengganti sandi.',
+               false, false, 'autocomplete="current-password"') }}
+      {{ isian('sandi_baru', 'Sandi baru', '', '', 'password',
+               'Minimal 6 karakter.', false, false,
+               'autocomplete="new-password"') }}
+      <div class="bantu" style="margin-top:8px">
+        Sandi sekarang diminta karena perangkat di pos dipakai bergantian dan
+        tetap masuk sepanjang shift — tanpa itu, layar yang tertinggal terbuka
+        cukup untuk mengunci Anda keluar dari akun sendiri.
+      </div>
+    </div>
+
+    <button type="submit" class="tbl blok" data-sibuk="Menyimpan…">
+      Simpan akun
+    </button>
+  </form>
+</div>
+  <div class="kartu">
+    <h2 class="kartu__judul">Informasi akun</h2>
+    <div class="baris"><span>Terakhir masuk</span><b>{{ orang.terakhir_login|tgl_jam }}</b></div>
+    <div class="baris"><span>Peran</span>
+      <b style="font-family:var(--teks);font-size:14px">{{ orang.role_label }}</b></div>
+    <div class="baris"><span>Kode perangkat</span>
+      <b style="font-family:var(--teks);font-size:14px">
+        {{ orang.perangkat_kode or '—' }}</b></div>
+    <div class="bantu" style="margin-top:8px">
+      Peran menentukan apa yang boleh Anda kerjakan, dan kode perangkat ikut
+      menyusun nomor transaksi — perubahan mengikuti kewenangan pengelolaan pengguna. Hubungi
+      pengelola akun bila ada yang keliru.
+    </div>
+  </div>
+
+<form method="post" action="{{ PREFIX }}/keluar"><button class="tbl bahaya blok" type="submit">Keluar</button></form>

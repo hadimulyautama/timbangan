@@ -31,7 +31,7 @@ async def penyiapan(
     request: Request,
     akun: TimbanganAkun = Depends(butuh_akun),
 ):
-    return render(request, "printer.html", kembali=f"{PREFIX}/")
+    return render(request, "printer.html", bagian="printer", judul_bagian="Pos & printer", kembali=f"{PREFIX}/pengaturan")
 
 
 @router.get("/printer/uji")

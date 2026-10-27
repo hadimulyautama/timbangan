@@ -21,11 +21,11 @@ from app.timbangan.db import get_db, hari_ini
 from app.timbangan.models import (
     TimbanganAkun,
     TimbanganJenis,
-    TimbanganKendaraan,
     TimbanganTaraStandar,
 )
 from app.timbangan.routes.pos import _angka
 from app.timbangan.security import (
+    AksesDitolak,
     NAMA_COOKIE,
     ada_super_aktif,
     buat_token,
@@ -127,44 +127,69 @@ async def _status_kledo() -> dict:
     return {**s, "tak_terjangkau": None, "selesai_pada": selesai}
 
 
+# Kategori hanya menentukan penyajian. Penjaga POST lama tetap menjadi
+# pengaman perubahan; GET kategori juga tidak boleh memaparkan data peran lain.
+KATEGORI = (
+    ("akun", "Akun saya", "Profil, sandi, dan informasi akun", '<circle cx="12" cy="8" r="4"/><path d="M4 22v-3a8 8 0 0 1 16 0v3"/>'),
+    ("printer", "Pos & printer", "Alamat printer, pemeriksaan, dan uji cetak", '<path d="M6 8V3h12v5M6 17H3V8h18v9h-3M6 14h12v8H6z"/>'),
+    ("aturan", "Aturan timbang & tara", "Aturan komoditas, tara standar, dan tara kemasan", '<path d="M12 3v18M7 21h10M3 7h18M5 7l-4 8h8zM19 7l-4 8h8z"/>'),
+    ("pihak", "Pihak & integrasi", "Pemantauan pihak dan pembaruan kontak Kledo", '<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="12" cy="9" r="3"/><path d="M7 19a5 5 0 0 1 10 0"/>'),
+    ("pengguna", "Pengguna & akses", "Pengguna, peran, kode perangkat, dan jejak audit", '<circle cx="9" cy="8" r="3"/><path d="M2 21v-3a7 7 0 0 1 14 0v3M17 5a3 3 0 0 1 0 6M18 14a5 5 0 0 1 4 5v2"/>'),
+    ("sistem", "Sistem & operasional", "Batas alat, identitas bukti, keamanan, dan versi", '<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="10" cy="18" r="2"/>'),
+)
+
+
 @router.get("/pengaturan")
 async def pengaturan(
     request: Request,
     akun: TimbanganAkun = Depends(butuh_akun),
     db: AsyncSession = Depends(get_db),
 ):
-    """Katalog seluruh data & parameter yang bisa disetel, beserta nilainya."""
+    """Katalog kategori; rincian dibaca hanya ketika kategorinya dibuka."""
+    bagian = request.query_params.get("bagian", "")
+    kelola = akun.is_super or (akun.is_admin and not await ada_super_aktif(db))
+    kategori = [dict(kode=k, nama=n, ket=d, ikon=i) for k, n, d, i in KATEGORI
+                if (k != "pihak" or akun.is_admin) and (k != "pengguna" or kelola)]
+    if bagian == "pihak" and not akun.is_admin:
+        raise AksesDitolak("Halaman ini hanya untuk Admin.")
+    if bagian == "pengguna" and not kelola:
+        raise AksesDitolak("Pengelolaan pengguna hanya untuk Super Admin.")
+    judul = {k: n for k, n, _, _ in KATEGORI} | {"operasional": "Alat & batas operasional"}
+    if bagian not in judul:
+        bagian = ""
+
     async def hitung(model, *syarat):
         q = select(func.count(model.id))
         for s in syarat:
             q = q.where(s)
         return (await db.execute(q)).scalar_one()
 
-    jumlah = {
-        "komoditas": await hitung(TimbanganJenis, TimbanganJenis.status == "aktif"),
-        "tara": await hitung(
-            TimbanganTaraStandar, TimbanganTaraStandar.status == "BERLAKU"
-        ),
-        "akun": await hitung(TimbanganAkun, TimbanganAkun.status == "aktif"),
-        "kendaraan": await hitung(TimbanganKendaraan),
-        "supplier": len(await service.daftar_supplier(db)),
-    }
+    jumlah = {}
+    if bagian == "aturan":
+        jumlah["komoditas"] = await hitung(TimbanganJenis, TimbanganJenis.status == "aktif")
+        if akun.is_admin:
+            jumlah["tara"] = await hitung(TimbanganTaraStandar, TimbanganTaraStandar.status == "BERLAKU")
+    elif bagian == "pengguna":
+        jumlah["akun"] = await hitung(TimbanganAkun, TimbanganAkun.status == "aktif")
+    elif bagian == "pihak":
+        jumlah["supplier"] = len(await service.daftar_supplier(db))
 
     return render(
         request, "pengaturan.html",
-        jumlah=jumlah,
-        tara_kemasan=await kemasan_tara.daftar(db) if akun.is_admin else None,
+        jumlah=jumlah, bagian=bagian, kategori=kategori,
+        judul_bagian=judul.get(bagian), orang=akun,
+        tara_kemasan=await kemasan_tara.daftar(db) if akun.is_admin and bagian == "aturan" else None,
         # Pintu darurat pembuatan Super Admin pertama — tertutup sendiri
         # begitu ada satu yang aktif. Lihat `security.butuh_super_atau_pertama`.
-        boleh_kelola_pengguna=akun.is_admin and not await ada_super_aktif(db),
-        alat=await _parameter_alat(db),
+        boleh_kelola_pengguna=kelola,
+        alat=await _parameter_alat(db) if bagian == "operasional" else [],
         bukti=_parameter_bukti(),
         sesi=_parameter_sesi(),
         sumber_label=SUMBER_LABEL,
         # Hanya Admin ke atas yang melihat (dan memicu) tombolnya — sama
         # seperti Tara & Monitoring di bawahnya. Tak perlu memanggil produksi
         # sama sekali untuk operator, yang tak akan melihat kartunya.
-        kledo=await _status_kledo() if akun.is_admin else None,
+        kledo=await _status_kledo() if akun.is_admin and bagian == "pihak" else None,
         # Versi kode yang sedang berjalan, di kaki halaman, untuk semua peran.
         # Peringatan skema tertinggal hanya untuk Admin ke atas (di templat).
         versi=await _versi.info(),
@@ -185,11 +210,11 @@ async def mulai_sinkron_kledo_kontak(
     try:
         dimulai = await klien_produksi.mulai_sinkron_kontak()
     except klien_produksi.ProduksiTakTersedia as e:
-        return redirect("/pengaturan", err=str(e))
+        return redirect("/pengaturan?bagian=pihak", err=str(e))
     if not dimulai:
-        return redirect("/pengaturan", err="Sinkron kontak Kledo sudah berjalan — tunggu sampai selesai.")
+        return redirect("/pengaturan?bagian=pihak", err="Sinkron kontak Kledo sudah berjalan — tunggu sampai selesai.")
     return redirect(
-        "/pengaturan",
+        "/pengaturan?bagian=pihak",
         ok="Sinkron kontak Kledo dimulai — muat ulang halaman ini sebentar lagi untuk melihat hasilnya.",
     )
 
@@ -206,7 +231,7 @@ async def simpan_pengaturan(
     """Setel satu parameter operasional, atau kembalikan ke bawaannya."""
     d = setelan.PETA.get(kunci)
     if d is None:
-        return redirect("/pengaturan", err="Setelan tidak dikenal.")
+        return redirect("/pengaturan?bagian=operasional", err="Setelan tidak dikenal.")
     try:
         if aksi == "bawaan":
             hasil = await setelan.kembalikan_bawaan(db, akun=akun, kunci=kunci)
@@ -217,8 +242,8 @@ async def simpan_pengaturan(
             pesan = f"{d.nama} kini {fmt.angka(hasil, d.desimal)} {d.satuan}."
         await db.commit()
     except setelan.SetelanError as e:
-        return redirect("/pengaturan", err=str(e))
-    return redirect("/pengaturan", ok=pesan)
+        return redirect("/pengaturan?bagian=operasional", err=str(e))
+    return redirect("/pengaturan?bagian=operasional", ok=pesan)
 
 
 @router.get("/aturan")
@@ -232,7 +257,7 @@ async def aturan(
         request, "aturan.html",
         jenis=await service.daftar_jenis(db),
         peta=await service.peta_aturan(db),
-        kembali=f"{PREFIX}/",
+        kembali=f"{PREFIX}/pengaturan?bagian=aturan",
     )
 
 
@@ -253,7 +278,7 @@ async def daftar_tara(
         jenis=await service.daftar_jenis(db),
         nama_pihak={s.id: s.nama_supplier
                     for s in await service.daftar_supplier(db)},
-        kembali=f"{PREFIX}/laporan",
+        kembali=f"{PREFIX}/pengaturan?bagian=aturan",
     )
 
 
@@ -333,7 +358,7 @@ async def jejak_audit(
         # `entitas_id` untuk akun berisi nomor id — tidak berarti apa-apa bagi
         # yang membacanya. Dipetakan ke namanya di sini, sekali saja.
         nama_akun={str(o.id): o.nama for o in semua_akun},
-        kembali=f"{PREFIX}/pengaturan",
+        kembali=f"{PREFIX}/pengaturan?bagian=pengguna",
     )
 
 
@@ -348,7 +373,7 @@ async def akun_saya_form(
     namanya atau mengganti sandi yang terlanjur diketahui orang lain.
     """
     return render(
-        request, "akun_saya.html", orang=akun, kembali=f"{PREFIX}/pengaturan",
+        request, "akun_saya.html", orang=akun, bagian="akun", judul_bagian="Akun saya", kembali=f"{PREFIX}/pengaturan",
     )
 
 
@@ -377,7 +402,7 @@ async def akun_saya_simpan(
 
     if not berubah:
         return redirect("/akun", ok="Tidak ada yang diubah.")
-    balasan = redirect("/pengaturan", ok=f"{', '.join(berubah).capitalize()} diubah.")
+    balasan = redirect("/pengaturan?bagian=akun", ok=f"{', '.join(berubah).capitalize()} diubah.")
     if "sandi" in berubah:
         # Versi sesi naik (di akun bersama bila tertaut) — token di perangkat
         # ini pun ikut mati, jadi pasang yang baru supaya orangnya tak
@@ -420,7 +445,7 @@ async def daftar_pengguna(
         baris=list((await db.execute(
             select(TimbanganAkun).order_by(TimbanganAkun.nama)
         )).scalars()),
-        kembali=f"{PREFIX}/laporan",
+        kembali=f"{PREFIX}/pengaturan?bagian=pengguna",
     )
 
 
@@ -592,8 +617,8 @@ async def simpan_tara_kemasan(
         nilai = await kemasan_tara.simpan(db, akun=akun, tara_id=tara_id,
             teks=tara_per_karung_kg, ip=request.client.host if request.client else None)
     except service.LayananError as exc:
-        return redirect('/pengaturan', err=str(exc))
+        return redirect('/pengaturan?bagian=aturan', err=str(exc))
     except DBAPIError:
         await db.rollback()
-        return redirect('/pengaturan', err='Master tara kemasan belum tersedia. Pastikan pembaruan Produksi sudah diterapkan.')
-    return redirect('/pengaturan', ok=f'Tara kemasan tersimpan: {fmt.angka(nilai,4)} kg per karung.')
+        return redirect('/pengaturan?bagian=aturan', err='Master tara kemasan belum tersedia. Pastikan pembaruan Produksi sudah diterapkan.')
+    return redirect('/pengaturan?bagian=aturan', ok=f'Tara kemasan tersimpan: {fmt.angka(nilai,4)} kg per karung.')

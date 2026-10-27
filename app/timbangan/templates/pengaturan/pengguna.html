@@ -1,0 +1,4 @@
+<div class="kartu"><h2 class="kartu__judul">Pengelolaan akses</h2>
+{% if not akun.is_super %}<p class="pesan">Belum ada Super Admin aktif. Akses awal Admin ini tertutup setelah ada Super Admin aktif.</p>{% endif %}
+{{ pintu('/pengguna', 'Pengguna & perangkat', jumlah.akun|string + ' akun aktif · penautan akun, peran, sandi, status, dan kode perangkat', 'Super Admin' if akun.is_super else 'Akses awal Admin') }}
+{% if akun.is_super %}{{ pintu('/audit', 'Jejak audit', 'Filter dan rincian perubahan, pelaku, waktu, serta nilai sebelum/sesudah', 'Lihat saja · Super Admin') }}{% endif %}</div>

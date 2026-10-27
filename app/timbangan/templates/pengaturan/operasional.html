@@ -1,0 +1,68 @@
+  {# ── Parameter alat & operasional ── #}
+  <div class="kartu">
+    <div class="kartu__judul">Alat &amp; batas operasional</div>
+    {% if akun.is_super %}
+      <div class="bantu" style="margin-bottom:12px">
+        Berlaku seketika, tanpa menyalakan ulang service. Setiap perubahan
+        tercatat di jejak audit.
+      </div>
+    {% else %}
+      <div class="bantu" style="margin-bottom:12px">
+        Angka yang sedang berlaku. Mengubahnya wewenang Super Admin — salah
+        ketik di sini menolak setiap truk yang datang.
+      </div>
+    {% endif %}
+
+    {% for p in alat %}
+      <div style="padding:11px 0{% if not loop.last %};border-bottom:1px solid var(--garis){% endif %}">
+        <div class="baris" style="padding:0">
+          <span>{{ p.nama }}</span>
+          {% if not akun.is_super %}
+            <b style="font-family:var(--teks);font-size:14px">{{ p.nilai }}</b>
+          {% endif %}
+        </div>
+        <div class="bantu" style="margin-top:3px">{{ p.arti }}</div>
+
+        {% if akun.is_super %}
+          <form method="post" action="{{ PREFIX }}/pengaturan"
+                style="display:flex;gap:8px;align-items:center;margin-top:8px">
+            <input type="hidden" name="kunci" value="{{ p.kunci }}">
+            <div class="sat" style="flex-grow:1">
+              <input class="fld" aria-label="{{ p.nama }}" name="nilai" value="{{ p.angka }}"
+                     inputmode="decimal" autocomplete="off" data-berat>
+              <span>{{ p.satuan }}</span>
+            </div>
+            <button type="submit" name="aksi" value="simpan"
+                    class="tbl kecil" style="height:52px">Simpan</button>
+          </form>
+          <div class="baris" style="padding:4px 0 0">
+            <span style="font-size:12px">
+              Batas wajar {{ p.batas }} · bawaan {{ p.bawaan }} {{ p.satuan }}
+            </span>
+            {% if p.asal == 'data' %}
+              <form method="post" action="{{ PREFIX }}/pengaturan">
+                <input type="hidden" name="kunci" value="{{ p.kunci }}">
+                <button type="submit" name="aksi" value="bawaan"
+                        class="tbl halus kecil">Kembalikan bawaan</button>
+              </form>
+            {% endif %}
+          </div>
+        {% endif %}
+
+        <div class="bantu" style="font-family:var(--mono);font-size:11px;
+                                  margin-top:4px">
+          {{ p.env }}
+          {% if p.asal == 'data' %}· disetel dari layar{% endif %}
+        </div>
+      </div>
+    {% endfor %}
+
+    <div class="bantu" style="margin-top:10px">
+      {% if akun.is_admin %}
+        Nilai yang belum pernah disetel dari layar mengikuti environment; yang
+        sudah disetel menang atasnya sampai dikembalikan ke bawaan.
+      {% else %}
+        Hanya Super Admin yang dapat mengubah bagian ini.
+      {% endif %}
+    </div>
+  </div>

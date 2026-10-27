@@ -1,0 +1,114 @@
+<div class="kartu"><h2 class="kartu__judul">Printer pos</h2><span class="lencana lencana--netral">Browser ini</span><p class="bantu">Kode perangkat {{ akun.perangkat_kode or "—" }} melekat pada akun dan ikut menyusun nomor transaksi. Alamat printer berikut hanya berlaku pada browser/perangkat ini.</p>
+
+
+  <div class="bantu" style="line-height:1.55">
+    Struk dikirim dari <b>perangkat ini</b> langsung ke printer di jaringan pos
+    timbang — bukan dari server. Karena itu penyiapannya dilakukan sekali di
+    tiap ponsel atau tablet, dan tidak ikut berpindah ke perangkat lain.
+  </div>
+
+  <div class="pesan" data-hasil-cetak hidden></div>
+
+  <div class="grup">
+    <label class="lbl" for="printer-url">Alamat printer</label>
+    <input class="fld teks" id="printer-url" name="printer_url" type="text" inputmode="url"
+           autocomplete="off" autocapitalize="none" spellcheck="false"
+           placeholder="{{ PRINTER_URL }}">
+    <div class="bantu">
+      Harus diawali <b>https://</b>. Halaman ini disajikan lewat HTTPS, dan
+      browser menolak menghubungi alamat <b>http://</b> dari halaman HTTPS.
+    </div>
+  </div>
+  <button type="button" class="tbl halus blok" data-simpan-printer>
+    Simpan alamat di perangkat ini</button>
+  <div class="baris"><span>Alamat yang digunakan</span><b data-alamat-printer></b></div>
+  <p class="bantu">Alamat tersimpan belum membuktikan sambungan berhasil. Kosongkan alamat untuk memakai bawaan, bila tersedia.</p>
+
+  <div class="grup">
+    <div class="lbl">Periksa sambungan</div>
+    <button type="button" class="tbl halus blok" data-periksa-printer>
+      Periksa perangkat ini</button>
+    <div class="kartu" data-laporan-printer hidden style="margin-top:8px"></div>
+    <div class="bantu">
+      Tidak mengeluarkan kertas. Memisahkan tiga sebab kegagalan yang dari
+      layar terasa sama: sertifikat belum diterima, izin jaringan belum
+      diklik, atau perangkat tidak satu jaringan dengan printer.
+    </div>
+  </div>
+
+  <div class="grup">
+    <div class="lbl">Uji cetak</div>
+    <a class="tbl blok" href="{{ PREFIX }}/printer/uji"
+       data-cetak="{{ PREFIX }}/printer/uji">
+      <span data-teks>Cetak halaman uji</span></a>
+    <div class="bantu">
+      Uji cetak tidak membuat tiket atau riwayat cetak transaksi. Yang keluar memuat penggaris 48 kolom. Bila penggaris itu patah menjadi
+      dua baris, kertas yang terpasang bukan 80 mm.
+    </div>
+  </div>
+
+  <div class="bantu" style="line-height:1.55">
+    Printer tetap bisa dilewati: pada layar cetak, <b>Struk 80 mm (PDF)</b>
+    selalu tersedia dan bisa dicetak lewat dialog berbagi ponsel, atau
+    dikirim lewat WhatsApp.
+  </div>
+
+<details class="kartu"><summary>Penyiapan sertifikat dan izin jaringan</summary>  <div class="kartu">
+    <div class="kartu__judul">Dua izin, sekali seumur perangkat</div>
+
+    <div class="baris" style="align-items:flex-start;gap:10px">
+      <span><b>1. Terima sertifikat printer</b><br>
+        <span class="bantu">
+          Sertifikat bawaan printer ini menyebut nama dan alamat yang
+          <b>bukan miliknya</b> (pabrik memasang sertifikat yang sama di
+          banyak unit), jadi setiap browser menolaknya. Buka alamat printer
+          sekali di tab lain, pilih <i>Lanjutkan</i> pada peringatan, lalu
+          tutup tabnya. <b>Wajib diulang di tiap perangkat</b> — menyimpan
+          alamat printer saja tidak cukup.
+        </span>
+      </span>
+    </div>
+    <a class="tbl halus blok" data-buka-printer target="_blank" rel="noopener"
+       style="margin:4px 0 14px">
+      Buka <span data-alamat-printer style="font-family:var(--mono)"></span>
+      di tab baru</a>
+
+    <div class="baris" style="align-items:flex-start;gap:10px">
+      <span><b>2. Izinkan akses jaringan lokal</b><br>
+        <span class="bantu">
+          Saat pertama kali mencetak, browser bertanya apakah halaman ini boleh
+          menghubungi alat di jaringan setempat. Pilih <i>Izinkan</i>. Bila
+          pertanyaannya terlewat, cetakan akan menggantung sampai batas waktu —
+          periksa izin browser, kemudian gunakan pemeriksaan sambungan sebelum mencoba cetak kembali.
+        </span>
+      </span>
+    </div>
+  </div>
+
+  {# Ini akan terlihat oleh setiap orang yang memakai aplikasi, jadi harus
+     dijelaskan DI SINI dan bukan hanya diketahui yang memasang. Cap yang
+     tidak dijelaskan akan dilaporkan sebagai kerusakan — atau lebih buruk,
+     dikira kebocoran data. Keputusan menerimanya diambil 2 September 2026
+     setelah tiga jalur ditimbang. #}
+  <div class="kartu">
+    <div class="kartu__judul">Mengapa browser menulis “Tidak aman”</div>
+    <div class="bantu" style="line-height:1.6">
+      Setelah perangkat ini dipakai mencetak, browser memberi cap
+      <b>“Tidak aman” / “Not Secure”</b> pada alamat aplikasi. Itu wajar dan
+      sudah diperhitungkan.
+      <br><br>
+      Sebabnya sertifikat bawaan printer, bukan aplikasi ini. Sertifikat itu
+      dipasang pabrik dengan nama dan alamat milik unit lain, jadi browser
+      tidak bisa memastikannya — dan begitu Anda menyetujuinya, cap itu
+      melekat pada halaman yang memakainya.
+      <br><br>
+      Yang <b>tidak</b> berubah: sambungan ke server aplikasi tetap
+      terenkripsi dan tetap terverifikasi seperti biasa; catatan timbang,
+      kata sandi, dan foto bukti tidak melewati printer. Yang dikirim ke
+      printer hanya isi struk, dan hanya di dalam jaringan pos.
+    </div>
+  </div>
+
+</details>
+
+</div>
