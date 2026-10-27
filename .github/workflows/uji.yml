@@ -51,7 +51,7 @@ jobs:
           (cd timbangan && python -m alembic upgrade head)
       - name: Periksa model dan migrasi
         working-directory: timbangan
-        run: python -m alembic check
+        run: python -m tests.periksa_skema_bersama
       - name: Regresi layanan dan HTTP
         working-directory: timbangan
         run: |
