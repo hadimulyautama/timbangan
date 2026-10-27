@@ -1,13 +1,7 @@
-__pycache__/
-*.py[cod]
-.venv/
-.env
-*.sqlite3
-.DS_Store
-.pytest_cache/
-# PDF pedoman dibuat ulang dari HTML-nya
-docs/*.pdf
-
-# Grafik pengetahuan graphify — hasil turunan, dibangun ulang dari kodenya
-graphify-out/
-KOMIT
+.git
+.env*
+.venv
+__pycache__
+*.pyc
+output
+tests

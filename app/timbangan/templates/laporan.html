@@ -1,115 +1,90 @@
 {% extends "base.html" %}
-{% block segar_otomatis %}data-segar-otomatis="1"{% endblock %}{# Sama seperti daftar: saringnya GET, dan sisanya cuma angka. #}
-{% from "macros.html" import baris_transaksi %}
-
+{% block segar_otomatis %}data-segar-otomatis="1"{% endblock %}
 {% block lebar %}lebar{% endblock %}
-{% block judul %}Ringkasan{% endblock %}
-{% block bar_judul %}Ringkasan{% endblock %}
-{% block bar_sub %}{{ f.dari|tgl(true) }} – {{ f.sampai|tgl(true) }}{% endblock %}
+{% block judul %}Laporan & Pemeriksaan{% endblock %}
+{% block bar_judul %}Laporan & Pemeriksaan{% endblock %}
+{% block bar_sub %}Rekap timbang dan penelusuran selisih{% endblock %}
+
+{% macro catatan(b, tugas=false) %}
+  {% set t = b.trx %}{% set l = lembar_per_tiket.get(t.id) %}
+  <article class="lp-record" data-laporan-id="{{ t.id }}">
+    <div class="lp-row"><span class="lp-code">{{ t.kode }}</span>
+      <span class="lencana lencana--{{ 'hati' if t.status_kontrol in STATUS_WAJIB_PERIKSA else 'netral' }}">Kontrol: {{ STATUS_LABEL.get(t.status_kontrol, t.status_kontrol or 'Belum tersedia') }}</span></div>
+    <h3>{{ b.pihak_tampil }}</h3>
+    <div class="lp-meta"><span>{{ t.tanggal|tgl(true) }}</span><span>{{ t.nomor_polisi or 'Tanpa kendaraan' }}</span><span>{{ NAMA_JENIS.get(t.jenis_kode, t.jenis_kode) }}</span></div>
+    <div class="lp-row"><span class="lp-muted">Selisih {{ (t.selisih_kg|angka(1)) ~ ' kg' if t.selisih_kg is not none else 'belum tersedia' }}</span>
+      {% if l %}<span class="lencana lencana--{{ 'aman' if l.status == 'SELESAI' else 'hati' }}">Pemeriksaan {{ 'selesai' if l.status == 'SELESAI' else 'terbuka' }}</span>{% else %}<span class="lp-muted">Tanpa lembar pemeriksaan</span>{% endif %}</div>
+    {% if tugas and t.status_kontrol not in STATUS_WAJIB_PERIKSA %}<p class="lp-muted">Angka sudah berubah; lembar pemeriksaan masih terbuka.</p>{% endif %}
+    <a class="tbl {{ '' if tugas else 'halus' }}" href="{{ PREFIX }}/transaksi/{{ t.id }}?kembali={{ konteks|urlencode }}{{ '#pemeriksaan' if tugas else '' }}">{{ 'Buka pemeriksaan' if tugas else 'Lihat rincian' }}</a>
+  </article>
+{% endmacro %}
+
+{% macro pola(r) %}
+  {% if r.pola %}<div class="lp-patterns">{% for p in r.pola %}<p><strong>{{ p.judul }}</strong> — {{ p.keterangan }}</p>{% endfor %}</div>{% endif %}
+{% endmacro %}
+{% macro status_pihak(r) %}
+  <div class="lp-status"><span>Saat ini <b>{{ r.status_saat_ini }}</b></span><span>Disarankan <b>{{ r.status_disarankan }}</b></span></div>
+{% endmacro %}
 
 {% block isi %}
-  <form method="get" class="saring">
-    <div class="grup">
-      <div class="lbl">Dari</div>
-      <input class="fld" type="date" name="dari" value="{{ f.dari|iso }}">
-    </div>
-    <div class="grup">
-      <div class="lbl">Sampai</div>
-      <input class="fld" type="date" name="sampai" value="{{ f.sampai|iso }}">
-    </div>
-    <button type="submit" class="tbl lebar-penuh">Lihat</button>
-  </form>
-
-  <div class="petak">
-    <div class="petak__sel">
-      <div class="petak__nilai">{{ ringkasan.jumlah }}</div>
-      <div class="petak__label">Transaksi</div>
-    </div>
-    {# Dipisah per arah sejak 11 September 2026.
-       "Total barang" dulu menjumlahkan gabah MASUK, beras KELUAR, jasa
-       timbang, dan transfer internal menjadi satu angka. Angka itu tidak
-       berarti apa-apa, dan yang membacanya mengira itu jumlah gabah yang
-       diterima hari itu. Jasa timbang dan transfer internal tidak muncul di
-       kedua sisi: barangnya tak masuk dan tak keluar. #}
-    <div class="petak__sel">
-      <div class="petak__nilai">{{ ringkasan.masuk_kg|ton }}</div>
-      <div class="petak__label">Barang masuk</div>
-    </div>
-    <div class="petak__sel">
-      <div class="petak__nilai">{{ ringkasan.keluar_kg|ton }}</div>
-      <div class="petak__label">Barang keluar</div>
-    </div>
-    <div class="petak__sel">
-      {# Namanya menyebut FAKTA, bukan tugas.
-         Angka ini menghitung status kontrol, dan status adalah catatan
-         permanen tentang apa yang terjadi saat menimbang — ia tidak berubah
-         ketika pemeriksaannya ditutup. Dulu labelnya "Perlu diperiksa",
-         sehingga transaksi yang sudah tuntas ditelusuri tetap terbaca sebagai
-         pekerjaan yang menggantung. Daftar tugasnya ada di bawah: lembar
-         pemeriksaan yang masih terbuka. #}
-      <div class="petak__nilai">{{ ringkasan.perlu_periksa }}</div>
-      <div class="petak__label">Di luar batas</div>
-    </div>
-    <div class="petak__sel">
-      <div class="petak__nilai">{{ ringkasan.tiket_terbuka }}</div>
-      <div class="petak__label">Tiket terbuka</div>
-    </div>
-  </div>
-
-  {# Angkanya HARUS bisa dijangkau. Dulu ini teks polos, dan lembar yang
-     angkanya sudah dikoreksi tidak muncul di daftar mana pun — terhitung,
-     tapi tidak bisa ditemukan. #}
-  {% if lembar_terbuka %}
-    <div class="pesan pesan--err" style="margin-bottom:8px">
-      {{ lembar_terbuka|length }} lembar pemeriksaan masih terbuka. Mengoreksi
-      angkanya tidak menutup lembarnya — buka satu per satu lalu tutup dengan
-      kategori dan catatan.
-    </div>
-    {% for b in lembar_terbuka %}
-      <div style="margin-bottom:8px">{{ baris_transaksi(b) }}</div>
+<div class="lp-page">
+  <div class="lp-heading"><h1>Laporan &amp; Pemeriksaan</h1><p class="lp-muted">Rekap timbang dan penelusuran selisih</p></div>
+  <nav class="lp-tabs" aria-label="Bagian laporan">
+    {% for kode,nama in [('rekap','Rekap'),('pemeriksaan','Pemeriksaan'),('pemantauan','Pemantauan pihak')] %}
+      <a href="{{ tautan[kode] }}" {% if tab == kode %}aria-current="page"{% endif %}>{{ nama }}{% if kode == 'pemeriksaan' %} <b aria-label="{{ lembar_terbuka|length }} terbuka">{{ lembar_terbuka|length }}</b>{% endif %}</a>
     {% endfor %}
+  </nav>
+  <section aria-label="{{ {'rekap':'Rekap','pemeriksaan':'Pemeriksaan','pemantauan':'Pemantauan pihak'}[tab] }}" class="lp-panel">
+  {% if tab != 'pemeriksaan' %}
+    <form action="{{ PREFIX }}/laporan" method="get" class="lp-dates">
+      <input type="hidden" name="tab" value="{{ tab }}">
+      <label>Dari<input class="fld" type="date" name="dari" value="{{ f.dari|iso }}"></label>
+      <label>Sampai<input class="fld" type="date" name="sampai" value="{{ f.sampai|iso }}"></label>
+      <button type="submit" class="tbl halus">Lihat</button>
+    </form>
+    <p class="lp-muted">Periode {{ f.dari|tgl(true) }} – {{ f.sampai|tgl(true) }}</p>
   {% endif %}
-
-  {% if perlu_periksa %}
-    <div>
-      {# Istilahnya menyebut FAKTA, bukan tugas. "Menunggu ditelusuri"
-         membuat transaksi yang pemeriksaannya sudah ditutup tetap terbaca
-         sebagai pekerjaan menggantung — padahal statusnya memang tidak
-         pernah berubah, karena ia catatan tentang apa yang terjadi saat
-         menimbang. Daftar tugas yang sesungguhnya ada di atas: lembar
-         pemeriksaan yang masih terbuka. #}
-      <div class="lbl" style="margin-bottom:8px">Selisih di luar batas</div>
-      {% for b in perlu_periksa %}
-        <div style="margin-bottom:8px">{{ baris_transaksi(b) }}</div>
+  {% if tab == 'rekap' %}
+    {% if lembar_terbuka %}<aside class="lp-urgent">
+      <div><strong>{{ lembar_terbuka|length }} lembar pemeriksaan masih terbuka</strong><p>Semua tanggal · termasuk angka yang sudah dikoreksi. Mengoreksi angkanya tidak menutup lembarnya.</p></div>
+      <a class="tbl" href="{{ tautan.pemeriksaan }}">Buka pemeriksaan</a>
+    </aside>{% endif %}
+    <div class="lp-grid">
+      {% for kode,nilai,nama in [('jumlah',ringkasan.jumlah,'Transaksi'),('masuk',ringkasan.masuk_kg|ton,'Barang masuk'),('keluar',ringkasan.keluar_kg|ton,'Barang keluar'),('batas',ringkasan.perlu_periksa,'Di luar batas'),('terbuka',ringkasan.tiket_terbuka,'Tiket terbuka')] %}
+      <div class="lp-stat" data-ringkasan="{{ kode }}"><strong>{{ nilai }}</strong><span>{{ nama }}</span></div>
       {% endfor %}
     </div>
-  {% endif %}
-
-  {% if tara_jatuh_tempo %}
-    <div class="kartu">
-      <div class="kartu__judul">Sampling tara segera kedaluwarsa</div>
-      {% for baris_tara, nama in tara_jatuh_tempo %}
-        <div class="baris">
-          <span>{{ NAMA_JENIS.get(baris_tara.jenis_kode, baris_tara.jenis_kode) }}
-            · {{ nama or 'umum' }}</span>
-          <b style="font-family:var(--teks);font-size:14px">
-            sampai {{ baris_tara.berlaku_sampai|tgl(true) }}</b>
-        </div>
-      {% endfor %}
-      <a href="{{ PREFIX }}/tara" class="tbl halus blok" style="margin-top:10px">
-        Perbarui sampling</a>
+    <p class="lp-muted">Masuk termasuk retur masuk; keluar termasuk retur keluar. Transfer internal dan jasa timbang tidak masuk kedua total berat.</p>
+    <section class="lp-section"><div class="lp-row"><h2>Selisih di luar batas</h2><span class="lencana lencana--netral">{{ ringkasan.perlu_periksa }} transaksi</span></div>
+      <p class="lp-muted">Sesuai periode rekap · status kontrol tetap tercatat meski pemeriksaannya selesai. Ditampilkan hingga 20 transaksi terbaru; seluruh hasil tersedia di Riwayat Timbang.</p>
+      <div class="lp-list">{% for b in perlu_periksa %}{{ catatan(b) }}{% else %}<div class="lp-empty">Tidak ada selisih di luar batas pada periode ini.</div>{% endfor %}</div>
+    </section>
+    {% if tara_jatuh_tempo %}<section class="lp-record"><h2>Sampling tara segera kedaluwarsa</h2>
+      {% for tara,nama in tara_jatuh_tempo %}<div class="lp-row"><span>{{ NAMA_JENIS.get(tara.jenis_kode,tara.jenis_kode) }} · {{ nama or 'umum' }}</span><b>sampai {{ tara.berlaku_sampai|tgl(true) }}</b></div>{% endfor %}
+      <a class="tbl halus" href="{{ PREFIX }}/tara">Perbarui sampling</a>
+    </section>{% endif %}
+  {% elif tab == 'pemeriksaan' %}
+    <div class="lp-section"><h2>Pemeriksaan terbuka</h2><p class="lp-muted">Semua tanggal · daftar ini tidak mengikuti periode rekap.</p>
+      <p class="lp-muted">Mengoreksi angka tidak otomatis menutup lembar. Penutupan mencatat hasil penelusuran; status kontrol dan fakta selisih tetap tersimpan.</p>
+      <div class="lp-list">{% for b in lembar_terbuka %}{{ catatan(b,true) }}{% else %}<div class="lp-empty"><strong>Semua pemeriksaan sudah ditutup.</strong><p>Riwayat selisih dan hasil pemeriksaan tetap tersedia melalui Rekap, Riwayat Timbang, dan rincian transaksi.</p><a class="tbl halus" href="{{ tautan.rekap }}">Lihat Rekap</a></div>{% endfor %}</div>
     </div>
+  {% else %}
+    <p class="lp-notice">Angka di sini adalah alasan untuk bertanya, bukan kesimpulan. Skor rendah berarti pola timbangannya perlu ditelusuri — bukan bahwa pihaknya berbuat curang.</p>
+    <p class="lp-muted">Pemasok dengan minimal 3 transaksi dalam periode ini. Usulan status tidak mengubah status pihak secara otomatis.</p>
+    {% if baris %}
+    <div class="lp-table"><table><thead><tr><th>Pihak</th><th class="angka">Transaksi</th><th class="angka">Skor</th><th>Kategori</th><th class="angka">Lewat batas</th><th class="angka">Rata selisih (kg)</th><th>Status</th></tr></thead><tbody>
+      {% for r in baris %}<tr data-pihak-id="{{ r.supplier_id }}"><td>{{ r.nama }}</td><td class="angka">{{ r.jumlah_transaksi }}</td><td class="angka">{{ r.skor.skor_total|angka(1) if r.skor else '—' }}</td><td>{{ r.skor.kategori if r.skor else 'Belum cukup data' }}</td><td class="angka">{{ r.skor.melewati_batas if r.skor else '—' }}</td><td class="angka">{{ r.skor.rata_selisih_kg|angka(1) if r.skor else '—' }}</td><td>{{ status_pihak(r) }}</td></tr>
+      {% if r.pola %}<tr><td colspan="7">{{ pola(r) }}</td></tr>{% endif %}{% endfor %}
+    </tbody></table></div>
+    <div class="lp-monitor-cards">{% for r in baris %}<article class="lp-record" data-pihak-kartu="{{ r.supplier_id }}"><div class="lp-row"><h2>{{ r.nama }}</h2><span class="lencana lencana--netral">Kategori {{ r.skor.kategori if r.skor else 'belum tersedia' }}</span></div>
+      <dl class="lp-facts"><div><dt>Transaksi</dt><dd>{{ r.jumlah_transaksi }}</dd></div><div><dt>Skor</dt><dd>{{ r.skor.skor_total|angka(1) if r.skor else '—' }}</dd></div><div><dt>Lewat batas</dt><dd>{{ r.skor.melewati_batas if r.skor else '—' }}</dd></div><div><dt>Rata selisih</dt><dd>{{ (r.skor.rata_selisih_kg|angka(1)) ~ ' kg' if r.skor else 'Belum tersedia' }}</dd></div></dl>
+      {{ status_pihak(r) }}{{ pola(r) }}</article>{% endfor %}</div>
+    {% else %}<div class="lp-empty">Belum cukup transaksi untuk menilai pola.</div>{% endif %}
   {% endif %}
-
-  <div class="aksi-baris">
-    <a href="{{ PREFIX }}/monitoring" class="tbl halus">Monitoring pihak</a>
-    <a href="{{ PREFIX }}/transaksi" class="tbl halus">Semua catatan</a>
-  </div>
-  {# data-unduh: berkasnya diambil di latar lalu diserahkan ke lembar
-     Bagikan, supaya halaman ini tidak pernah ditinggalkan. Lihat app.js.
-     target="_blank" tetap dipasang sebagai jalan terakhir bila JS tidak
-     jalan sama sekali. #}
-  <a class="tbl halus blok" data-unduh target="_blank" rel="noopener" download
-     href="{{ PREFIX }}/ekspor.csv?dari={{ f.dari|iso }}&sampai={{ f.sampai|iso }}">
-    Unduh CSV</a>
+  <div class="lp-actions"><a class="tbl halus" href="{{ PREFIX }}/transaksi?dari={{ f.dari|iso }}&sampai={{ f.sampai|iso }}">Riwayat Timbang</a>
+    <a class="tbl halus" data-unduh target="_blank" rel="noopener" download href="{{ PREFIX }}/ekspor.csv?dari={{ f.dari|iso }}&sampai={{ f.sampai|iso }}">Unduh CSV</a></div>
+  <p class="lp-muted">CSV mengikuti periode {{ f.dari|tgl(true) }} – {{ f.sampai|tgl(true) }}; tiket dibatalkan tidak disertakan. Tab tidak mengubah cakupan ekspor.</p>
+  <p data-hasil-unduh data-pesan="Unduhan belum berhasil. Coba kembali; periode dan tab tetap tersimpan." role="alert" hidden></p>
+  </section>
+</div>
 {% endblock %}

@@ -1,0 +1,46 @@
+/* Susunan Laporan; warna dan tipografi mengikuti token TeraFlow. */
+.lp-page{container-type:inline-size;overflow-wrap:anywhere;min-width:0}
+.lp-heading{display:grid;gap:6px;margin-bottom:20px}.lp-heading h1{font-size:25px;font-weight:500;line-height:1.4;margin:0}
+.lp-panel,.lp-section{display:grid;gap:12px;min-width:0}
+.lp-panel{padding-top:20px}
+.lp-page h2{font-size:17px;margin:0;font-weight:600;line-height:1.4}
+.lp-page h3{font-size:16px;margin:0;font-weight:600;line-height:1.4}
+.lp-page p{margin:0;line-height:1.6}
+.lp-muted{font-size:13px;color:var(--pd-muted)}
+.lp-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding-bottom:10px;border-bottom:1px solid var(--pd-line)}
+.lp-tabs a{display:flex;flex-wrap:wrap;align-content:center;align-items:center;justify-content:center;gap:5px;text-align:center;min-height:48px;padding:9px 5px;border-radius:8px;color:var(--pd-muted);font-size:13px;text-decoration:none}
+.lp-tabs a[aria-current=page]{color:var(--tf-button-ink);background:var(--tf-accent)}
+.lp-tabs b{font-size:11px;min-width:19px;padding:2px 4px;border-radius:5px;background:color-mix(in srgb,currentColor 12%,transparent)}
+.lp-tabs a:focus-visible,.lp-page .tbl:focus-visible{outline:3px solid var(--tf-accent);outline-offset:3px}
+.lp-dates{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;align-items:end}
+.lp-dates label{display:grid;gap:6px;min-width:0;font-size:13px;color:var(--pd-muted)}
+.lp-dates .fld{min-width:0;width:100%;box-sizing:border-box;padding:10px 6px;min-height:44px}
+.lp-dates button{grid-column:1/-1}
+.lp-urgent{display:grid;gap:12px;padding:16px;border-radius:12px;background:var(--hati-muda);color:var(--hati)}
+.lp-urgent strong{font-size:16px}.lp-urgent p{font-size:13px;margin-top:6px}
+.lp-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.lp-stat{padding:16px;border:1px solid var(--pd-line);border-radius:12px;background:var(--pd-sheet);display:grid;gap:6px;min-width:0}
+.lp-stat:first-child{grid-column:1/-1}
+.lp-stat strong{font-size:25px;line-height:1.3;font-variant-numeric:tabular-nums;font-weight:600}
+.lp-stat span{font-size:12px;color:var(--pd-muted)}
+.lp-row{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;min-width:0}
+.lp-row .lencana{white-space:normal;max-width:100%;font-size:11px;line-height:1.5}
+.lp-list{display:grid;gap:10px}
+.lp-record{display:grid;gap:10px;min-width:0;background:var(--pd-sheet);border:1px solid var(--pd-line);border-radius:12px;padding:15px}
+.lp-code{font-size:12px;color:var(--pd-muted);font-variant-numeric:tabular-nums}
+.lp-meta{display:flex;flex-wrap:wrap;gap:5px 12px;color:var(--pd-muted);font-size:12px}
+.lp-record .tbl{justify-self:start;min-height:44px;white-space:normal;max-width:100%}
+.lp-empty{padding:24px 16px;text-align:center;border:1px dashed var(--pd-line);border-radius:12px;color:var(--pd-muted);display:grid;gap:12px}
+.lp-notice{border:1px solid var(--pd-line);background:var(--pd-soft);border-radius:12px;padding:14px;font-size:14px}
+.lp-actions{display:flex;flex-wrap:wrap;gap:8px}.lp-actions .tbl{min-height:44px}
+.lp-table{display:none;border:1px solid var(--pd-line);border-radius:12px;background:var(--pd-sheet);overflow:hidden}
+.lp-table table{width:100%;table-layout:fixed}.lp-table th,.lp-table td{padding:12px 9px;white-space:normal;overflow-wrap:anywhere}
+.lp-table th:first-child{width:20%}.lp-table th:last-child{width:22%}
+.lp-table th{font-size:12px}.lp-table td{font-size:13px}
+.lp-status{display:grid;gap:7px;font-size:12px}.lp-status span{display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px}
+.lp-monitor-cards{display:grid;gap:10px}.lp-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:0}
+.lp-facts dt{font-size:12px;color:var(--pd-muted)}.lp-facts dd{margin:4px 0 0;font-size:16px;font-weight:600;font-variant-numeric:tabular-nums}
+.lp-patterns{display:grid;gap:7px;font-size:13px;border-top:1px solid var(--pd-line);padding-top:10px}
+@container(min-width:570px){.lp-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.lp-stat:first-child{grid-column:auto}.lp-dates{grid-template-columns:1fr 1fr auto}.lp-dates button{grid-column:auto}.lp-tabs{display:flex;gap:8px}.lp-tabs a{padding:10px 16px}.lp-urgent{grid-template-columns:1fr auto;align-items:center}}
+@container(min-width:780px){.lp-table{display:block}.lp-monitor-cards{display:none}}
+@media(pointer:coarse){.lp-dates input{font-size:16px}}

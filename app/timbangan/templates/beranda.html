@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block segar_otomatis %}data-segar-otomatis="1"{% endblock %}{# Layar yang paling sering ditinggalkan terbuka — dan yang paling sering basi. #}
-{% from "macros.html" import baris_transaksi, judul_truk, lencana %}
+{% from "tiket_kartu.html" import kartu_tiket, terbaru with context %}
 
 {#
   Kartu "mulai penimbangan" MEMBENTANG di tempat, tidak mengirim petugas ke
@@ -89,59 +89,23 @@
   {% endif %}
 {% endmacro %}
 
-{% block judul %}Pos Timbang{% endblock %}
-{% block bar_judul %}Pos Timbang{% endblock %}
+{% block judul %}Beranda{% endblock %}
+{% block bar_judul %}Beranda{% endblock %}
 {% block bar_sub %}{{ akun.nama }} · {{ akun.perangkat_kode or 'perangkat belum diberi kode' }}{% endblock %}
 
 {% block isi %}
 
-  {# ── Antrean diringkas, dan "Mulai penimbangan" tak lagi di bawahnya ──
+  <header class="tf-sambut">
+    <div class="tf-sub">{{ hari_lokal|tgl }}</div>
+    <h1>Pos Timbang</h1>
+    <div class="tf-sub">{{ akun.nama }} · perangkat {{ akun.perangkat_kode or 'belum diberi kode' }}</div>
+  </header>
+  <div class="tf-home-grid">
+  <section class="tf-section" aria-labelledby="mulai-judul">
+    <h2 id="mulai-judul">Mulai penimbangan</h2>
+    <div class="tf-actions-grid">
 
-     Tiket terbuka memang pekerjaan yang paling mendesak, dan itu tak berubah.
-     Yang keliru adalah menaruh SELURUHNYA di atas: dua puluh tiket berarti
-     6.400 piksel gulir sebelum petugas sampai ke "Barang masuk" — sementara
-     truk berikutnya sudah berhenti di jembatan. Temuan QA UI-06.
-
-     Lima teratas saja; sisanya di balik "lihat semua". Yang lima itu memang
-     yang paling lama menunggu, jadi ia tetap daftar yang benar untuk dilihat
-     lebih dulu. #}
-  {% if terbuka %}
-    <div>
-      <div class="lbl" style="margin-bottom:8px">
-        Menunggu timbang kedua ({{ terbuka|length }})
-      </div>
-      {% for b in terbuka[:5] %}
-        <a href="{{ PREFIX }}/tiket/{{ b.trx.id }}" class="pilihan"
-           style="margin-bottom:8px">
-          <div class="pilihan__isi">
-            {{ judul_truk(b) }}
-            <div class="pilihan__ket">
-              {{ NAMA_JENIS.get(b.trx.jenis_kode, b.trx.jenis_kode) }} ·
-              {{ ARAH_LABEL.get(b.trx.arah, b.trx.arah|lower) }} ·
-              sejak {{ b.trx.timbang1_waktu|jam }}
-            </div>
-          </div>
-          {% if b.trx.id in menganggur %}
-            <span class="lencana lencana--hati">Lama</span>
-          {% else %}
-            <span class="lencana lencana--netral">Tahap 2</span>
-          {% endif %}
-        </a>
-      {% endfor %}
-      {% if terbuka|length > 5 %}
-        <a href="{{ PREFIX }}/tiket" class="btn btn--halus"
-           style="display:block;text-align:center">
-          Lihat semua {{ terbuka|length }} tiket terbuka
-        </a>
-      {% endif %}
-    </div>
-  {% endif %}
-
-  <div>
-    <div class="lbl" style="margin-bottom:8px">Mulai penimbangan</div>
-    <div style="display:flex;flex-direction:column;gap:8px">
-
-      {% call kartu([MASUK], 'Barang masuk', 'Gabah, beras, beras PK, broken') %}
+      {% call kartu([MASUK], 'Barang masuk', 'Penerimaan barang · pilih komoditas') %}
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2f6e7a"
              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 5v14"/><path d="M19 12l-7 7-7-7"/></svg>
@@ -160,7 +124,7 @@
          saat komoditas kedua dibuka. Tak ada daftar komoditas yang ditulis di
          berkas ini. #}
       {% call kartu([MASUK], 'Barang masuk jasa',
-                    'Titipan pelanggan — digiling lalu kembali',
+                    'Titipan jasa giling · barang pelanggan',
                     pola='/jasa/', pilihan=jenis_jasa) %}
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2f6e7a"
              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -216,29 +180,33 @@
       {% endcall %}
 
     </div>
-  </div>
-
-  <div>
-    <div class="lbl" style="margin-bottom:8px">
-      {# "Timbangan saya" sampai 30 September 2026, ketika daftarnya memang
-         dipersempit ke orangnya sendiri. Sekarang seluruh pos tergambar untuk
-         siapa pun (keputusan pemilik), jadi judul lama akan berbohong —
-         dan judul yang berbohong lebih buruk daripada daftar yang kosong. #}
-      Hari ini
+  </section>
+  <section class="tf-section" aria-labelledby="aktif-judul">
+    <div class="tf-section-title"><h2 id="aktif-judul">Tiket Aktif</h2><a class="tf-link" href="{{ PREFIX }}/tiket">Lihat semua →</a></div>
+    <div class="tf-overview">
+      <a href="{{ PREFIX }}/tiket?tab=truk"><strong>{{ jumlah_antrean.truk }}</strong> Truk</a>
+      <a href="{{ PREFIX }}/tiket?tab=partai"><strong>{{ jumlah_antrean.partai }}</strong> Partai kecil</a>
     </div>
-    {% if hari_ini_daftar %}
-      {% for b in hari_ini_daftar %}
-        <div style="margin-bottom:8px">{{ baris_transaksi(b) }}</div>
-      {% endfor %}
-
+    {% if kelompok.truk %}
+      <div class="tf-sub">Truk paling lama menunggu</div>
+      <div class="tf-stack">{% for b in kelompok.truk[:2] %}{{ kartu_tiket(b) }}{% endfor %}</div>
     {% else %}
-      <div class="kartu kosong">
-        {{ 'Belum ada penimbangan hari ini.' if akun.is_admin
-           else 'Anda belum menimbang apa pun hari ini.' }}
-      </div>
+      <div class="kartu tf-empty"><strong>Tidak ada truk menunggu</strong>
+        {{ 'Partai kecil masih bisa dilanjutkan.' if kelompok.partai else 'Semua penimbangan sudah tuntas.' }}</div>
     {% endif %}
+    {% if kelompok.partai %}
+      <div class="tf-sub">Partai masih berjalan</div>
+      {{ kartu_tiket(kelompok.partai[0]) }}
+      {% if jumlah_antrean.partai > 1 %}<a class="tf-link" href="{{ PREFIX }}/tiket?tab=partai">Lihat semua partai →</a>{% endif %}
+    {% endif %}
+  </section>
   </div>
-
-  <a href="{{ PREFIX }}/aturan" class="tbl halus blok">Aturan komoditas</a>
-
+  <section class="tf-section" aria-labelledby="terbaru-judul">
+    <div class="tf-section-title"><h2 id="terbaru-judul">Terbaru hari ini</h2><a class="tf-link" href="{{ PREFIX }}/transaksi">Riwayat →</a></div>
+    <div class="tf-stack">
+      {% for b in hari_ini_daftar %}{{ terbaru(b) }}
+      {% else %}<div class="kartu tf-empty">Belum ada penimbangan hari ini.</div>{% endfor %}
+    </div>
+  </section>
+  <a href="{{ PREFIX }}/aturan" class="tf-link">Aturan komoditas</a>
 {% endblock %}

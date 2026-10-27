@@ -29,6 +29,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    JSON,
     LargeBinary,
     Numeric,
     String,
@@ -44,6 +45,33 @@ from hmu_core import Armada, Brand, PackageSize, PackagingMaterial, RiceQualityS
 
 # Nama lama tetap tersedia untuk semua pemanggil Timbangan.
 TimbanganKendaraan = Armada
+
+
+class TimbanganSopir(Base):
+    """Satu ejaan utama per nama sopir; tiket menyimpan nama saat dicatat.
+
+    Kunci unik menahan duplikat saat dua petugas memasukkan nama serentak.
+    Tidak ada batas unik pada tiket: satu sopir tentu dapat datang berkali-kali.
+    """
+    __tablename__ = "timbangan_sopir"
+    __table_args__ = (UniqueConstraint("kunci_nama", name="uq_timbangan_sopir_kunci_nama"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    nama: Mapped[str] = mapped_column(String(100), nullable=False)
+    kunci_nama: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+class TimbanganSopirAlias(Base):
+    """Ejaan yang sudah dikonfirmasi pemilik menunjuk satu sopir utama."""
+    __tablename__ = "timbangan_sopir_alias"
+
+    kunci_nama: Mapped[str] = mapped_column(String(200), primary_key=True)
+    nama: Mapped[str] = mapped_column(String(100), nullable=False)
+    sopir_id: Mapped[int] = mapped_column(ForeignKey("timbangan_sopir.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False)
+
 
 # Numeric tanpa Decimal → aritmetika float konsisten di seluruh lapisan.
 KG = Numeric(14, 3, asdecimal=False)
@@ -370,6 +398,10 @@ class TimbanganTransaksi(Base, TimestampMixin):
     )
     # Salinan aturan yang dipakai (JSON) — butir b.
     aturan_snapshot: Mapped[str | None] = mapped_column(Text)
+    # Cuplikan muatan aktual PadiFlow saat selesai: kiriman, perintah,
+    # pelanggan dan ID item. Bukan salinan harga atau hasil timbang per pihak.
+    # NULL menjaga tiket lama apa adanya, tanpa mengarang alokasi pelanggan.
+    pengiriman_snapshot: Mapped[dict | None] = mapped_column(JSON(none_as_null=True))
 
     #: ⚠⚠ TIKET INI MEMBAWA BARANG TITIPAN, bukan barang yang dibeli — dan ini
     #: SATU-SATUNYA tempat faktanya hidup. Migrasi 0041 (2 Oktober 2026),
@@ -835,3 +867,19 @@ class TimbanganNomor(Base):
     tanggal: Mapped[date] = mapped_column(Date, primary_key=True)
     perangkat: Mapped[str] = mapped_column(String(8), primary_key=True)
     n: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class TimbanganKiriman(Base):
+    """Tanda terima kiriman formulir; ditulis satu transaksi dengan timbangnya.
+
+    Tidak menyimpan salinan isian. Sidik isi mencegah satu kunci dipakai
+    untuk dua pekerjaan; jawaban tetap dapat dibaca ulang sesudah balasan
+    HTTP hilang, tanpa mengulang audit, bobot, atau integrasi.
+    """
+    __tablename__ = "timbangan_kiriman"
+    kunci: Mapped[str] = mapped_column(String(36), primary_key=True)
+    akun_id: Mapped[int] = mapped_column(ForeignKey("timbangan_akun.id"), nullable=False)
+    jalur: Mapped[str] = mapped_column(String(255), nullable=False)
+    sidik: Mapped[str] = mapped_column(String(64), nullable=False)
+    jawaban: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

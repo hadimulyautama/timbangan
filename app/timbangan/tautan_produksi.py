@@ -1,9 +1,9 @@
 """Apakah sebuah tiket timbang sudah dipakai sistem penggilingan?
 
-**Hanya membaca.** Dua tabel yang dibaca di sini — `purchase_batches` dan
-`pk_purchase_batches` — dimiliki repo penggilingan; modul ini tak pernah
-menulis, mengunci, atau memigrasikannya. Kontrak kolomnya tertulis di
-`app/models.py`.
+**Hanya membaca.** Tabel batch, retur, dan pengiriman yang dibaca di sini
+dimiliki repo penggilingan; modul ini tak pernah
+menulis, mengunci, atau memigrasikannya. Kontrak batch tertulis di
+`app/models.py`; kontrak baca pengiriman ada di `pengiriman_tertaut`.
 
 Kenapa ini ada. Produksi menaut batch pembeliannya ke tiket lewat
 `timbangan_transaksi_id`. Selama timbangan tak pernah melihat tautan itu,
@@ -19,7 +19,7 @@ pekerjaan itu ada di aplikasi yang berbeda.
 """
 from __future__ import annotations
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 #: Satu kueri untuk dua tabel. Keunikan `timbangan_transaksi_id` berlaku PER
@@ -42,6 +42,32 @@ async def batch_tertaut(db: AsyncSession, trx_id: int | None) -> list[str]:
     return [b[0] or "(tanpa kode)" for b in baris]
 
 
+async def pengiriman_tertaut(db: AsyncSession, trx_id: int | None) -> list[str]:
+    """Perintah yang belum batal juga memegang tiket armada yang dipilih.
+
+    Kontrak baca Produksi: outgoing_records.kode (VARCHAR 20), status
+    (VARCHAR 20: perintah/dimuat/selesai/batal), timbangan_transaksi_id (INT).
+    Tabel ini tidak dibuat atau dimigrasikan Timbangan. Instalasi mandiri
+    boleh belum memilikinya; keberadaannya diperiksa tanpa menelan galat SQL
+    yang bisa membatalkan seluruh transaksi PostgreSQL.
+    """
+    if not trx_id or not await db.run_sync(
+        lambda sesi: inspect(sesi.connection()).has_table("outgoing_records")
+    ):
+        return []
+    if await db.run_sync(lambda sesi: inspect(sesi.connection()).has_table("kiriman_keluar")):
+        return list((await db.execute(text("""
+            SELECT o.kode FROM outgoing_records o
+            LEFT JOIN kiriman_keluar k ON k.id=o.kiriman_id
+            WHERE COALESCE(k.timbangan_transaksi_id,o.timbangan_transaksi_id)=:tid
+              AND o.status <> 'batal'
+        """), {"tid": trx_id})).scalars().all())
+    return list((await db.execute(text("""
+        SELECT kode FROM outgoing_records
+         WHERE timbangan_transaksi_id = :tid AND status <> 'batal'
+    """), {"tid": trx_id})).scalars().all())
+
+
 async def pastikan_bebas_tautan(db: AsyncSession, trx, *, tindakan: str) -> None:
     """Tolak `tindakan` bila tiket ini sudah dicatat produksi.
 
@@ -52,6 +78,7 @@ async def pastikan_bebas_tautan(db: AsyncSession, trx, *, tindakan: str) -> None
     from app.timbangan.service import LayananError
 
     kode = await batch_tertaut(db, getattr(trx, "id", None))
+    kode.extend(await pengiriman_tertaut(db, getattr(trx, "id", None)))
     if getattr(trx, "arah", None) == "RETUR_MASUK":
         # Retur yang sudah diterima menjadi sumber stok. Mengubah bobot atau
         # kemasannya sesudah itu akan membuat kedua aplikasi berselisih.

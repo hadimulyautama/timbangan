@@ -11,13 +11,16 @@ from zoneinfo import ZoneInfo
 
 import math
 from uuid import uuid4
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Form, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.timbangan import logic, service
+from app.timbangan import logic, service, kiriman, klien_produksi, sopir
+from app.timbangan import format as fmt
 from app.timbangan.db import get_db, hari_ini, sekarang
 from app.timbangan.models import (
     CARA_DUA_KALI,
@@ -26,7 +29,8 @@ from app.timbangan.models import (
     TimbanganAkun,
 )
 from app.timbangan.security import butuh_akun
-from app.timbangan.web import PREFIX, galat_db, redirect, render
+from app.timbangan import pengiriman
+from app.timbangan.web import ARAH_LABEL, PREFIX, galat_db, redirect, render
 
 router = APIRouter(prefix=PREFIX)
 
@@ -70,6 +74,14 @@ def _angka(teks: str | None, bawaan: float = 0.0) -> float:
     if not math.isfinite(n):
         return bawaan
     return n
+
+
+def _karung(teks, bawaan=0):
+    # Jangan potong pecahan menjadi integer atau menukar teks keliru dengan
+    # jumlah lama. Layanan menolak nilai negatif, pecahan, dan di luar batas.
+    if teks is None or not str(teks).strip():
+        return bawaan
+    return _angka(teks, -1)
 
 
 def _waktu_operator(teks: str | None) -> datetime | None:
@@ -234,6 +246,11 @@ async def acuan(
     }
 
 
+@router.get("/kiriman/sesi")
+async def sesi_kiriman(akun: TimbanganAkun = Depends(butuh_akun)):
+    return {"akun_id": akun.id}
+
+
 @router.get("/")
 async def beranda(
     request: Request,
@@ -241,7 +258,12 @@ async def beranda(
     db: AsyncSession = Depends(get_db),
 ):
     """Satu layar: apa yang sedang berjalan, dan apa yang bisa dimulai."""
-    terbuka = await service.tiket_terbuka(db)
+    jumlah = await service.jumlah_antrean(db)
+    kelompok = {
+        "truk": await service.halaman_antrean(db, "truk", batas=2),
+        "partai": await service.halaman_antrean(db, "partai", batas=1),
+    }
+    terbuka = kelompok["truk"] + kelompok["partai"]
     # ⚠ DIPERSEMPIT KE ORANGNYA SENDIRI SAMPAI 30 September 2026, dan
     # alasannya SUDAH TIDAK BERLAKU. Kalimat lama di sini berbunyi: "rinciannya
     # memang tidak boleh dibuka olehnya, jadi menampilkannya hanya menyodorkan
@@ -275,8 +297,11 @@ async def beranda(
     return render(
         request, "beranda.html",
         terbuka=terbuka,
+        kelompok=kelompok, jumlah_antrean=jumlah,
+        hari_lokal=hari_ini(),
+        NAMA_JENIS={j.kode: j.nama for j in await service.daftar_jenis(db, hanya_aktif=False)},
         hari_ini_daftar=hari,
-        menganggur={b.trx.id for b in await service.tiket_menganggur(db)},
+        menganggur=await service.id_menganggur_pada_halaman(db, terbuka),
         per_arah=per_arah,
         # Komoditas yang dibuka untuk JASA — dari kolom `boleh_jasa` di master,
         # bukan dari daftar di kode. Kosong berarti kartunya tak digambar.
@@ -356,7 +381,8 @@ async def form_timbang_pertama(
         # Saran nomor polisi + sopir terakhirnya. Ikut ke halaman supaya tetap
         # bekerja tanpa jaringan — pos timbang sering kehilangan sinyal, dan
         # saran yang butuh jaringan justru menghilang persis saat dibutuhkan.
-        kendaraan=await service.kendaraan_dikenal(db),
+        kendaraan=await service.kendaraan_pilihan(db),
+        sopir_pilihan=await sopir.daftar_pilihan(db),
         tara=tara,
         asal_tara=asal,
         sekarang=sekarang(),
@@ -423,7 +449,8 @@ async def form_jasa_masuk(
         # kalimat yang menyuruh memuat ulang. Pesanan jasa yang berjalan
         # sekaligus segelintir — daftarnya pendek dengan sendirinya.
         pesanan=await service.pesanan_jasa_semua_berjalan(db),
-        kendaraan=await service.kendaraan_dikenal(db),
+        kendaraan=await service.kendaraan_pilihan(db),
+        sopir_pilihan=await sopir.daftar_pilihan(db),
         tara=tara,
         asal_tara=asal,
         sekarang=sekarang(),
@@ -432,6 +459,7 @@ async def form_jasa_masuk(
 
 
 @router.post("/jasa/{jenis_kode}")
+@kiriman.terima_kiriman
 async def simpan_jasa_masuk(
     jenis_kode: str,
     request: Request,
@@ -459,6 +487,7 @@ async def simpan_jasa_masuk(
         return redirect("/", err=str(e))
 
     data = service.InputTimbang(
+        dibuat_offline=request.headers.get("x-timbangan-luring") == "1",
         kunci=kunci.strip() or None,
         arah=aturan.arah,
         jenis_kode=jenis_kode,
@@ -478,7 +507,7 @@ async def simpan_jasa_masuk(
         tara_lain_kg=_angka(tara_lain_kg),
         muatan=[service.InputMuatan(
             jenis_kode=jenis_kode,
-            jumlah_karung=int(_angka(jumlah_karung)),
+            jumlah_karung=_karung(jumlah_karung),
             tara_per_karung_kg=_angka(tara_per_karung_kg),
             berat_acuan_kg=_angka(berat_acuan_kg),
             nomor_acuan=nomor_acuan.strip() or None,
@@ -490,8 +519,7 @@ async def simpan_jasa_masuk(
     try:
         trx = await service.simpan_timbang_pertama(
             db, akun=akun, data=data,
-            ip=request.client.host if request.client else None,
-        )
+            ip=request.client.host if request.client else None, komit=not kiriman.aktif(request))
     except (service.LayananError, logic.ValidasiError) as e:
         return redirect(f"/jasa/{jenis_kode}", err=str(e))
     except DBAPIError as e:
@@ -501,6 +529,7 @@ async def simpan_jasa_masuk(
 
 
 @router.post("/timbang/{jenis_kode}")
+@kiriman.terima_kiriman
 async def simpan_timbang_pertama(
     jenis_kode: str,
     request: Request,
@@ -523,22 +552,23 @@ async def simpan_timbang_pertama(
 ):
     jenis_kode = jenis_kode.upper()
     muatan: list[service.InputMuatan] = []
-    if cara_timbang != CARA_SEKALI or jenis_kode != "BEBAS":
-        muatan = [service.InputMuatan(
-            jenis_kode=jenis_kode,
-            jumlah_karung=int(_angka(jumlah_karung)),
-            tara_per_karung_kg=_angka(tara_per_karung_kg),
-            berat_acuan_kg=_angka(berat_acuan_kg),
-            nomor_acuan=nomor_acuan.strip() or None,
-        )]
+    muatan = [service.InputMuatan(
+        jenis_kode=jenis_kode,
+        jumlah_karung=_karung(jumlah_karung),
+        tara_per_karung_kg=_angka(tara_per_karung_kg),
+        berat_acuan_kg=_angka(berat_acuan_kg),
+        nomor_acuan=nomor_acuan.strip() or None,
+    )]
 
     aturan = await service.aturan_untuk(db, jenis_kode)
     if aturan.arah in (logic.RETUR_MASUK, logic.RETUR_KELUAR, logic.KELUAR):
         for m in muatan:
-            m.jumlah_karung = 0
+            if aturan.arah == logic.KELUAR:
+                m.jumlah_karung = 0  # Pengiriman tetap mengikuti Produksi.
             m.tara_per_karung_kg = 0
 
     data = service.InputTimbang(
+        dibuat_offline=request.headers.get("x-timbangan-luring") == "1",
         # `kode` sengaja tak dikirim: server yang menerbitkannya,
         # atomik, saat menyimpan.
         kunci=kunci.strip() or None,
@@ -560,8 +590,7 @@ async def simpan_timbang_pertama(
     try:
         trx = await service.simpan_timbang_pertama(
             db, akun=akun, data=data,
-            ip=request.client.host if request.client else None,
-        )
+            ip=request.client.host if request.client else None, komit=not kiriman.aktif(request))
     except (service.LayananError, logic.ValidasiError) as e:
         return redirect(f"/timbang/{jenis_kode}", err=str(e))
     except DBAPIError as e:
@@ -626,6 +655,7 @@ async def form_partai_baru(
 
 
 @router.post("/partai/{jenis_kode}/baru")
+@kiriman.terima_kiriman
 async def buat_partai(
     jenis_kode: str,
     request: Request,
@@ -633,6 +663,7 @@ async def buat_partai(
     supplier_id: str = Form(""),
     pihak_nama: str = Form(""),
     berat_kg: list[str] = Form([]),
+    jumlah_karung: str = Form(""),
     aksi: str = Form("sementara"),
     akun: TimbanganAkun = Depends(butuh_akun),
     db: AsyncSession = Depends(get_db),
@@ -645,24 +676,27 @@ async def buat_partai(
 
     aturan = await service.aturan_untuk(db, jenis_kode)
     data = service.InputTimbang(
+        dibuat_offline=request.headers.get("x-timbangan-luring") == "1",
         kunci=kunci.strip() or None, arah=aturan.arah, jenis_kode=jenis_kode,
-        berat_kg=berat[0], cara_timbang=CARA_PARTAI,
+        berat_kg=berat[0], cara_timbang=CARA_PARTAI, waktu_operator=kiriman.waktu(request),
+        muatan=[service.InputMuatan(jenis_kode=jenis_kode, jumlah_karung=_karung(jumlah_karung))],
         supplier_id=int(supplier_id) if supplier_id.isdigit() else None,
         pihak_nama=pihak_nama.strip() or None,
         perangkat_kode=akun.perangkat_kode,
     )
     ip = request.client.host if request.client else None
     try:
-        trx = await service.simpan_timbang_pertama(db, akun=akun, data=data, ip=ip)
+        if aksi == "selesai":
+            service.periksa_jumlah_karung([service.InputMuatan(jenis_kode=jenis_kode, jumlah_karung=_karung(jumlah_karung))], wajib=True)
+        trx = await service.simpan_timbang_pertama(db, akun=akun, data=data, ip=ip, komit=not kiriman.aktif(request))
         if berat[1:]:
             trx = await service.tambah_penimbangan(
                 db, akun=akun, kode=trx.kode, berat=berat[1:],
                 # Kunci yang sama dengan formulirnya: kiriman ulang tak
                 # menambah karung yang sama untuk kedua kalinya.
-                kunci=(kunci.strip() or None), ip=ip,
-            )
+                kunci=(kunci.strip() or None), ip=ip, waktu_operator=kiriman.waktu(request), komit=not kiriman.aktif(request))
         if aksi == "selesai":
-            trx = await service.selesaikan_partai(db, akun=akun, kode=trx.kode, ip=ip)
+            trx = await service.selesaikan_partai(db, akun=akun, kode=trx.kode, ip=ip, waktu_operator=kiriman.waktu(request), komit=not kiriman.aktif(request), jumlah_karung=_karung(jumlah_karung))
     except (service.LayananError, logic.ValidasiError) as e:
         return redirect(f"/partai/{jenis_kode}/baru", err=str(e))
     except DBAPIError as e:
@@ -692,16 +726,18 @@ async def layar_partai(
         request, "partai.html",
         kunci=str(uuid4()),
         b=baris,
-        aturan=await service.aturan_untuk(db, baris.trx.jenis_kode),
+        aturan=service.aturan_dari_snapshot(baris.trx) or await service.aturan_untuk(db, baris.trx.jenis_kode),
         kembali=f"{PREFIX}/tiket",
     )
 
 
 @router.post("/partai/{transaksi_id:int}")
+@kiriman.terima_kiriman
 async def lanjut_partai(
     transaksi_id: int,
     request: Request,
     berat_kg: list[str] = Form([]),
+    jumlah_karung: str = Form(""),
     aksi: str = Form("sementara"),
     # Penanda kiriman: ketukan dobel atau kiriman ulang antrean luring tak
     # boleh menambah karung yang sama untuk kedua kalinya (temuan QA T-10).
@@ -715,15 +751,22 @@ async def lanjut_partai(
     kode, ip = baris.trx.kode, (request.client.host if request.client else None)
     berat = _daftar_berat(berat_kg)
     try:
+        if aksi == "selesai":
+            service.periksa_jumlah_karung([service.InputMuatan(jenis_kode=baris.trx.jenis_kode, jumlah_karung=_karung(jumlah_karung))], wajib=True)
+        if aksi != "selesai" and jumlah_karung.strip():
+            await service._pasang_muatan(db, baris.trx, [service.InputMuatan(
+                jenis_kode=baris.trx.jenis_kode, jumlah_karung=_karung(jumlah_karung))])
+            if not kiriman.aktif(request):
+                await db.commit()
         # Menutup tanpa menambah apa pun sah: barangnya sudah habis ditimbang
         # pada kunjungan sebelumnya.
         if berat:
             await service.tambah_penimbangan(db, akun=akun, kode=kode,
                                              berat=berat,
                                              kunci=(kunci.strip() or None),
-                                             ip=ip)
+                                             ip=ip, waktu_operator=kiriman.waktu(request), komit=not kiriman.aktif(request))
         if aksi == "selesai":
-            await service.selesaikan_partai(db, akun=akun, kode=kode, ip=ip)
+            await service.selesaikan_partai(db, akun=akun, kode=kode, ip=ip, waktu_operator=kiriman.waktu(request), komit=not kiriman.aktif(request), jumlah_karung=_karung(jumlah_karung))
     except (service.LayananError, logic.ValidasiError) as e:
         return redirect(f"/partai/{transaksi_id}", err=str(e))
     except DBAPIError as e:
@@ -769,13 +812,38 @@ async def hapus_penimbangan(
 @router.get("/tiket")
 async def daftar_tiket(
     request: Request,
+    tab: str = "truk",
+    q: str = "",
+    kegiatan: str = "",
+    halaman: int = 1,
     akun: TimbanganAkun = Depends(butuh_akun),
     db: AsyncSession = Depends(get_db),
 ):
+    jumlah = await service.jumlah_antrean(db)
+    tab = tab if tab in jumlah else "truk"
+    label_kegiatan = {**ARAH_LABEL,
+                      "JASA": "Barang masuk jasa · Titipan jasa giling"}
+    pilihan_kegiatan = await service.kegiatan_antrean(db)
+    q = q.strip()
+    jumlah_hasil = await service.hitung_antrean(db, tab, cari=q, kegiatan=kegiatan)
+    ukuran = 40
+    jumlah_halaman = max(1, math.ceil(jumlah_hasil / ukuran))
+    halaman = max(1, min(halaman, jumlah_halaman))
+    hasil = await service.halaman_antrean(
+        db, tab, batas=ukuran, offset=(halaman - 1) * ukuran, cari=q, kegiatan=kegiatan)
+
+    def alamat(**ganti):
+        nilai = {"tab": tab, "q": q, "kegiatan": kegiatan, "halaman": halaman, **ganti}
+        return f"{PREFIX}/tiket?{urlencode({k: v for k, v in nilai.items() if v})}"
+
     return render(
         request, "tiket.html",
-        terbuka=await service.tiket_terbuka(db),
-        menganggur={b.trx.id for b in await service.tiket_menganggur(db)},
+        jumlah_antrean=jumlah, jumlah_terbuka=sum(jumlah.values()),
+        tab=tab, q=q, kegiatan=kegiatan, hasil=hasil, jumlah_hasil=jumlah_hasil,
+        halaman=halaman, jumlah_halaman=jumlah_halaman, alamat=alamat,
+        pilihan_kegiatan=pilihan_kegiatan, label_kegiatan=label_kegiatan,
+        NAMA_JENIS={j.kode: j.nama for j in await service.daftar_jenis(db, hanya_aktif=False)},
+        menganggur=await service.id_menganggur_pada_halaman(db, hasil),
         kembali=f"{PREFIX}/",
     )
 
@@ -798,7 +866,7 @@ async def form_timbang_kedua(
     if baris.trx.partai:
         return redirect(f"/partai/{transaksi_id}")
 
-    aturan = await service.aturan_untuk(db, baris.trx.jenis_kode)
+    aturan = service.aturan_dari_snapshot(baris.trx) or await service.aturan_untuk(db, baris.trx.jenis_kode)
     # Sarannya dihitung DI SINI, bukan di timbang pertama seperti dulu.
     # Kolom karung sudah pindah ke layar ini, dan justru di sini sarannya
     # lebih tajam: pihaknya sudah diketahui, sehingga sampling khusus pihak
@@ -811,12 +879,12 @@ async def form_timbang_kedua(
     if baris.trx.arah == logic.KELUAR:
         try:
             from app.timbangan import klien_produksi
-            integrasi_muatan = await klien_produksi.muatan_pengiriman(transaksi_id)
-        except klien_produksi.ProduksiTakTersedia as e:
+            integrasi_muatan = await pengiriman.baca(db, transaksi_id)
+        except (klien_produksi.ProduksiTakTersedia, pengiriman.MuatanTidakSah, service.LayananError) as e:
             integrasi_error = str(e)
     return render(
         request, "timbang2.html",
-        b=baris, aturan=aturan, sekarang=sekarang(),
+        kunci=str(uuid4()), b=baris, aturan=aturan, sekarang=sekarang(),
         tara=tara, asal_tara=asal,
         integrasi_muatan=integrasi_muatan, integrasi_error=integrasi_error,
         boleh_koreksi=service.boleh_mengubah(baris.trx, akun)[0],
@@ -824,7 +892,82 @@ async def form_timbang_kedua(
     )
 
 
+@router.post("/tiket/{transaksi_id}/pratinjau")
+async def pratinjau_timbang_kedua(
+    transaksi_id: int,
+    berat_kg: str = Form(""),
+    jumlah_karung: str = Form(""),
+    tara_per_karung_kg: str = Form(""),
+    berat_acuan_kg: str = Form(""),
+    nomor_acuan: str = Form(""),
+    akun: TimbanganAkun = Depends(butuh_akun),
+    db: AsyncSession = Depends(get_db),
+):
+    """Baca saja: hitung dengan mesin resmi, tanpa menyentuh objek tiket.
+
+    Pemetaan isian mengikuti POST timbang kedua yang lama, termasuk kapan
+    isian kosong mempertahankan muatan tersimpan. Tidak membuka pemeriksaan,
+    menulis receipt/audit, menyinkronkan stok, atau memverifikasi Produksi.
+    """
+    def jawab(data, status=200):
+        return JSONResponse(data, status_code=status,
+                            headers={"Cache-Control": "no-store"})
+    b = await service.ambil_transaksi(db, transaksi_id)
+    if b is None:
+        return jawab({"tersedia": False, "pesan": "Tiket tidak ditemukan."}, 404)
+    t = b.trx
+    if (t.status_tiket != "TERBUKA" or t.status_transaksi != "AKTIF"
+            or t.partai or t.cara_timbang == CARA_SEKALI):
+        return jawab({"tersedia": False, "pesan": "Tiket ini tidak menunggu timbang kedua."}, 409)
+    try:
+        kedua = _angka(berat_kg)
+        if kedua <= 0:
+            raise service.LayananError("Berat timbang harus lebih dari 0 kg.")
+        aturan = service.aturan_dari_snapshot(t) or await service.aturan_untuk(db, t.jenis_kode)
+        muatan = service._baris_logic(t.muatan)
+        lama = t.muatan[0] if t.muatan else None
+        if t.arah == logic.KELUAR:
+            data = await pengiriman.baca(db, transaksi_id)
+            muatan = service._baris_logic(pengiriman.input_muatan(data))
+        elif t.arah in (logic.RETUR_MASUK, logic.RETUR_KELUAR):
+            muatan = [logic.BarisMuatan(
+                jenis_kode=t.jenis_kode, jumlah_karung=_karung(jumlah_karung, lama.jumlah_karung if lama else 0),
+                tara_per_karung_kg=0,
+                berat_acuan_kg=_angka(berat_acuan_kg, float(lama.berat_acuan_kg) if lama else 0),
+                nomor_acuan=nomor_acuan.strip() or (lama.nomor_acuan if lama else None),
+            )]
+        elif jumlah_karung or berat_acuan_kg:
+            muatan = [logic.BarisMuatan(
+                jenis_kode=t.jenis_kode,
+                jumlah_karung=_karung(jumlah_karung, lama.jumlah_karung if lama else 0),
+                tara_per_karung_kg=_angka(tara_per_karung_kg, float(lama.tara_per_karung_kg) if lama else 0),
+                berat_acuan_kg=_angka(berat_acuan_kg, float(lama.berat_acuan_kg) if lama else 0),
+                nomor_acuan=nomor_acuan.strip() or (lama.nomor_acuan if lama else None),
+            )]
+        service.periksa_jumlah_karung(muatan, wajib=True)
+        bermuatan, kosong = service._bermuatan_dan_kosong(t.arah, float(t.timbang1_kg), kedua)
+        hasil = logic.hitung(
+            aturan=aturan, berat_bermuatan_kg=bermuatan,
+            berat_kosong_kg=kosong, muatan=muatan,
+            tara_lain_kg=float(t.tara_lain_kg or 0),
+            kapasitas_kg=(await service.setelan.semua(db))["kapasitas_jembatan_kg"],
+        )
+    except (service.LayananError, logic.ValidasiError, pengiriman.MuatanTidakSah) as e:
+        return jawab({"tersedia": False, "pesan": str(e)}, 422)
+    except klien_produksi.ProduksiTakTersedia as e:
+        return jawab({"tersedia": False, "pesan": f"Muatan dari Produksi belum bisa dibaca: {e}"}, 422)
+    return jawab({"tersedia": True, "nilai": {
+        "Netto timbangan": fmt.kg(hasil.netto_timbangan_kg),
+        "Potongan tara": fmt.kg(hasil.total_tara_kg),
+        "Berat barang": fmt.kg(hasil.berat_barang_kg),
+        **({"Berat acuan": fmt.kg(hasil.berat_acuan_kg),
+            "Selisih dari dokumen": ("+" if hasil.selisih_kg > 0 else "") + fmt.kg(hasil.selisih_kg)}
+           if hasil.berat_acuan_kg > 0 else {}),
+    }, "pembanding": hasil.berat_acuan_kg > 0})
+
+
 @router.post("/tiket/{transaksi_id}")
+@kiriman.terima_kiriman
 async def simpan_timbang_kedua(
     transaksi_id: int,
     request: Request,
@@ -848,40 +991,21 @@ async def simpan_timbang_kedua(
     muatan = None
     # Simpan sementara hanya menyimpan bacaan jembatan; pelanggan dan muatan
     # boleh menyusul dari Produksi. Gangguan jaringan tidak boleh menahan ini.
+    data_muatan = None
     if baris.trx.arah == logic.KELUAR and aksi != "sementara":
         try:
-            from app.timbangan import klien_produksi
-            data_muatan = await klien_produksi.muatan_pengiriman(transaksi_id)
-        except klien_produksi.ProduksiTakTersedia as e:
-            return redirect(f"/tiket/{transaksi_id}", err=f"Muatan dari Produksi belum bisa dibaca: {e}")
-        muatan = []
-        for item in data_muatan.get("muatan", []):
-            kode = str(item.get("jenis_kode") or "").strip().upper()
-            aturan_muatan = await service.aturan_untuk(db, kode)
-            if aturan_muatan.arah not in (logic.MASUK, logic.KELUAR, logic.BEBAS):
-                return redirect(f"/tiket/{transaksi_id}", err=f"Aturan timbang untuk {item.get('nama') or kode} belum tersedia.")
-            if item.get('tara_per_karung_kg') is None:
-                return redirect(f"/tiket/{transaksi_id}", err="Tara kemasan dari Produksi belum tersedia. Perbarui Produksi dan periksa Pengaturan Tara kemasan.")
-            muatan.append(service.InputMuatan(
-                jenis_kode=kode,
-                berat_acuan_kg=float(item.get("berat_kg") or 0),
-                jumlah_karung=int(item.get("jumlah_karung") or 0),
-                tara_per_karung_kg=float(item['tara_per_karung_kg']),
-                catatan=item.get('nama'),
-                kualitas_id=item.get('kualitas_id'),
-                merek_produk_id=item.get('merek_produk_id'),
-                packaging_material_id=item.get('packaging_material_id'),
-                package_size_id=item.get('package_size_id'),
-            ))
-        if not muatan:
-            return redirect(f"/tiket/{transaksi_id}", err="Perintah Produksi belum memiliki muatan yang tercatat.")
+            data_muatan = await pengiriman.baca(db, transaksi_id)
+            muatan = pengiriman.input_muatan(data_muatan)
+        except (klien_produksi.ProduksiTakTersedia, pengiriman.MuatanTidakSah,
+                service.LayananError) as e:
+            return redirect(f"/tiket/{transaksi_id}", err=f"Muatan dari Produksi belum bisa dibaca (PadiFlow): {e}")
     elif baris.trx.arah in (logic.RETUR_MASUK, logic.RETUR_KELUAR):
         # Retur cukup dua bacaan jembatan, tanpa potongan kemasan dan tanpa
         # menunggu rincian Produksi. Abaikan tara dari halaman lama.
         lama = baris.trx.muatan[0] if baris.trx.muatan else None
         muatan = [service.InputMuatan(
             jenis_kode=baris.trx.jenis_kode,
-            jumlah_karung=lama.jumlah_karung if lama else 0,
+            jumlah_karung=_karung(jumlah_karung, lama.jumlah_karung if lama else 0),
             tara_per_karung_kg=0,
             berat_acuan_kg=_angka(berat_acuan_kg, float(lama.berat_acuan_kg) if lama else 0),
             nomor_acuan=nomor_acuan.strip() or (lama.nomor_acuan if lama else None),
@@ -890,9 +1014,7 @@ async def simpan_timbang_kedua(
         lama = baris.trx.muatan[0] if baris.trx.muatan else None
         muatan = [service.InputMuatan(
             jenis_kode=baris.trx.jenis_kode,
-            jumlah_karung=int(_angka(
-                jumlah_karung, lama.jumlah_karung if lama else 0
-            )),
+            jumlah_karung=_karung(jumlah_karung, lama.jumlah_karung if lama else 0),
             tara_per_karung_kg=_angka(
                 tara_per_karung_kg, float(lama.tara_per_karung_kg) if lama else 0
             ),
@@ -910,8 +1032,8 @@ async def simpan_timbang_kedua(
             muatan=muatan,
             catatan=catatan.strip() or None,
             selesaikan=aksi != "sementara",
-            ip=request.client.host if request.client else None,
-        )
+            pengiriman_snapshot=(data_muatan if data_muatan and data_muatan.get('sidik_sumber') else None),
+            ip=request.client.host if request.client else None, komit=not kiriman.aktif(request))
     except (service.LayananError, logic.ValidasiError) as e:
         return redirect(f"/tiket/{transaksi_id}", err=str(e))
     except DBAPIError as e:
@@ -925,6 +1047,7 @@ async def simpan_timbang_kedua(
             ok="Tersimpan. Tiket masih terbuka — selesaikan setelah muatan dan timbang kedua sudah pasti.",
         )
     if baris.trx.arah == logic.KELUAR:
+        await kiriman.sebelum_integrasi(request, db, f"{PREFIX}/transaksi/{trx.id}")
         if not akun.akun_id:
             return redirect(
                 f"/transaksi/{trx.id}",
@@ -933,6 +1056,8 @@ async def simpan_timbang_kedua(
         try:
             hasil = await klien_produksi.selesaikan_pengiriman(
                 transaksi_id, akun.akun_id,
+                **({'sidik_sumber': trx.pengiriman_snapshot['sidik_sumber']}
+                   if trx.pengiriman_snapshot and trx.pengiriman_snapshot.get('sidik_sumber') else {}),
             )
             if not hasil.get("selesai"):
                 return redirect(

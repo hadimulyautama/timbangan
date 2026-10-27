@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% from "macros.html" import lencana %}
+{% set trx = b.trx %}
+{% set hasil_tersimpan = trx.status_tiket == TIKET_SELESAI %}
+{% set final = trx.status_tiket == TIKET_SELESAI and trx.status_transaksi != 'VOID' %}
+{% block judul %}Detail tiket keluar · {{ trx.kode }}{% endblock %}
+{% block bar_judul %}Detail tiket keluar{% endblock %}
+{% block bar_sub %}{{ trx.kode }}{% endblock %}
+{% block lebar %}dk-bingkai{% endblock %}
+{% block isi %}
+<div class="dk" data-detail-keluar data-kode="{{ trx.kode }}">
+  <a class="dk-kembali" href="{{ kembali }}">← Kembali</a>
+  <section class="dk-hero" aria-label="Hasil satu perjalanan">
+    <div class="dk-sebar"><span class="lencana">{{ 'Batal' if trx.status_transaksi == 'VOID' else ('Selesai timbang' if final else ('Menunggu timbang kedua' if trx.status_tiket == TIKET_TERBUKA else 'Ditutup tanpa timbang kedua')) }}</span><span>Pengiriman · Keluar</span></div>
+    <h1>{{ trx.nomor_polisi or trx.kode }}</h1>
+    <p>{{ trx.kode }} · {{ trx.tanggal|tgl(true) }}</p>
+    <div class="dk-hasil"><span>Berat barang seluruh truk</span><strong>{{ trx.berat_barang_kg|kg if final and trx.berat_barang_kg is not none else 'Hasil akhir belum tersedia' }}</strong></div>
+    <div class="dk-sebar"><span>{{ lencana(trx.status_kontrol) if hasil_tersimpan else 'Kontrol akhir belum tersedia' }}</span><span>Kontrol TeraFlow · internal</span></div>
+    <p>{{ ringkasan_pengiriman(keluar.data) or b.pihak_tampil }} · satu perjalanan</p>
+  </section>
+  {% if trx.status_transaksi == 'VOID' %}<p class="pesan pesan--err">Dibatalkan. {{ trx.void_alasan }}</p>{% elif trx.status_tiket == TIKET_DITUTUP_PAKSA %}<p class="pesan pesan--err">Tiket ditutup tanpa timbang kedua. {{ trx.tutup_paksa_alasan }}</p>{% endif %}
+  <section class="kartu dk-integrasi" data-status-produksi="{{ keluar.produksi.kode }}">
+    <strong>{{ keluar.produksi.label }}</strong>
+    <p class="bantu">Status pengiriman tercatat terpisah dari hasil timbang dan pemeriksaan TeraFlow. Membuka halaman ini tidak menjalankan verifikasi.</p>
+    {% if keluar.produksi.perintah %}<p>{% for p in keluar.produksi.perintah %}<a href="{{ produksi_url }}/barang-keluar/{{ p.id }}">{{ p.kode }}</a> · {{ p.status }}{{ ' / ' if not loop.last }}{% endfor %}</p>{% endif %}
+    {% if tautan_produksi and not keluar.produksi.perintah %}<a href="{{ tautan_produksi }}">{{ 'Hubungkan ke barang keluar Produksi' if keluar.produksi.kode == 'belum' else 'Periksa pengiriman di PadiFlow' }} →</a>{% if not keluar.produksi.perintah %}<p class="bantu">Pilih transaksi yang sesuai pada form verifikasi Produksi; tidak ada tautan yang dibuat saat membuka halaman.</p>{% endif %}{% endif %}
+  </section>
+  <div class="dk-aksi tanpa-cetak">
+    {% if final %}<a href="{{ PREFIX }}/transaksi/{{ trx.id }}/cetak" class="tbl">Cetak bukti timbang{% if cetak %} · {{ cetak|length }}×{% endif %}</a>{% elif trx.status_tiket == TIKET_TERBUKA and trx.status_transaksi != 'VOID' %}<a href="{{ PREFIX }}/tiket/{{ trx.id }}" class="tbl">Lanjutkan timbang kedua</a>{% endif %}
+    <a href="{{ PREFIX }}/pilih/{{ trx.arah }}" class="tbl halus">Timbang berikutnya</a>
+    <a href="{{ PREFIX }}/tiket" class="tbl halus">Tiket Aktif{% if JUMLAH_TIKET %} · {{ JUMLAH_TIKET }}{% endif %}</a>
+  </div>
+  {% if pemeriksaan %}<section class="pesan {{ 'pesan--ok' if pemeriksaan.status == 'SELESAI' else 'pesan--err' }}"><b>Pemeriksaan TeraFlow {{ 'selesai' if pemeriksaan.status == 'SELESAI' else 'masih terbuka' }}.</b><p class="bantu">Penutupan pemeriksaan tidak mengubah status kontrol atau verifikasi PadiFlow.</p><a href="#pemeriksaan" data-buka-jejak>Lihat pemeriksaan →</a></section>{% endif %}
+  <nav class="dk-tabs" aria-label="Rincian tiket">
+    {% for id,label in [('muatan','Muatan pelanggan'),('perhitungan','Perhitungan'),('jejak','Jejak & dokumen')] %}<a id="dk-tab-{{ id }}" href="#dk-{{ id }}" data-dk-tab="{{ id }}">{{ label }}</a>{% endfor %}
+  </nav>
+  <div class="dk-kolom">
+    <div class="dk-utama">
+      <section id="dk-muatan" data-dk-panel="muatan" aria-labelledby="dk-tab-muatan">
+        <h2>Muatan per pelanggan</h2>
+        <p class="bantu">{% if keluar.sumber == 'snapshot' %}Snapshot tersimpan saat penyelesaian atau koreksi sah{% elif keluar.sumber == 'langsung' %}Muatan aktual langsung dari PadiFlow · belum menjadi snapshot final{% else %}Data historis yang tersedia · identitas sumber tidak ditambahkan{% endif %}{% if keluar.data and keluar.data.kiriman_id %} · Kiriman #{{ keluar.data.kiriman_id }}{% endif %}</p>
+        <p class="bantu">Jumlah dan subtotal berasal dari catatan muat PadiFlow. Jembatan menimbang seluruh truk. Selisih hasil timbang tidak dibagi ke pelanggan atau barang.</p>
+        {% if keluar.pesan %}<p class="pesan pesan--err">{{ keluar.pesan }}</p>{% endif %}
+        {% for p in keluar.kelompok %}
+        <details class="kartu dk-pelanggan kg-penerima" {{ 'open' if loop.first }}>
+          <summary><span><strong>{{ p.pelanggan }}</strong><small>{% for kode in p.baris|map(attribute='kode_perintah')|unique %}{{ kode or 'Kode perintah belum tercatat' }}{{ ' · ' if not loop.last }}{% endfor %} · {{ p.baris|length }} baris barang{% if p.pelanggan_id %} · Pelanggan #{{ p.pelanggan_id }}{% endif %}</small></span><b>{{ p.subtotal|angka(3) }} kg acuan</b></summary>
+          {% for m in p.baris %}<article class="dk-barang kg-barang">
+            <h3>{{ m.nama or NAMA_JENIS.get(m.jenis_kode,m.jenis_kode) }}</h3>
+            <div class="dk-sebar"><span>{{ m.jumlah }} {{ m.satuan or 'satuan belum tercatat' }}</span><b>{{ m.berat_kg|angka(3) }} kg muatan aktual</b></div>
+            <p class="bantu">{{ m.kode_perintah or 'Kode perintah belum tercatat' }}{% if m.perintah_id %} · Perintah #{{ m.perintah_id }}{% endif %}{% if m.outgoing_item_id %} · Item #{{ m.outgoing_item_id }}{% endif %}</p>
+            <div class="dk-sebar bantu"><span>{{ m.jumlah_karung }} karung fisik</span><span>{{ m.tara_per_karung_kg|angka(4) }} kg tara per karung</span></div>
+            {% if m.packaging_material_id or m.package_size_id or m.kualitas_id or m.merek_produk_id %}<details class="dk-sumber"><summary>Identitas barang sumber</summary><p class="bantu">Komoditas {{ m.jenis_kode }}{% if m.kualitas_id %} · Mutu #{{ m.kualitas_id }}{% endif %}{% if m.merek_produk_id %} · Merek #{{ m.merek_produk_id }}{% endif %}{% if m.packaging_material_id %} · Kemasan #{{ m.packaging_material_id }}{% endif %}{% if m.package_size_id %} · Ukuran #{{ m.package_size_id }}{% endif %}</p></details>{% endif %}
+          </article>{% endfor %}
+          <div class="baris total"><span>Subtotal catatan muat</span><b>{{ p.subtotal|angka(3) }} kg</b></div>
+        </details>
+        {% else %}
+        <section class="kartu"><p class="bantu">{{ PIHAK_LABEL.get(trx.arah, 'Pihak') }}</p><h3>{{ b.pihak_tampil }}</h3>
+          {% for m in trx.muatan %}<article class="dk-barang"><h3>{{ NAMA_JENIS.get(m.jenis_kode,m.jenis_kode) }}</h3><p>{{ m.nomor_acuan or 'Dokumen tanpa nomor' }}</p><div class="baris"><span>Acuan historis</span><b>{{ m.berat_acuan_kg|kg if m.berat_acuan_kg is not none else 'Belum tersedia' }}</b></div><p class="bantu">{{ m.jumlah_karung }} karung · {{ m.tara_per_karung_kg|angka(4) }} kg tara per karung</p>{% if m.catatan %}<p>{{ m.catatan }}</p>{% endif %}</article>{% else %}<p>Rincian pelanggan dan muatan belum tersedia.</p>{% endfor %}
+        </section>{% endfor %}
+        {% if keluar.total_acuan is not none %}<section class="kartu"><div class="baris total"><span>Total acuan seluruh pelanggan</span><b>{{ keluar.total_acuan|angka(3) }} kg</b></div><p class="bantu">Acuan muatan satu perjalanan, bukan hasil timbang terpisah per pelanggan.</p></section>{% endif %}
+      </section>
+      <section id="dk-perhitungan" data-dk-panel="perhitungan" aria-labelledby="dk-tab-perhitungan">
+        <h2>Perhitungan satu perjalanan</h2>
+        <section class="kartu">
+          <div class="baris"><span>Timbang pertama · truk kosong sebelum muat</span><b>{{ trx.timbang1_kg|kg }}</b></div><p class="bantu">{{ trx.timbang1_waktu|tgl_jam }}</p>
+          <div class="baris"><span>Timbang kedua · truk bermuatan setelah muat</span><b>{{ trx.timbang2_kg|kg if trx.timbang2_kg is not none else 'Belum tersedia' }}</b></div><p class="bantu">{{ trx.timbang2_waktu|tgl_jam }}</p>
+          {% if hasil_tersimpan %}
+          {% if trx.status_transaksi == 'VOID' %}<p class="pesan pesan--err">Nilai historis sebelum pembatalan · bukan bukti timbang yang sah.</p>{% endif %}
+          {% for label,n in [('Berat truk bermuatan',trx.berat_bermuatan_kg),('Berat truk kosong',trx.berat_kosong_kg),('Netto jembatan timbang',trx.netto_timbangan_kg),('Total tara karung',keluar.tara_karung),('Tara lain',trx.tara_lain_kg),('Total tara seluruh pengurang',trx.total_tara_kg),('Berat barang',trx.berat_barang_kg),('Total acuan muatan',keluar.acuan)] %}<div class="baris {{ 'total' if label == 'Berat barang' }}"><span>{{ label }}</span><b>{{ n|kg(2 if 'tara' in label.lower() else 0) if n is not none else 'Belum tersedia' }}</b></div>{% endfor %}
+          {% if trx.status_kontrol != 'TANPA_KONTROL' and trx.selisih_kg is not none %}<div class="baris"><span>Selisih seluruh truk</span><b>{{ trx.selisih_kg|kg_tanda }} · {{ trx.selisih_persen|persen }}</b></div>{% else %}<p class="bantu">Tanpa pembanding; selisih belum tersedia.</p>{% endif %}
+          {% if trx.status_kontrol != 'TANPA_KONTROL' %}<div class="baris"><span>Batas wajar tersimpan</span><b>{{ trx.batas_bawah_kg|angka(2) if trx.batas_bawah_kg is not none else 'bebas' }} … {{ trx.batas_atas_kg|angka(2) if trx.batas_atas_kg is not none else 'bebas' }} kg</b></div>{% endif %}
+          <div class="baris"><span>Kontrol TeraFlow</span>{{ lencana(trx.status_kontrol) }}</div>
+          {% else %}<p class="bantu">Hasil akhir belum tersedia. Bacaan sementara tidak menyelesaikan tiket.</p>{% endif %}
+        </section>
+        <section class="kartu"><h3>Tara setiap barang / kemasan</h3>{% for m in trx.muatan %}<div class="dk-barang"><b>{{ NAMA_JENIS.get(m.jenis_kode,m.jenis_kode) }} · {{ m.nomor_acuan or 'Tanpa nomor dokumen' }}</b><p>{{ m.jumlah_karung }} karung × {{ m.tara_per_karung_kg|angka(4) }} kg = {{ (m.jumlah_karung * m.tara_per_karung_kg)|angka(3) }} kg</p>{% if m.catatan %}<p class="bantu">{{ m.catatan }}</p>{% endif %}</div>{% else %}<p>Belum ada rincian tara tersimpan.</p>{% endfor %}<p class="bantu">Hasil resmi dibaca dari tiket tersimpan. Total tara sudah termasuk tara lain; tidak dipotong dua kali.</p></section>
+      </section>
+      <section id="dk-jejak" data-dk-panel="jejak" aria-labelledby="dk-tab-jejak">
+        <h2>Jejak & dokumen</h2>
+        <section class="kartu"><h3>Identitas perjalanan</h3>
+        {% for label,n in [('Tiket',trx.kode),('Nomor polisi',trx.nomor_polisi),('Sopir',trx.nama_sopir),('Perangkat',trx.perangkat_kode),('Jumlah revisi',trx.jumlah_revisi)] %}<div class="baris"><span>{{ label }}</span><b>{{ n if n is not none else 'Belum tercatat' }}</b></div>{% endfor %}
+        <p>Timbang pertama · {{ trx.timbang1_waktu|tgl_jam }} · {{ keluar.orang.get(trx.timbang1_petugas_id,'Petugas belum tercatat') }}</p>
+        <p>Timbang kedua · {{ trx.timbang2_waktu|tgl_jam }} · {{ keluar.orang.get(trx.timbang2_petugas_id,'Petugas belum tercatat') }}</p>
+        <h3>Catatan</h3><p class="dk-catatan">{{ trx.catatan or 'Tidak ada catatan.' }}</p>
+        {% if akun.is_super %}<a href="{{ PREFIX }}/audit">Buka jejak audit →</a>{% endif %}</section>
+        {% include "rincian_pemeriksaan.html" %}
+        {% if pemeriksaan and pemeriksaan.status == 'SELESAI' %}<section class="kartu"><h3>Langkah pemeriksaan tercatat</h3>{% for nama,label in [('langkah_ulang_timbang','Timbang ulang'),('langkah_hitung_karung','Hitung ulang karung'),('langkah_periksa_tara','Periksa tara karung'),('langkah_periksa_dokumen','Periksa dokumen'),('langkah_periksa_muatan','Periksa muatan'),('langkah_lapor','Laporkan')] %}<div class="baris"><span>{{ label }}</span><b>{{ pemeriksaan[nama] or 'Tidak diisi' }}</b></div>{% endfor %}<p class="bantu">Ditutup oleh {{ keluar.orang.get(pemeriksaan.ditutup_oleh_id,'Petugas belum tercatat') }} · {{ pemeriksaan.ditutup_pada|tgl_jam }}</p></section>{% endif %}
+        <section class="kartu"><h3>Riwayat cetak</h3>{% for c in cetak %}<article class="dk-barang"><b>Cetak {{ c.urutan }} · {{ c.format }} · revisi {{ c.revisi }}</b><p>{{ c.waktu|tgl_jam }} · {{ keluar.orang.get(c.oleh_id,'Petugas belum tercatat') }}</p><p>{{ c.alasan or 'Cetak pertama' }}</p></article>{% else %}<p>Belum ada catatan cetak.</p>{% endfor %}<p class="bantu">Pratinjau dokumen tidak menyatakan printer berhasil mencetak.</p></section>
+      </section>
+    </div>
+    <aside class="kartu dk-ringkas"><h2>Ringkasan perjalanan</h2><div class="baris"><span>Sopir</span><b>{{ trx.nama_sopir or '—' }}</b></div><div class="baris"><span>Nomor polisi</span><b>{{ trx.nomor_polisi or '—' }}</b></div><p>Timbang pertama<br><b>{{ trx.timbang1_waktu|tgl_jam }}</b><br>{{ keluar.orang.get(trx.timbang1_petugas_id,'Petugas belum tercatat') }}</p><p>Timbang kedua<br><b>{{ trx.timbang2_waktu|tgl_jam }}</b><br>{{ keluar.orang.get(trx.timbang2_petugas_id,'Petugas belum tercatat') }}</p><p class="bantu">Snapshot muatan tersimpan bersama tiket. Membuka halaman tidak mengganti data historis.</p></aside>
+  </div>
+  <details class="dk-lanjutan tanpa-cetak"><summary>Tindakan lain</summary>{% include "rincian_tindakan.html" %}</details>
+</div>
+{% endblock %}
+{% block skrip %}<script src="{{ PREFIX }}/static/rincian-keluar.js?v={{ VERSI }}" defer></script>{% endblock %}

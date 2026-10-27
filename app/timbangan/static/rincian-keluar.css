@@ -1,0 +1,58 @@
+/* Detail keluar: satu hasil perjalanan dengan rincian muatan per pelanggan. */
+body.padiflow-ui .bingkai.dk-bingkai {max-width:1320px;width:100%;min-width:0}
+.dk {display:grid;gap:18px;min-width:0;color:var(--pd-ink)}
+.dk *, .dk *::before,.dk *::after {box-sizing:border-box}
+.dk :is(p,h1,h2,h3) {margin:0}
+.dk p+p,.dk h3+p {margin-top:8px}
+.dk p {line-height:1.55}
+.dk :is(h2,h3) {font-size:17px;line-height:1.4}
+.dk h1 {font-size:clamp(26px,3vw,38px);line-height:1.2}
+.dk :is(a,span,b,strong,small,p,h1,h2,h3) {overflow-wrap:anywhere;min-width:0}
+.dk :is(input,textarea,select) {max-width:100%;min-width:0}
+.dk .kartu {margin:0;padding:20px;border:1px solid var(--pd-line);border-radius:16px;background:var(--pd-sheet);min-width:0}
+.dk-hero {background:var(--tf-active);border:1px solid var(--pd-line);border-radius:18px;padding:24px;display:grid;gap:14px}
+.dk-sebar {display:flex;justify-content:space-between;gap:14px;align-items:center;flex-wrap:wrap}
+.dk-hasil {display:grid;gap:6px}
+.dk-hasil>strong {font-size:clamp(24px,3.5vw,38px);line-height:1.3}
+.dk-hasil>span,.dk small,.dk .bantu {color:var(--pd-muted)}
+.dk-integrasi {display:grid;gap:8px;border-left:4px solid var(--tf-accent)!important}
+.dk-aksi {display:flex;gap:10px;flex-wrap:wrap}
+.dk-aksi .tbl {min-height:44px;flex:1;text-align:center;white-space:normal;font-size:14px;line-height:1.4}
+.dk-tabs {display:flex;flex-wrap:wrap;gap:8px;border-bottom:1px solid var(--pd-line);padding-bottom:12px}
+.dk-tabs a {display:flex;align-items:center;justify-content:center;min-height:44px;padding:10px 14px;border:1px solid var(--pd-line);border-radius:9px;color:var(--pd-ink);text-decoration:none;background:var(--pd-sheet);font-size:14px}
+.dk-tabs a[aria-selected=true] {border-color:var(--tf-accent);background:var(--tf-active);color:var(--tf-accent)}
+.dk-kolom {display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:24px;align-items:start}
+.dk-utama {min-width:0}
+.dk [data-dk-panel] {display:grid;gap:16px;min-width:0;scroll-margin-top:100px}
+.dk [hidden] {display:none!important}
+.dk-pelanggan>summary {display:flex;align-items:flex-start;gap:14px;cursor:pointer;min-height:44px}
+.dk-pelanggan>summary:before {content:'▸';color:var(--tf-accent)}
+.dk-pelanggan[open]>summary:before {content:'▾'}
+.dk-pelanggan>summary>span {flex:1}
+.dk-pelanggan>summary>b {font-size:14px;text-align:right;max-width:40%}
+.dk-pelanggan small {display:block;font-size:12px;line-height:1.5;margin-top:6px}
+.dk .dk-barang {padding:18px 0;border-top:1px solid var(--pd-line);display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
+.dk-pelanggan[open]>summary {padding-bottom:18px}
+.dk .baris {gap:14px;padding:10px 0;align-items:flex-start;flex-wrap:wrap}
+.dk .baris>b {font-family:inherit;max-width:100%;text-align:right}
+.dk .baris>span {flex:1;min-width:100px}
+.dk .baris.total {border-top:1px solid var(--pd-line)}
+.dk-ringkas {display:grid;gap:12px}
+.dk-ringkas h2 {font-size:17px}
+.dk-sumber summary {cursor:pointer;min-height:44px;display:flex;align-items:center;font-size:13px;color:var(--tf-accent)}
+.dk-catatan {white-space:pre-wrap}
+.dk-lanjutan {display:grid;gap:12px}
+.dk-lanjutan>summary {cursor:pointer;min-height:44px;padding:12px 0;color:var(--tf-accent)}
+.dk-lanjutan>.tbl,.dk-lanjutan>.kartu {margin-top:12px}
+.dk #pemeriksaan {scroll-margin-top:110px}
+@media(max-width:1100px) {.dk-kolom {grid-template-columns:minmax(0,1fr)}}
+@media(max-width:599px) {
+ .dk {gap:14px}.dk .kartu,.dk-hero {padding:16px}.dk-kolom {gap:16px}
+ .dk-aksi .tbl {flex-basis:30%;font-size:13px;padding:10px 8px}
+ .dk-tabs {gap:6px}.dk-tabs a {padding:10px;font-size:13px}
+ .dk-pelanggan>summary {gap:8px}.dk-pelanggan>summary>b {max-width:35%}
+ .dk .baris {font-size:14px}.dk-barang .dk-sebar {font-size:14px}
+}
+@media print {.dk [data-dk-panel][hidden] {display:grid!important}.dk-tabs {display:none}.dk-kolom {display:block}}
+
+@media(max-width:359px) {.dk-aksi {display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.dk-aksi>a:first-child {grid-column:1/-1}}

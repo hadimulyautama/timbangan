@@ -1,0 +1,37 @@
+{# Kartu tampilan saja. Semua tujuan tetap formulir/rincian transaksi lama. #}
+{% from "macros.html" import lencana %}
+{% macro kegiatan(trx) %}{{ 'Barang masuk jasa · Titipan jasa giling' if trx.jasa else ARAH_LABEL.get(trx.arah, trx.arah|lower) }}{% endmacro %}
+{% macro bobot(nilai) -%}{{ (nilai|angka(3)).rstrip('0').rstrip(',') }} kg{%- endmacro %}
+{% macro kartu_tiket(b) %}
+<a href="{{ PREFIX }}/{{ 'partai' if b.trx.partai else 'tiket' }}/{{ b.trx.id }}" class="tf-ticket">
+  <div class="tf-ticket-head"><div class="tf-ticket-identity">
+    <div class="tf-ticket-name">{{ b.trx.kode if b.trx.partai else (b.trx.nomor_polisi or b.trx.kode) }}</div>
+    <div class="tf-party">{{ b.pihak_tampil }}</div>
+  </div>
+  {% if b.trx.partai %}<span class="lencana lencana--netral">Partai</span>
+  {% elif b.trx.id in menganggur %}<span class="lencana lencana--hati">Lama</span>
+  {% else %}<span class="lencana lencana--netral">Tahap 2</span>{% endif %}</div>
+  <div class="tf-sub">{{ NAMA_JENIS.get(b.trx.jenis_kode, b.trx.jenis_kode) }} · {{ kegiatan(b.trx) }}</div>
+  {% if b.trx.partai %}<div class="tf-sub">{{ b.trx.penimbangan|length }} kali timbang · {{ bobot(b.trx.timbang1_kg or 0) }} sementara</div>{% endif %}
+  <div class="tf-sub">Timbang pertama · sejak {{ (b.trx.timbang1_waktu or b.trx.timbang1_waktu_sistem or b.trx.created_at)|tgl_jam }}</div>
+  <div class="tf-ticket-foot"><span>{{ b.trx.kode }}{% if b.trx.partai %} · Belum ditutup{% endif %}</span><strong>{{ 'Lanjutkan partai' if b.trx.partai else 'Timbang kedua' }} →</strong></div>
+</a>
+{% endmacro %}
+{% macro terbaru(b) %}
+<a href="{{ PREFIX }}/transaksi/{{ b.trx.id }}" class="tf-ticket">
+  <div class="tf-ticket-head"><div class="tf-ticket-identity">
+    <div class="tf-ticket-name">{{ b.trx.nomor_polisi or b.trx.kode }}</div>
+    <div class="tf-party">{{ b.pihak_tampil }}</div>
+  </div><div class="tf-status">
+    {% if not b.trx.selesai %}<span class="lencana lencana--netral">{{ 'Partai berjalan' if b.trx.partai else 'Menunggu timbang kedua' }}</span>
+    {% elif b.trx.status_tiket == TIKET_DITUTUP_PAKSA %}<span class="lencana lencana--hati">Ditutup paksa</span>
+    {% else %}<span class="lencana lencana--netral">Timbang selesai</span>{{ lencana(b.trx.status_kontrol) }}{% endif %}
+  </div></div>
+  <div class="tf-sub">{{ NAMA_JENIS.get(b.trx.jenis_kode, b.trx.jenis_kode) }} · {{ kegiatan(b.trx) }} · {{ b.trx.tanggal|tgl(true) }} · {{ (b.trx.timbang2_waktu or b.trx.timbang1_waktu)|jam }}</div>
+  <div class="tf-ticket-foot"><span>{{ b.trx.kode }}</span><strong>
+    {% if not b.trx.selesai %}{{ (bobot(b.trx.timbang1_kg or 0) ~ ' sementara') if b.trx.partai else 'Berat barang belum tersedia' }}
+    {% elif b.trx.berat_barang_kg is not none %}{{ bobot(b.trx.berat_barang_kg) }}
+    {% else %}Berat barang belum tersedia{% endif %}
+  </strong><span>{{ 'Detail & cetak' if b.trx.status_tiket == TIKET_SELESAI else 'Detail' }} →</span></div>
+</a>
+{% endmacro %}

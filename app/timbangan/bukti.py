@@ -52,7 +52,11 @@ def baris_angka(trx, arah_masuk: bool) -> list[Baris]:
             f"{fmt.angka(trx.berat_kosong_kg)} kg",
             fmt.jam(trx.timbang2_waktu if arah_masuk else trx.timbang1_waktu)))
     b.append(Baris("Netto timbangan", f"{fmt.angka(trx.netto_timbangan_kg)} kg"))
-    if trx.jumlah_karung:
+    if trx.jumlah_karung and getattr(trx, 'pengiriman_snapshot', None):
+        from decimal import Decimal
+        kemasan = Decimal(str(trx.total_tara_kg or 0)) - Decimal(str(trx.tara_lain_kg or 0))
+        b.append(Baris(f"Tara kemasan {trx.jumlah_karung} karung", f"- {fmt.angka(kemasan, 3)} kg"))
+    elif trx.jumlah_karung:
         per = float(trx.total_tara_kg or 0) / trx.jumlah_karung
         b.append(Baris(
             f"Tara karung  {trx.jumlah_karung} × {fmt.angka(per, 3)} kg",

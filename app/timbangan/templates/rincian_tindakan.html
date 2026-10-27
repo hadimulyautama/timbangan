@@ -1,0 +1,64 @@
+    {% if boleh_ubah and trx.status_transaksi != 'VOID' %}
+      <a href="{{ PREFIX }}/transaksi/{{ trx.id }}/koreksi" class="tbl halus blok">
+        Koreksi
+      </a>
+    {% elif sebab_terkunci %}
+      <div class="bantu">{{ sebab_terkunci }}</div>
+    {% endif %}
+
+    {% if boleh_batal and trx.status_transaksi != 'VOID' %}
+      {# Kata yang dipakai mengikuti KEADAAN tiketnya, bukan peran orangnya.
+         Tiket yang belum ditimbang kedua belum punya netto dan belum masuk
+         pembukuan mana pun — yang dibatalkan cuma niat menimbang, dan
+         "Batalkan transaksi" terdengar jauh lebih berat daripada yang
+         sebenarnya terjadi. #}
+      <details class="kartu">
+        <summary style="cursor:pointer;font-weight:700;font-size:14px">
+          {{ "Hapus tiket ini" if trx.status_tiket == 'TERBUKA'
+             else "Batalkan transaksi" }}
+        </summary>
+        <form method="post" action="{{ PREFIX }}/transaksi/{{ trx.id }}/batal"
+              style="margin-top:12px;display:flex;flex-direction:column;gap:10px">
+          <div class="grup">
+            <label class="lbl" for="alasan-batal">Alasan pembatalan</label>
+            <textarea class="fld" id="alasan-batal" name="alasan" rows="2" required></textarea>
+          </div>
+          <button type="submit" class="tbl bahaya">Batalkan</button>
+          <div class="bantu">
+            Data tidak dihapus. Transaksi ditandai batal, tetap tertera di
+            catatan, dan tidak dihitung dalam ringkasan.
+          </div>
+        </form>
+      </details>
+    {% endif %}
+
+    {% if akun.is_super %}
+      {# Satu-satunya tindakan yang tidak meninggalkan barisnya. Karena itu
+         terbatas pada Super Admin, terkunci di balik nomor transaksi yang
+         harus diketik, dan tetap menuliskan salinan penuh ke jejak audit. #}
+      <details class="kartu">
+        <summary style="cursor:pointer;font-weight:700;font-size:14px">
+          Hapus permanen
+        </summary>
+        <div class="bantu" style="margin-top:10px">
+          Berbeda dari membatalkan: barisnya hilang dari catatan sama sekali.
+          Jejak auditnya tetap ada beserta salinan penuh angkanya dan alasan
+          yang Anda tulis. Untuk truk yang batal bongkar, pakai
+          <b>Batalkan</b> — bukan ini.
+        </div>
+        <form method="post" action="{{ PREFIX }}/transaksi/{{ trx.id }}/hapus"
+              style="margin-top:12px;display:flex;flex-direction:column;gap:10px">
+          <div class="grup">
+            <label class="lbl" for="alasan-hapus">Alasan penghapusan</label>
+            <textarea class="fld" id="alasan-hapus" name="alasan" rows="2" required></textarea>
+          </div>
+          <div class="grup">
+            <label class="lbl" for="kode-hapus">Nomor transaksi</label>
+            <input class="fld" id="kode-hapus" name="ketik_kode" required autocomplete="off"
+                   autocapitalize="characters">
+            <div class="bantu">Ketik persis: {{ trx.kode }}</div>
+          </div>
+          <button type="submit" class="tbl bahaya">Hapus permanen</button>
+        </form>
+      </details>
+    {% endif %}

@@ -13,8 +13,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import (BigInteger, Boolean, DateTime, ForeignKey, Index,
-                        Integer, Numeric, String, Text, text)
+from sqlalchemy import (BigInteger, Boolean, DateTime, ForeignKey, Index, JSON,
+                        Integer, Numeric, String, Text, UniqueConstraint, text)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from hmu_core.base import Base, TimestampMixin
@@ -69,10 +69,17 @@ class Warehouse(Base, TimestampMixin):
     """Gudang 1 (Selepan, tumpuk PK maks 30t) & Gudang 2 (Penyosohan, maks 60t)."""
 
     __tablename__ = "warehouses"
+    __table_args__ = (UniqueConstraint("kode_fungsi", name="uq_warehouses_kode_fungsi"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    # Identitas proses tidak berubah ketika nama gudang diganti.
+    kode_fungsi: Mapped[str | None] = mapped_column(String(20))
     nama_gudang: Mapped[str] = mapped_column(String(100), nullable=False)
     alamat: Mapped[str | None] = mapped_column(Text)
+    latitude: Mapped[float | None] = mapped_column(Numeric(10, 7))
+    longitude: Mapped[float | None] = mapped_column(Numeric(10, 7))
+    aktif: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False,
+                                        server_default=text("true"))
     kapasitas_tumpuk_ton: Mapped[float | None] = mapped_column(Numeric(10, 2))
     kapasitas_tumpuk_pk_ton: Mapped[float | None] = mapped_column(Numeric(10, 2))
 
@@ -178,6 +185,10 @@ class Silo(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(String(20), default="kosong")
     # Jenis bahan (mis. gabah, pk, beras, broken, menir, reject, bekatul).
     jenis_isi: Mapped[str] = mapped_column(String(20), nullable=False, default="pk")
+    # Filter komoditas yang diizinkan; null berarti pakai kebijakan bawaan gudang.
+    komoditas_diizinkan: Mapped[list[str] | None] = mapped_column(JSON)
+    # False mengarsipkan silo kosong tanpa memutus riwayat yang menunjuk kepadanya.
+    aktif: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=text("true"))
 
     warehouse: Mapped[Warehouse] = relationship(back_populates="silos")
 
@@ -191,6 +202,7 @@ class Dryer(Base, TimestampMixin):
     warehouse_id: Mapped[int] = mapped_column(ForeignKey("warehouses.id"), nullable=False)
     nama: Mapped[str] = mapped_column(String(50), nullable=False)
     kapasitas_kg: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    target_kadar_air: Mapped[float | None] = mapped_column(Numeric(5, 2))
     # aktif / rusak / maintenance
     status: Mapped[str] = mapped_column(String(20), default="aktif")
 

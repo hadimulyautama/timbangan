@@ -1,36 +1,40 @@
 {% extends "base.html" %}
-{% from "macros.html" import judul_truk %}
-{% block judul %}Tiket terbuka{% endblock %}
-{% block bar_judul %}Tiket terbuka{% endblock %}
-{% block bar_sub %}{{ terbuka|length }} tiket belum ditutup{% endblock %}
-
+{% from "tiket_kartu.html" import kartu_tiket with context %}
+{% block segar_otomatis %}data-segar-otomatis="1"{% endblock %}
+{% block judul %}Tiket Aktif{% endblock %}
+{% block bar_judul %}Tiket Aktif{% endblock %}
+{% block bar_sub %}{{ jumlah_terbuka }} tiket belum ditutup{% endblock %}
 {% block isi %}
-  {% for b in terbuka %}
-    <a href="{{ PREFIX }}/tiket/{{ b.trx.id }}" class="pilihan">
-      <div class="pilihan__isi">
-        {{ judul_truk(b) }}
-        <div class="pilihan__ket">
-          {{ NAMA_JENIS.get(b.trx.jenis_kode, b.trx.jenis_kode) }} ·
-          {% if b.trx.partai %}
-            {{ b.trx.penimbangan|length }} kali timbang ·
-            {{ '%g'|format(b.trx.timbang1_kg or 0) }} kg sementara ·
-          {% else %}
-            {{ ARAH_LABEL.get(b.trx.arah, b.trx.arah|lower) }} ·
-          {% endif %}
-          sejak {{ b.trx.timbang1_waktu|tgl_jam }}
-        </div>
-      </div>
-      {# Partai kecil TIDAK ditandai "Lama": kedatangannya memang bertahap,
-         kadang lintas hari, dan tanda itu akan menuduh alur yang normal. #}
-      {% if b.trx.partai %}
-        <span class="lencana">Partai</span>
-      {% elif b.trx.id in menganggur %}
-        <span class="lencana lencana--hati">Lama</span>
-      {% endif %}
-    </a>
-  {% else %}
-    <div class="kartu kosong">
-      Tidak ada tiket yang sedang terbuka.<br>Semua penimbangan sudah tuntas.
-    </div>
-  {% endfor %}
+<header class="tf-sambut"><h1>Tiket Aktif</h1><div class="tf-sub">{{ jumlah_terbuka }} tiket belum selesai · seluruh petugas</div></header>
+<nav class="tf-tabs" aria-label="Jenis tiket aktif">
+  <a href="{{ alamat(tab='truk', halaman=1) }}" {{ 'aria-current=page' if tab == 'truk' }}>Truk ({{ jumlah_antrean.truk }})</a>
+  <a href="{{ alamat(tab='partai', halaman=1) }}" {{ 'aria-current=page' if tab == 'partai' }}>Partai kecil ({{ jumlah_antrean.partai }})</a>
+</nav>
+<section class="tf-section" aria-label="{{ 'Truk' if tab == 'truk' else 'Partai kecil' }}">
+  <form method="get" action="{{ PREFIX }}/tiket" class="tf-filter" role="search">
+    <input type="hidden" name="tab" value="{{ tab }}">
+    <label class="tf-search"><span class="tf-sub">Cari {{ 'plat, pihak, atau kode tiket' if tab == 'truk' else 'kode atau pihak' }}</span>
+      <input type="search" name="q" value="{{ q }}" placeholder="{{ 'Cari plat, pihak, atau kode tiket' if tab == 'truk' else 'Cari kode atau pihak' }}"></label>
+    {% if tab == 'truk' %}<label><span class="tf-sub">Kegiatan</span><select name="kegiatan">
+      <option value="">Semua kegiatan</option>
+      {% for k in pilihan_kegiatan %}<option value="{{ k }}" {{ 'selected' if kegiatan == k }}>{{ label_kegiatan.get(k, k) }}</option>{% endfor %}
+      {% if kegiatan and kegiatan not in pilihan_kegiatan %}<option value="{{ kegiatan }}" selected>{{ label_kegiatan.get(kegiatan, kegiatan) }}</option>{% endif %}
+    </select></label>{% else %}<input type="hidden" name="kegiatan" value="{{ kegiatan }}">{% endif %}
+    <button type="submit" class="tbl halus">Cari</button>
+    {% if q or kegiatan %}<a href="{{ PREFIX }}/tiket?tab={{ tab }}" class="tf-link">Hapus filter</a>{% endif %}
+  </form>
+  <div class="tf-sub">{{ jumlah_hasil }} dari {{ jumlah_antrean[tab] }} {{ 'truk' if tab == 'truk' else 'partai kecil' }} · paling lama di atas · jumlah tab mencakup semua tiket aktif</div>
+  <div class="tf-stack" data-ticket-results>
+    {% for b in hasil %}{{ kartu_tiket(b) }}
+    {% else %}<div class="kartu tf-empty">
+      <strong>{{ 'Tidak ada tiket yang cocok' if q or (tab == 'truk' and kegiatan) else ('Tidak ada truk menunggu' if tab == 'truk' else 'Tidak ada partai yang terbuka') }}</strong>
+      {% if not jumlah_terbuka and not q and not kegiatan %}Tidak ada tiket yang sedang terbuka.<br>{% endif %}{{ 'Coba kata lain atau hapus filter.' if q or (tab == 'truk' and kegiatan) else 'Mulai penimbangan dari Beranda.' }}
+    </div>{% endfor %}
+  </div>
+  {% if jumlah_halaman > 1 %}<nav class="tf-pagination" aria-label="Halaman tiket aktif">
+    {% if halaman > 1 %}<a class="tbl halus" href="{{ alamat(halaman=halaman-1) }}">← Sebelumnya</a>{% endif %}
+    <span class="tf-sub">Halaman {{ halaman }} dari {{ jumlah_halaman }}</span>
+    {% if halaman < jumlah_halaman %}<a class="tbl halus" href="{{ alamat(halaman=halaman+1) }}">Berikutnya →</a>{% endif %}
+  </nav>{% endif %}
+</section>
 {% endblock %}

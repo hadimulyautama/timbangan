@@ -1,0 +1,32 @@
+/* Hanya halaman koreksi: struktur, tema dan target sentuh. */
+body.tf-koreksi .bingkai.lebar{max-width:none}
+body.tf-koreksi .isi{max-width:1200px;width:100%;margin-inline:auto;min-width:0;box-sizing:border-box}
+.cf-page{container-type:inline-size;display:grid;gap:16px;min-width:0;overflow-wrap:anywhere}
+.cf-page h1{font-size:25px;font-weight:500;margin:0;line-height:1.4}
+.cf-page h2{font-size:15px;font-weight:600;margin:0;line-height:1.5}
+.cf-form,.cf-main,.cf-review,.cf-panel{display:grid;gap:14px;min-width:0;align-content:start}
+.cf-panel{padding:16px;background:var(--pd-sheet);border:1px solid var(--pd-line);border-radius:12px}
+.cf-identity{gap:8px}
+.cf-row{display:flex;justify-content:space-between;align-items:start;flex-wrap:wrap;gap:8px 15px;min-width:0}
+.cf-identity>.cf-row>strong{font-size:18px}
+.cf-columns,.cf-paired{display:grid;gap:16px;min-width:0}
+.cf-page .grup{margin:0;min-width:0}
+.cf-page .fld{width:100%;max-width:100%;min-width:0;min-height:46px;box-sizing:border-box}
+.cf-page .sat,.cf-page .cari{min-width:0}
+.cf-page :is(.tbl,summary){min-height:46px;line-height:1.5;white-space:normal}
+.cf-actions{display:flex;gap:12px;min-width:0}
+.cf-actions>.tbl{flex:1;min-width:0;padding:12px}
+.cf-actions>button[type=submit]{flex:2}
+.cf-change{display:grid;gap:5px;border-top:1px solid var(--pd-line);padding-top:10px;font-size:13px}
+.cf-values{background:var(--pd-soft);border-radius:9px;padding:13px;display:grid;gap:10px;font-size:13px}
+.cf-values strong{font-variant-numeric:tabular-nums}
+.cf-review small{line-height:1.65}
+.cf-page [data-cf-hasil]{display:grid;gap:13px}
+.cf-page :is(input,select,textarea,button,a,summary):focus-visible{outline:3px solid var(--tf-accent);outline-offset:3px}
+.cf-page [aria-invalid=true]{border-color:var(--pd-danger)}
+.cf-page dialog:not([open]){display:none}
+.cf-page dialog{max-width:min(420px,calc(100vw - 36px));box-sizing:border-box;color:var(--pd-ink)}
+.cf-page dialog::backdrop{background:#08162688}
+@container(min-width:660px){.cf-columns{grid-template-columns:minmax(0,1.2fr) minmax(250px,.8fr);align-items:start}.cf-paired{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:360px){.cf-panel{padding:12px}.cf-page h1{font-size:22px}.cf-actions{gap:8px}}
+body.padiflow-ui.tf-koreksi .cf-page .pesan--ok{background:var(--pd-green-bg);color:var(--pd-green);border-color:var(--pd-line)}

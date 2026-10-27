@@ -87,6 +87,13 @@
   <link rel="stylesheet" href="{{ PREFIX }}/static/app.css?v={{ VERSI }}">
   <link rel="stylesheet" href="{{ PREFIX }}/static/komponen-portal.css?v={{ VERSI }}">
   <link rel="stylesheet" href="{{ PREFIX }}/static/teraflow.css?v={{ VERSI }}">
+  <link rel="stylesheet" href="{{ PREFIX }}/static/beranda-tiket.css?v={{ VERSI }}">
+  <link rel="stylesheet" href="{{ PREFIX }}/static/luring.css?v={{ VERSI }}">
+  <link rel="stylesheet" href="{{ PREFIX }}/static/riwayat.css?v={{ VERSI }}">
+  {% if layar == 'laporan' %}<link rel="stylesheet" href="{{ PREFIX }}/static/laporan.css?v={{ VERSI }}">{% endif %}
+  {% if layar == 'koreksi' %}<link rel="stylesheet" href="{{ PREFIX }}/static/koreksi.css?v={{ VERSI }}">{% endif %}
+  {% if layar in ('timbang1','timbang2') %}<link rel="stylesheet" href="{{ PREFIX }}/static/formulir.css?v={{ VERSI }}">{% endif %}
+{% if keluar %}<link rel="stylesheet" href="{{ PREFIX }}/static/rincian-keluar.css?v={{ VERSI }}">{% endif %}
 </head>
 {# `segar_otomatis` sengaja OPT-IN per halaman, bukan berlaku di mana-mana.
    Menyegarkan di sini berarti memuat ulang halaman, dan reload MEMBUANG yang
@@ -96,7 +103,7 @@
 
    Jadi hanya layar BACA yang menyalakannya, dan tiap halaman baru harus
    memutuskannya sendiri. Bawaannya diam. #}
-<body class="padiflow-ui pd-timbang terik" data-kelipatan="{{ KELIPATAN_TERA }}"
+<body class="padiflow-ui pd-timbang terik {{ 'tf-pos' if layar in ('beranda', 'tiket', 'daftar') }} {{ 'tf-riwayat' if layar == 'daftar' }} {{ 'tf-koreksi' if layar == 'koreksi' }} {{ 'tf-formulir' if layar in ('timbang1','timbang2') }}" data-akun-id="{{ akun.id if akun else '' }}" data-kelipatan="{{ KELIPATAN_TERA }}"
       data-printer="{{ PRINTER_URL }}"
       data-printer-devid="{{ PRINTER_DEVID }}"
       {% block segar_otomatis %}{% endblock %}>
@@ -147,8 +154,8 @@
     {% if akun %}<button type="button" class="pd-menu" aria-label="Buka menu" aria-controls="menu-timbang" aria-expanded="false">☰</button>
     <div class="pd-shortcuts" aria-label="Akses cepat">
       <a href="{{ PREFIX }}/pilih/MASUK">↙ Barang Masuk</a>
-      <a href="{{ PREFIX }}/tiket">▤ Tiket</a>
-      <a href="{{ PREFIX }}/transaksi">≡ Catatan</a>
+      <a href="{{ PREFIX }}/tiket">▤ Tiket Aktif</a>
+      <a href="{{ PREFIX }}/transaksi">≡ Riwayat</a>
     </div>{% endif %}
     {% if kembali %}
       <a href="{{ kembali }}" aria-label="Kembali">
@@ -180,7 +187,7 @@
          stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M12 20h.01"/><path d="M8.5 16.4a5 5 0 0 1 7 0"/>
       <path d="M5 12.9a10 10 0 0 1 14 0"/><path d="M2 2l20 20"/></svg>
-    <span>Tanpa jaringan — timbangan tetap tersimpan di perangkat</span>
+    <span>Tanpa jaringan — data server belum dapat diperbarui</span>
     <span class="antrean" data-antrean></span>
   </div>
 
@@ -206,7 +213,7 @@
     </div>
     <div class="bawah__isi">
       <span class="bawah__label">MENU UTAMA</span>
-      <a href="{{ PREFIX }}/" class="{{ 'aktif' if layar == 'beranda' }}">
+      <a href="{{ PREFIX }}/" class="{{ 'aktif' if layar == 'beranda' }}" {{ 'aria-current=page' if layar == 'beranda' }}>
         <span class="bawah__ikon"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"
              stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 10l9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
@@ -215,7 +222,7 @@
       </a>
 
       <span class="bawah__label">OPERASIONAL</span>
-      <a href="{{ PREFIX }}/tiket" class="{{ 'aktif' if layar == 'tiket' }}">
+      <a href="{{ PREFIX }}/tiket" class="{{ 'aktif' if layar == 'tiket' }}" {{ 'aria-current=page' if layar == 'tiket' }}>
         <span style="position:relative;display:flex">
           <span class="bawah__ikon"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"
                stroke-linecap="round" stroke-linejoin="round">
@@ -225,7 +232,7 @@
             <span class="bawah__tanda">{{ JUMLAH_TIKET }}</span>
           {% endif %}
         </span>
-        Tiket
+        Tiket Aktif
       </a>
 
       {# CATATAN terbuka untuk semua sejak 30 September 2026 (keputusan
@@ -239,7 +246,7 @@
              stroke-linecap="round" stroke-linejoin="round">
           <path d="M4 4h16v16H4z"/><path d="M8 9h8"/><path d="M8 13h8"/>
           <path d="M8 17h5"/></svg></span>
-        Catatan
+        Riwayat Timbang
       </a>
 
       <span class="bawah__label">DATA &amp; PENGATURAN</span>
@@ -250,7 +257,7 @@
                stroke-linecap="round" stroke-linejoin="round">
             <path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/>
             <path d="M22 20H2"/></svg></span>
-          Ringkasan
+          Laporan &amp; Pemeriksaan
         </a>
       {% endif %}
 
@@ -270,10 +277,31 @@
          aria-orientation="vertical" aria-label="Ubah lebar sidebar"
          title="Tarik untuk mengubah lebar sidebar"></div>
   </nav>
+
+  <nav class="tf-bottom" aria-label="Navigasi bawah">
+<a href="{{ PREFIX }}/" {{ 'aria-current=page' if layar == 'beranda' }}><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 10l9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+          <path d="M9 22V12h6v10"/></svg><span>Beranda</span></a>
+<a href="{{ PREFIX }}/tiket" {{ 'aria-current=page' if layar == 'tiket' }}><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 7h18v4a2 2 0 0 0 0 4v3H3v-3a2 2 0 0 0 0-4z"/>
+            <path d="M13 7v13"/></svg><span>Tiket Aktif {% if JUMLAH_TIKET %}<small>{{ JUMLAH_TIKET }}</small>{% endif %}</span></a>
+<a href="{{ PREFIX }}/transaksi" {{ 'aria-current=page' if layar in ('daftar', 'rincian', 'koreksi', 'cetak_pilih') }}><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4h16v16H4z"/><path d="M8 9h8"/><path d="M8 13h8"/>
+          <path d="M8 17h5"/></svg><span>Riwayat</span></a>
+{% if akun.is_admin %}<a href="{{ PREFIX }}/laporan" {{ 'aria-current=page' if layar in ('laporan', 'monitoring') }}><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/>
+            <path d="M22 20H2"/></svg><span>Laporan</span></a>
+{% endif %}</nav>
 {% endif %}
 
+<script src="{{ PREFIX }}/static/luring.js?v={{ VERSI }}" defer></script>
 <script src="{{ PREFIX }}/static/app.js?v={{ VERSI }}" defer></script>
 <script src="{{ PREFIX }}/static/komponen-portal.js?v={{ VERSI }}" defer></script>
+{% if layar == 'daftar' %}<script src="{{ PREFIX }}/static/riwayat.js?v={{ VERSI }}" defer></script>{% endif %}
 <script>
 (function () {
   var pegangan = document.querySelector(".bawah__ukur");
@@ -309,6 +337,10 @@
   });
 })();
 </script>
+<script src="{{ PREFIX }}/static/navigasi-pos.js?v={{ VERSI }}" defer></script>
+{% if layar == 'rincian' %}<script src="{{ PREFIX }}/static/pemeriksaan.js?v={{ VERSI }}" defer></script>{% endif %}
+{% if layar in ('timbang1','timbang2') %}<script src="{{ PREFIX }}/static/formulir.js?v={{ VERSI }}" defer></script>{% endif %}
+{% if layar == 'koreksi' %}<script src="{{ PREFIX }}/static/koreksi.js?v={{ VERSI }}" defer></script>{% endif %}
 {% block skrip %}{% endblock %}
 </body>
 </html>

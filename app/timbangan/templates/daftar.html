@@ -1,237 +1,126 @@
 {% extends "base.html" %}
-{% block segar_otomatis %}data-segar-otomatis="1"{% endblock %}{# Borang saringnya memakai GET, jadi isinya kembali dari alamat sesudah dimuat ulang. #}
-{% from "macros.html" import lencana %}
-
+{% block segar_otomatis %}data-segar-otomatis="1"{% endblock %}
 {% block lebar %}lebar{% endblock %}
-{% block judul %}Catatan timbang{% endblock %}
-{% block bar_judul %}Catatan timbang{% endblock %}
+{% block judul %}Riwayat Timbang{% endblock %}
+{% block bar_judul %}Riwayat Timbang{% endblock %}
 {% block bar_sub %}{{ total }} transaksi{% endblock %}
 
 {% block isi %}
-  <form method="get" class="kartu saring">
-    <div class="grup">
-      <div class="lbl">Dari</div>
-      <input class="fld" type="date" name="dari" value="{{ f.dari|iso }}">
-    </div>
-    <div class="grup">
-      <div class="lbl">Sampai</div>
-      <input class="fld" type="date" name="sampai" value="{{ f.sampai|iso }}">
-    </div>
-    <div class="grup">
-      <div class="lbl">Arah</div>
-      {# Bawaan TANPA filter ("Semua") — permintaan pemilik 4 Oktober 2026.
-         "Retur" satu pilihan gabungan (RETUR_MASUK + RETUR_KELUAR): yang
-         mencari transaksi retur biasanya tak peduli arahnya dulu. #}
-      <select class="fld" name="arah">
-        <option value="" {{ 'selected' if not arah_pilih }}>Semua</option>
-        <option value="KELUAR" {{ 'selected' if arah_pilih == 'KELUAR' }}>
-          Barang keluar</option>
-        <option value="MASUK" {{ 'selected' if arah_pilih == 'MASUK' }}>
-          Barang masuk</option>
-        <option value="TRANSFER" {{ 'selected' if arah_pilih == 'TRANSFER' }}>
-          Transfer internal</option>
-        <option value="RETUR" {{ 'selected' if arah_pilih == 'RETUR' }}>
-          Retur (masuk & keluar)</option>
-        <option value="BEBAS" {{ 'selected' if arah_pilih == 'BEBAS' }}>
-          Jasa timbang</option>
-      </select>
-    </div>
-    <div class="grup">
-      <div class="lbl">Komoditas</div>
-      <select class="fld" name="jenis">
-        <option value="">Semua</option>
-        {% for j in jenis %}
-          <option value="{{ j.kode }}" {{ 'selected' if f.jenis_kode == j.kode }}>
-            {{ j.nama }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="grup">
-      <div class="lbl">Status</div>
-      <select class="fld" name="status">
-        <option value="">Semua</option>
-        {% for kode, label in STATUS_LABEL.items() %}
-          <option value="{{ kode }}" {{ 'selected' if f.status_kontrol == kode }}>
-            {{ label }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="grup lebar-penuh">
-      <div class="lbl">Cari</div>
-      <input class="fld teks" name="cari" value="{{ f.cari or '' }}"
-             placeholder="Nomor polisi, kode, nama">
-    </div>
-    <button type="submit" class="tbl lebar-penuh">Terapkan</button>
-  </form>
+  {% set filter_jumlah = (1 if arah_pilih else 0) + (1 if f.jenis_kode else 0) + (1 if f.status_kontrol else 0) + (1 if f.status_tiket else 0) %}
+  <header class="rh-heading">
+    <div><h1>Riwayat Timbang</h1><div class="tf-sub">{{ f.dari|tgl(true) }} – {{ f.sampai|tgl(true) }} · semua petugas</div></div>
+    {% if akun.is_admin %}
+      <a class="tbl halus rh-csv" data-unduh target="_blank" rel="noopener" download
+         href="{{ PREFIX }}/ekspor.csv?dari={{ f.dari|iso }}&sampai={{ f.sampai|iso }}">CSV periode</a>
+    {% endif %}
+  </header>
+  {% if akun.is_admin %}<p class="pesan pesan--err" data-hasil-unduh role="alert" hidden></p>{% endif %}
 
-  <form id="form-hapus-massal" method="post"
-        action="{{ PREFIX }}/transaksi/hapus-massal"
-        class="kartu" style="padding:0;overflow:hidden">
-    <div class="gulung">
-      <table>
-        <thead>
-          <tr>
-            {% if akun.is_super %}
-              <th style="width:1%">
-                <input type="checkbox" data-pilih-semua
-                       aria-label="Pilih semua di halaman ini">
-              </th>
-            {% endif %}
-            <th>Tanggal</th><th>Nomor polisi</th><th>Pihak</th><th>Komoditas</th>
-            <th class="angka">Barang</th><th class="angka">Selisih</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for b in baris %}
-            <tr onclick="location='{{ PREFIX }}/transaksi/{{ b.trx.id }}'"
-                style="cursor:pointer">
-              {% if akun.is_super %}
-                {# Klik di sel ini tak boleh ikut memicu navigasi barisnya —
-                   lihat {% raw %}{% block skrip %}{% endraw %} untuk jaring
-                   keduanya (perubahan lewat keyboard, bukan klik mentah). #}
-                <td onclick="event.stopPropagation()">
-                  <input type="checkbox" name="transaksi_id" value="{{ b.trx.id }}"
-                         data-baris-pilih aria-label="Pilih {{ b.trx.kode }}">
-                </td>
-              {% endif %}
-              <td>{{ b.trx.tanggal|tgl(true) }}</td>
-              <td>{{ b.trx.nomor_polisi or b.trx.kode }}</td>
-              <td>{{ b.supplier_nama or b.trx.pihak_nama or '—' }}</td>
-              <td>{{ NAMA_JENIS.get(b.trx.jenis_kode, b.trx.jenis_kode) }}
-                <div class="bantu" style="margin:0">
-                  {{ ARAH_LABEL.get(b.trx.arah, b.trx.arah|lower) }}</div></td>
-              <td class="angka">{{ b.trx.berat_barang_kg|angka }}</td>
-              <td class="angka">
-                {% if b.trx.status_tiket == TIKET_SELESAI %}
-                  {{ b.trx.selisih_kg|angka(1) }}
-                {% else %}—{% endif %}
-              </td>
-              <td>
-                {% if b.trx.status_transaksi == 'VOID' %}
-                  <span class="lencana lencana--netral">Batal</span>
-                {% elif b.trx.status_tiket == TIKET_TERBUKA %}
-                  <span class="lencana lencana--netral">Tahap 2</span>
-                {% else %}{{ lencana(b.trx.status_kontrol) }}{% endif %}
-              </td>
-            </tr>
-          {% else %}
-            <tr><td colspan="{{ 8 if akun.is_super else 7 }}" class="kosong">
-              Tidak ada transaksi pada rentang ini.</td></tr>
+  <form method="get" action="{{ PREFIX }}/transaksi" class="rh-form" aria-label="Filter riwayat timbang">
+    <label>Cari tiket<input class="fld teks" type="search" name="cari" value="{{ f.cari or '' }}" placeholder="Nomor polisi, kode, nama"></label>
+    <div class="rh-fields">
+      <label>Dari<input class="fld" type="date" name="dari" value="{{ f.dari|iso }}"></label>
+      <label>Sampai<input class="fld" type="date" name="sampai" value="{{ f.sampai|iso }}"></label>
+    </div>
+    <div class="rh-form-actions">
+      <button type="submit" class="tbl">Terapkan</button>
+      <a class="tf-link" href="{{ PREFIX }}/transaksi">Hapus filter</a>
+    </div>
+    <details class="rh-more" {{ 'open' if filter_jumlah }}>
+      <summary>Filter{% if filter_jumlah %} ({{ filter_jumlah }}){% endif %}</summary>
+      <div class="rh-fields rh-advanced">
+        <label>Kegiatan<select class="fld" name="arah">
+          <option value="" {{ 'selected' if not arah_pilih }}>Semua</option>
+          {% for kode, label in [('KELUAR','Pengiriman'),('MASUK','Barang masuk'),('TRANSFER','Transfer internal'),('RETUR','Retur (masuk & keluar)'),('BEBAS','Jasa timbang')] %}
+            <option value="{{ kode }}" {{ 'selected' if arah_pilih == kode }}>{{ label }}</option>
           {% endfor %}
+          {% if arah_pilih in ('RETUR_MASUK','RETUR_KELUAR') %}<option value="{{ arah_pilih }}" selected>{{ ARAH_LABEL[arah_pilih] }}</option>{% endif %}
+        </select></label>
+        <label>Komoditas<select class="fld" name="jenis"><option value="">Semua</option>
+          {% for j in jenis %}<option value="{{ j.kode }}" {{ 'selected' if f.jenis_kode == j.kode }}>{{ j.nama }}{{ ' (nonaktif)' if j.status != 'aktif' }}</option>{% endfor %}
+        </select></label>
+        <label>Status kontrol<select class="fld" name="status"><option value="">Semua</option>
+          {% for kode, label in STATUS_LABEL.items() %}<option value="{{ kode }}" {{ 'selected' if f.status_kontrol == kode }}>{{ label }}</option>{% endfor %}
+        </select></label>
+        <label>Status tiket<select class="fld" name="tiket"><option value="">Semua</option>
+          {% for kode, label in [('TERBUKA','Terbuka'),('SELESAI','Selesai'),('DITUTUP_PAKSA','Ditutup tanpa timbang kedua')] %}<option value="{{ kode }}" {{ 'selected' if f.status_tiket == kode }}>{{ label }}</option>{% endfor %}
+        </select></label>
+      </div>
+    </details>
+  </form>
+  {% if filter_jumlah or f.cari %}
+    <div class="rh-chips" aria-label="Filter aktif">
+      {% if f.cari %}<span>Cari: {{ f.cari }}</span>{% endif %}
+      {% if arah_pilih %}<span>{{ 'Retur masuk & keluar' if arah_pilih == 'RETUR' else ARAH_LABEL.get(arah_pilih, arah_pilih) }}</span>{% endif %}
+      {% if f.jenis_kode %}<span>{{ NAMA_JENIS.get(f.jenis_kode, f.jenis_kode) }}</span>{% endif %}
+      {% if f.status_kontrol %}<span>Kontrol: {{ STATUS_LABEL.get(f.status_kontrol, f.status_kontrol) }}</span>{% endif %}
+      {% if f.status_tiket %}<span>Tiket: {{ f.status_tiket|replace('_',' ')|lower }}</span>{% endif %}
+    </div>
+  {% endif %}
+
+  <section class="tf-section" aria-label="Hasil riwayat timbang">
+    <div class="tf-section-title"><h2>{{ total }} transaksi</h2><span class="tf-sub">Terbaru dahulu</span></div>
+    <form id="form-hapus-massal" method="post" action="{{ PREFIX }}/transaksi/hapus-massal" class="rh-results">
+      {% if akun.is_super and baris %}
+        <div class="rh-select-all"><label class="rh-check"><input type="checkbox" data-pilih-semua> Pilih semua di halaman ini</label><span class="tf-sub" data-jumlah-dipilih-wadah><b data-jumlah-dipilih>0</b> baris dipilih</span></div>
+      {% endif %}
+      {% if baris %}
+      <table class="rh-table">
+        <caption class="rh-sr">Riwayat timbang · {{ total }} transaksi · satuan kilogram</caption>
+        <colgroup>{% if akun.is_super %}<col class="rh-col-check">{% endif %}<col class="rh-col-time"><col class="rh-col-identity"><col class="rh-col-load"><col class="rh-col-weight"><col class="rh-col-difference"><col class="rh-col-status"><col class="rh-col-actions"></colgroup>
+        <thead><tr>{% if akun.is_super %}<th scope="col">Pilih</th>{% endif %}<th scope="col">Waktu</th><th scope="col">Tiket &amp; pihak</th><th scope="col">Muatan</th><th scope="col" class="rh-num">Barang (kg)</th><th scope="col" class="rh-num">Selisih (kg)</th><th scope="col">Status</th><th scope="col">Aksi</th></tr></thead>
+        <tbody>
+        {% for b in baris %}
+          {% set t = b.trx %}
+          {% set aktif = t.status_transaksi != 'VOID' %}
+          {% set selesai = t.status_tiket == TIKET_SELESAI %}
+          {% set sementara = aktif and t.status_tiket == TIKET_TERBUKA %}
+          {% set periksa = pemeriksaan.get(t.id) %}
+          <tr class="rh-item" data-riwayat-id="{{ t.id }}" data-buka="{{ tujuan('/transaksi/' ~ t.id) }}">
+            {% if akun.is_super %}<td class="rh-select"><label class="rh-check"><input type="checkbox" name="transaksi_id" value="{{ t.id }}" data-baris-pilih aria-label="Pilih {{ t.kode }}"></label></td>{% endif %}
+            <td class="rh-time">{{ t.tanggal|tgl(true) }}<div class="tf-sub">{{ (t.timbang2_waktu or t.timbang1_waktu or t.created_at)|jam }} · lokal</div></td>
+            <td class="rh-identity"><a class="rh-open" href="{{ tujuan('/transaksi/' ~ t.id) }}">{{ t.nomor_polisi or t.kode }}</a><div class="rh-party">{{ b.pihak_tampil }}</div><div class="tf-sub rh-code">{{ t.kode }}</div></td>
+            <td class="rh-load">{{ NAMA_JENIS.get(t.jenis_kode, t.jenis_kode) }}<div class="tf-sub">{{ ARAH_LABEL.get(t.arah, t.arah|lower) }}{% if t.jasa %} · Titipan jasa giling{% endif %}</div>{% if t.partai %}<div class="tf-sub">Partai kecil · {{ t.penimbangan|length }} kali timbang</div>{% endif %}</td>
+            <td class="rh-weight rh-num"><span class="rh-mobile-label">Berat barang</span>
+              {% if sementara and t.partai %}<strong>{{ t.timbang1_kg|angka(3) }}<span class="rh-unit"> kg</span></strong><div class="tf-sub">Sementara</div>
+              {% elif t.berat_barang_kg is not none %}<strong>{{ t.berat_barang_kg|angka(3 if t.partai else 0) }}<span class="rh-unit"> kg</span></strong>{% if sementara %}<div class="tf-sub">Sementara</div>{% endif %}
+              {% else %}<span aria-label="Berat barang belum tersedia">—</span><div class="tf-sub">Belum tersedia</div>{% endif %}
+            </td>
+            <td class="rh-difference rh-num {{ 'rh-warn' if t.status_kontrol in ('PERLU_PEMERIKSAAN','INVESTIGASI','KURANG','KELEBIHAN') }}"><span class="rh-mobile-label">Selisih</span>{% if selesai and t.selisih_kg is not none %}{{ t.selisih_kg|kg_tanda(1) }}{% else %}<span aria-label="Selisih belum tersedia">—</span>{% endif %}</td>
+            <td class="rh-status"><span class="lencana lencana--{{ 'netral' if not aktif or not selesai else 'aman' }}">{% if not aktif %}Batal{% elif t.status_tiket == TIKET_DITUTUP_PAKSA %}Ditutup tanpa timbang kedua{% elif sementara %}{{ 'Partai terbuka' if t.partai else 'Timbang kedua' }}{% else %}Selesai{% endif %}</span>
+              <div class="rh-control {{ 'rh-warn' if t.status_kontrol in ('PERLU_PEMERIKSAAN','INVESTIGASI','KURANG','KELEBIHAN') }}">Kontrol: {{ STATUS_LABEL.get(t.status_kontrol, t.status_kontrol or 'belum tersedia') }}</div>
+              {% if periksa %}<div class="tf-sub">Pemeriksaan {{ 'selesai' if periksa == 'SELESAI' else 'dibuka' }}</div>{% endif %}
+            </td>
+            <td class="rh-actions"><a class="tf-link" href="{{ tujuan('/transaksi/' ~ t.id) }}">Detail<span class="rh-sr"> {{ t.kode }}</span></a>
+              {% if aktif and selesai %}<a class="tbl halus kecil" href="{{ tujuan('/transaksi/' ~ t.id ~ '/cetak') }}">Cetak</a>
+              {% elif sementara %}<a class="tf-link" href="{{ tujuan(('/partai/' if t.partai else '/tiket/') ~ t.id) }}">{{ 'Lanjutkan partai' if t.partai else 'Timbang kedua' }} →</a>{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
         </tbody>
       </table>
-    </div>
-
-    {% if akun.is_super and baris %}
-      {# Sama seperti "Hapus permanen" di rincian.html: terkunci di balik
-         teks yang harus diketik, bukan sekadar tombol ditekan. Bedanya di
-         sana nomor transaksi (satu baris, satu nomor); di sini JUMLAH yang
-         dipilih — tak ada satu nomor yang mewakili banyak baris berbeda. #}
-      <details style="border-top:1px solid var(--garis)">
-        <summary style="cursor:pointer;font-weight:700;font-size:14px;padding:12px 14px">
-          Hapus massal
-        </summary>
-        <div style="padding:0 14px 14px;display:flex;flex-direction:column;gap:10px">
-          <div class="bantu">
-            Sama seperti hapus satu baris: permanen, dan tetap tercatat penuh
-            di jejak audit. Baris yang masih tertaut catatan produksi akan
-            dilewati, bukan membatalkan seluruh penghapusan. "Pilih semua"
-            hanya memilih baris di halaman ini ({{ baris|length }} baris) —
-            paginasi membuat memilih lintas halaman sekaligus mustahil tanpa
-            risiko salah hitung.
-          </div>
-          <div data-jumlah-dipilih-wadah hidden>
-            <b><span data-jumlah-dipilih>0</span> baris dipilih.</b>
-          </div>
-          <div class="grup">
-            <div class="lbl">Alasan penghapusan</div>
-            <textarea class="fld" name="alasan" rows="2" required></textarea>
-          </div>
-          <div class="grup">
-            <div class="lbl">Ketik jumlah baris yang dipilih</div>
-            <input class="fld" name="konfirmasi" required autocomplete="off"
-                   inputmode="numeric">
-            <div class="bantu">
-              Supaya penghapusan ini bukan sekadar tombol tertekan — hitung
-              dulu berapa yang benar-benar dipilih.
-            </div>
-          </div>
-          <button type="submit" class="tbl bahaya" data-tombol-hapus-massal>
-            Hapus baris terpilih
-          </button>
-        </div>
-      </details>
-    {% endif %}
-  </form>
-
-  {% if total > per_halaman %}
-    <div class="aksi-baris">
-      {% if halaman > 1 %}
-        <a class="tbl halus"
-           href="?hal={{ halaman - 1 }}&dari={{ f.dari|iso }}&sampai={{ f.sampai|iso }}">
-          Sebelumnya</a>
+      {% else %}
+        <div class="tf-empty kartu"><strong>{{ 'Belum ada transaksi' if belum_ada else 'Tidak ada transaksi yang cocok' }}</strong>{{ 'Transaksi yang tersimpan akan tampil di sini.' if belum_ada else 'Ubah pencarian, filter, atau rentang tanggal.' }}</div>
       {% endif %}
-      {% if halaman * per_halaman < total %}
-        <a class="tbl halus"
-           href="?hal={{ halaman + 1 }}&dari={{ f.dari|iso }}&sampai={{ f.sampai|iso }}">
-          Berikutnya</a>
+      {% if akun.is_super and baris %}
+        <details class="rh-bulk"><summary>Kelola catatan · Hapus massal</summary>
+          <div class="rh-form">
+            <p class="tf-sub">Permanen, bukan pembatalan transaksi. Pilihan hanya berlaku pada halaman ini. Catatan tertaut Produksi tetap dilindungi; baris yang tidak dapat dihapus akan dilaporkan sebagai dilewati. Jejak audit tetap dicatat.</p>
+            <label>Alasan penghapusan<textarea class="fld" name="alasan" rows="2" required></textarea></label>
+            <label>Ketik jumlah baris yang dipilih<input class="fld" name="konfirmasi" required autocomplete="off" inputmode="numeric"></label>
+            <button type="submit" class="tbl bahaya" data-tombol-hapus-massal disabled>Hapus baris terpilih</button>
+          </div>
+        </details>
       {% endif %}
-    </div>
-  {% endif %}
-
-  {% if akun.is_admin %}
-    {# Lihat catatan yang sama di laporan.html. #}
-    <a class="tbl halus blok" data-unduh target="_blank" rel="noopener" download
-       href="{{ PREFIX }}/ekspor.csv?dari={{ f.dari|iso }}&sampai={{ f.sampai|iso }}">
-      Unduh CSV</a>
-  {% endif %}
-{% endblock %}
-
-{% block skrip %}
-{% if akun.is_super %}
-<script>
-/* Hapus massal: "Pilih semua" hanya menandai baris di halaman ini — tak ada
-   state tersimpan lintas halaman, jadi mewarisi centang dari halaman lain
-   mustahil tanpa risiko lupa apa yang sebenarnya tercentang. Jumlah yang
-   diketik di konfirmasi diperiksa di SERVER, bukan di sini — naskah ini
-   cuma menolong orangnya melihat angkanya sendiri sebelum mengetik. */
-(function () {
-  var form = document.getElementById('form-hapus-massal');
-  if (!form) { return; }
-  var semua = form.querySelector('[data-pilih-semua]');
-  var kotak = form.querySelectorAll('[data-baris-pilih]');
-  var wadahJumlah = form.querySelector('[data-jumlah-dipilih-wadah]');
-  var tekaJumlah = form.querySelector('[data-jumlah-dipilih]');
-  var tombol = form.querySelector('[data-tombol-hapus-massal]');
-
-  function perbarui() {
-    var n = 0;
-    Array.prototype.forEach.call(kotak, function (k) { if (k.checked) { n++; } });
-    if (tekaJumlah) { tekaJumlah.textContent = n; }
-    if (wadahJumlah) { wadahJumlah.hidden = n === 0; }
-    if (tombol) { tombol.disabled = n === 0; }
-    if (semua) { semua.checked = n > 0 && n === kotak.length; }
-  }
-
-  Array.prototype.forEach.call(kotak, function (k) {
-    // Klik checkbox tak boleh ikut memicu navigasi baris (onclick di
-    // <tr>) — ditahan juga di <td>-nya lewat onclick langsung; ini jaring
-    // kedua untuk perubahan yang datang bukan dari klik mentah (keyboard).
-    k.addEventListener('click', function (e) { e.stopPropagation(); });
-    k.addEventListener('change', perbarui);
-  });
-
-  if (semua) {
-    semua.addEventListener('click', function (e) { e.stopPropagation(); });
-    semua.addEventListener('change', function () {
-      Array.prototype.forEach.call(kotak, function (k) { k.checked = semua.checked; });
-      perbarui();
-    });
-  }
-
-  perbarui();
-})();
-</script>
-{% endif %}
+    </form>
+  </section>
+  <nav class="rh-pagination" aria-label="Halaman riwayat timbang">
+    <span>{{ ((halaman - 1) * per_halaman + 1) if total else 0 }}–{{ [halaman * per_halaman, total]|min }} dari {{ total }} transaksi</span>
+    {% if jumlah_halaman > 1 %}<div class="rh-page-actions">
+      {% if halaman > 1 %}<a class="tbl halus" rel="prev" href="{{ alamat(hal=halaman - 1) }}">← Sebelumnya</a>{% endif %}
+      <span>Hal. {{ halaman }}/{{ jumlah_halaman }}</span>
+      {% if halaman < jumlah_halaman %}<a class="tbl halus" rel="next" href="{{ alamat(hal=halaman + 1) }}">Berikutnya →</a>{% endif %}
+    </div>{% endif %}
+  </nav>
+  {% if akun.is_admin %}<p class="rh-caption">CSV periode mengikuti rentang tanggal, tanpa transaksi batal. Filter kegiatan, komoditas, status, dan pencarian daftar tidak membatasi CSV.</p>{% endif %}
 {% endblock %}

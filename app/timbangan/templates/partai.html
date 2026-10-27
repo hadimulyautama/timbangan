@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros.html" import konteks_jenis %}
+{% from "macros.html" import konteks_jenis, isian %}
 
 {# Satu halaman untuk dua keadaan: memulai tiket baru, dan melanjutkan tiket
    yang sudah terbuka. Bedanya cuma pihak sudah terkunci dan ada daftar yang
@@ -72,18 +72,16 @@
   </div>
 {% endif %}
 
-<form method="post" action="{{ aksi_url }}">
+<form method="post" data-simpan-luring action="{{ aksi_url }}">
+  <input type="hidden" name="kunci" value="{{ kunci }}">
   {% if not trx %}
     {# Kunci kiriman, BUKAN nomor tiket — server yang menerbitkan nomornya
        saat menyimpan. Lihat `service.alokasi_nomor`. #}
-    <input type="hidden" name="kunci" value="{{ kunci }}">
 
     <div class="grup">
       <div class="lbl">{{ PIHAK_LABEL.get(aturan.arah, 'Pihak') }}</div>
-      {# Satu kolom untuk daftar dan nama baru sekaligus — lihat `data-gabung`
-         di app.js. Petani dan pedagang kecil justru sering belum terdaftar,
-         jadi mengetik nama baru di sini jalur biasa, bukan pengecualian. #}
-      <select class="fld" name="supplier_id" data-gabung="f-pihak_nama"
+      {# Partai kecil memakai aturan kontak yang sama dengan timbang truk. #}
+      <select class="fld" name="supplier_id" required
               data-cari="Ketik nama {{ PIHAK_LABEL.get(aturan.arah, 'pihak')|lower }}…">
         <option value="">— pilih —</option>
         {% if pihak_sering %}
@@ -101,17 +99,8 @@
       </select>
     </div>
 
-    {# Petani dan pedagang kecil justru sering belum terdaftar, jadi kolom
-       ketik ini bukan jalur pengecualian melainkan jalur biasa. #}
-    <div class="grup">
-      <div class="lbl">
-        Nama {{ PIHAK_LABEL.get(aturan.arah, 'pihak')|lower }}
-        <span style="text-transform:none;letter-spacing:0;font-weight:500">
-          (bila belum terdaftar)</span>
-      </div>
-      <input class="fld teks" name="pihak_nama" id="f-pihak_nama" type="text">
-      <div class="bantu">Isi ini bila tidak memilih dari daftar di atas.</div>
-    </div>
+    <div class="bantu">Wajib dipilih dari daftar Kledo. Belum muncul? Minta
+      Admin menekan <b>Perbarui Kontak</b> di Pengaturan, lalu muat ulang layar ini.</div>
   {% endif %}
 
   {# Kolom berat SENGAJA tidak memakai macro `berat`: macro itu memasang
@@ -131,8 +120,13 @@
     <div class="bantu">Angka apa adanya, tanpa dibulatkan. Kolom kosong diabaikan.</div>
   </div>
 
+  {{ isian('jumlah_karung', 'Jumlah karung total',
+           trx.muatan[0].jumlah_karung if trx and trx.muatan else '', 'karung', 'text',
+           'Total seluruh karung pada tiket ini. Wajib diisi saat timbang selesai.',
+           true, false, 'inputmode="numeric" data-jumlah-karung') }}
+
   <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px">
-    <button type="submit" name="aksi" value="sementara" class="tbl halus blok"
+    <button type="submit" name="aksi" value="sementara" formnovalidate class="tbl halus blok"
             data-sibuk="Menyimpan…">
       Simpan sementara
     </button>

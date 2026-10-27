@@ -473,6 +473,18 @@ def hitung(
     kosong = float(berat_kosong_kg) if berat_kosong_kg is not None else 0.0
     baris = list(muatan or [])
 
+    # Rumus juga dipakai pratinjau baca saja. Penjaga di layanan saja tidak
+    # cukup: pratinjau tara negatif dulu menampilkan berat barang yang naik.
+    nilai_muatan = [("Tara lain", tara_lain_kg or 0)]
+    for b in baris:
+        nilai_muatan.extend((
+            ("Tara per karung", b.tara_per_karung_kg),
+            ("Berat acuan", b.berat_acuan_kg),
+        ))
+    for nama, nilai in nilai_muatan:
+        if not math.isfinite(float(nilai)) or float(nilai) < 0:
+            raise ValidasiError(f"{nama} harus berupa angka yang tidak negatif.")
+
     if bermuatan <= 0:
         raise ValidasiError("Berat timbang harus lebih dari 0 kg.")
     # Dibaca saat dipanggil, bukan saat fungsi didefinisikan — supaya

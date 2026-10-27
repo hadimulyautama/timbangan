@@ -1,0 +1,22 @@
+{% macro rincian_kiriman(data, historis=false) %}
+{% if data %}
+<section class="kg-kiriman" aria-label="Rincian muatan PadiFlow">
+  <h3>{{ ringkasan_pengiriman(data) }}</h3>
+  <p class="bantu">{{ 'Cuplikan saat timbang diselesaikan' if historis else 'Muatan aktual dari PadiFlow' }} · {{ data.nomor_polisi }}{% if data.kiriman_id %} · Kiriman #{{ data.kiriman_id }}{% endif %}</p>
+  <p class="bantu">Berat per pelanggan dan barang berasal dari catatan muat PadiFlow. Jembatan menimbang total satu perjalanan; selisih tidak dibagikan ke pelanggan.</p>
+  {% set penerima = kelompok_pengiriman(data) %}
+  {% for p in penerima %}
+  <section class="kg-penerima"><h4>{{ p.pelanggan }}</h4>
+    {% for b in p.baris %}
+    <div class="kg-barang"><div><strong>{{ b.nama or b.jenis_kode }}</strong><div class="bantu">{{ b.kode_perintah or data.kode_perintah }}{% if b.outgoing_item_id %} · Item #{{ b.outgoing_item_id }}{% endif %}</div></div>
+      <div>{{ b.jumlah }} {{ b.satuan or ('karung' if b.jumlah_karung else 'kg') }}<br><b>{{ b.berat_kg|angka(3) }} kg acuan</b></div>
+      <div class="bantu kg-tara">{{ b.jumlah_karung }} karung × {{ b.tara_per_karung_kg|angka(4) }} kg tara per karung</div>
+    </div>
+    {% endfor %}
+    <div class="kg-subtotal"><span>Subtotal muatan {{ p.pelanggan }}</span><b>{{ p.subtotal|angka(3) }} kg</b></div>
+  </section>
+  {% endfor %}
+  <div class="kg-subtotal"><strong>Total acuan muatan seluruh pelanggan</strong><strong>{{ penerima|sum(attribute='subtotal')|angka(3) }} kg</strong></div>
+</section>
+{% endif %}
+{% endmacro %}

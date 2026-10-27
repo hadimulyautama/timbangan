@@ -25,6 +25,7 @@ from reportlab.pdfgen import canvas as rl_canvas
 
 from app.timbangan import format as fmt
 from app.timbangan.bukti import baris_angka
+from app.timbangan.pengiriman import rincian_bukti
 
 # Setengah folio, melintang.
 NCR_L, NCR_T = 215 * mm, 165 * mm
@@ -227,6 +228,7 @@ def bukti_ncr(*, trx, aturan, pihak: str, petugas: str, muatan,
                  f"   ·   Lembar 2 — Arsip pos timbang")
 
     c.showPage()
+    _lampiran_muatan(c, trx)
     c.save()
     return buf.getvalue()
 def bukti_thermal(*, trx, aturan, pihak: str, petugas: str, muatan,
@@ -241,8 +243,10 @@ def bukti_thermal(*, trx, aturan, pihak: str, petugas: str, muatan,
     """
     baris = baris_angka(trx, arah_masuk)
     tanda = _tanda_ulang(trx, cetakan_ke)
+    import textwrap
+    rinci = [r for baris in rincian_bukti(trx, berat=tampilkan_selisih) for r in textwrap.wrap(baris, 47)]
     tinggi = (58 + 5.2 * len(baris) + (14 if tampilkan_selisih else 0)
-              + (8 if trx.catatan else 0) + (5 if tanda else 0) + 28) * mm
+              + (8 if trx.catatan else 0) + (5 if tanda else 0) + 28 + 3.5 * len(rinci)) * mm
 
     buf = io.BytesIO()
     c = rl_canvas.Canvas(buf, pagesize=(STRUK_L, tinggi))
@@ -310,6 +314,13 @@ def bukti_thermal(*, trx, aturan, pihak: str, petugas: str, muatan,
         c.setFont(BIASA, 6.6)
         c.drawString(M, y, _potong(c, trx.catatan, BIASA, 6.6, L))
 
+    if rinci:
+        garis()
+        c.setFont(BIASA, 6.4)
+        for baris in rinci:
+            y -= 3.5 * mm
+            c.drawString(M, y, baris)
+
     # Tanda tangan
     y -= 12 * mm
     for i, (label, nama) in enumerate((("Petugas timbang", petugas),
@@ -332,3 +343,22 @@ def bukti_thermal(*, trx, aturan, pihak: str, petugas: str, muatan,
     c.showPage()
     c.save()
     return buf.getvalue()
+
+
+def _lampiran_muatan(c, trx):
+    import textwrap
+    rinci = [r for baris in rincian_bukti(trx, berat=False) for r in textwrap.wrap(baris, 100)]
+    if not rinci:return
+    y = 0
+    for baris in rinci:
+        if y < 15 * mm:
+            if y:c.showPage()
+            c.setPageSize((NCR_L, NCR_T))
+            y = NCR_T - 12 * mm
+            c.setFont(TEBAL, 9)
+            c.drawString(8 * mm, y, 'Lampiran muatan - ' + trx.kode)
+            y -= 8 * mm
+        c.setFont(BIASA, 8)
+        c.drawString(8 * mm, y, baris)
+        y -= 4.5 * mm
+    c.showPage()

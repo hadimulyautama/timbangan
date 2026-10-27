@@ -2,17 +2,18 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+from urllib.parse import urlencode, urlsplit
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import Response
+from fastapi.responses import Response, JSONResponse
 from sqlalchemy import select
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.timbangan import epos, logic, pdf, service
+from app.timbangan import epos, logic, pdf, service, sopir, koreksi as borang_koreksi
 from app.timbangan.config import tsettings
 from app.timbangan.db import get_db, hari_ini
-from app.timbangan.models import TimbanganAkun, TimbanganCetak
+from app.timbangan.models import TimbanganAkun, TimbanganCetak, TimbanganPemeriksaan
 from app.config import settings
 from app.timbangan.routes.pos import _angka
 from app.timbangan.security import (
@@ -22,10 +23,24 @@ from app.timbangan.security import (
 )
 from app.timbangan.web import galat_db, PREFIX, redirect, render
 
+from app.timbangan import pengiriman, klien_produksi, rincian_keluar, format as fmt
+
 router = APIRouter(prefix=PREFIX)
 
 #: Dua arah retur digabung jadi satu pilihan filter — lihat `daftar()`.
 ARAH_RETUR = (logic.RETUR_MASUK, logic.RETUR_KELUAR)
+
+
+def _kembali_riwayat(request):
+    """Konteks daftar baca saja, dibatasi ke URL lokal daftar yang lama."""
+    url = request.query_params.get("kembali", "")
+    try:
+        bagian = urlsplit(url)
+    except ValueError:
+        return None
+    if not bagian.scheme and not bagian.netloc and bagian.path in {PREFIX + p for p in ("/transaksi", "/laporan", "/monitoring")}:
+        return url
+    return None
 
 #: Kategori penutup pemeriksaan. Sengaja tidak ada kategori "curang":
 #: sistem mencatat temuan, manusia yang menyimpulkan.
@@ -141,17 +156,48 @@ async def daftar(
     except ValueError:
         f.dari, f.sampai = hari_ini() - timedelta(days=BAWAAN_HARI), hari_ini()
 
-    halaman = max(1, int(q.get("hal", 1) or 1))
+    try:
+        halaman = max(1, int(q.get("hal", 1) or 1))
+    except ValueError:
+        halaman = 1
     per_halaman = 50
+    total = await service.hitung_transaksi(db, f)
+    jumlah_halaman = max(1, (total + per_halaman - 1) // per_halaman)
+    halaman = min(halaman, jumlah_halaman)
+    baris = await service.daftar_transaksi(
+        db, f, batas=per_halaman, offset=(halaman - 1) * per_halaman)
+    # Hanya membaca keadaan lembar yang nyata. Status kontrol yang tersimpan
+    # tidak membuktikan lembar masih dibuka (atau bahwa Produksi memverifikasi).
+    pemeriksaan = {}
+    if baris:
+        pemeriksaan = dict((await db.execute(
+            select(TimbanganPemeriksaan.transaksi_id, TimbanganPemeriksaan.status)
+            .where(TimbanganPemeriksaan.transaksi_id.in_([b.trx.id for b in baris]))
+            .order_by(TimbanganPemeriksaan.id)
+        )).all())
+
+    def alamat(**ganti):
+        # Satu pembentuk URL untuk semua halaman. Tidak menyalin query mentah
+        # agar pesan kilat dan parameter lain tak menjadi filter tersembunyi.
+        nilai = {"dari": f.dari.isoformat(), "sampai": f.sampai.isoformat(),
+                 "arah": arah_pilih, "jenis": f.jenis_kode, "status": f.status_kontrol,
+                 "tiket": f.status_tiket, "cari": f.cari, "hal": halaman, **ganti}
+        return PREFIX + "/transaksi?" + urlencode({k: v for k, v in nilai.items() if v})
+
+    def tujuan(path):
+        return PREFIX + path + "?" + urlencode({"kembali": alamat()})
+
+    master = await service.daftar_jenis(db, hanya_aktif=False)
+    belum_ada = total == 0 and not await service.hitung_transaksi(
+        db, service.FilterTransaksi(sertakan_void=True))
     return render(
         request, "daftar.html",
         f=f, halaman=halaman, per_halaman=per_halaman,
         arah_pilih=arah_pilih,
-        total=await service.hitung_transaksi(db, f),
-        baris=await service.daftar_transaksi(
-            db, f, batas=per_halaman, offset=(halaman - 1) * per_halaman
-        ),
-        jenis=await service.daftar_jenis(db),
+        total=total, baris=baris, jumlah_halaman=jumlah_halaman, alamat=alamat, tujuan=tujuan,
+        pemeriksaan=pemeriksaan, belum_ada=belum_ada,
+        jenis=[j for j in master if j.status == "aktif" or j.kode == f.jenis_kode],
+        NAMA_JENIS={j.kode: j.nama for j in master},
         kembali=f"{PREFIX}/",
     )
 
@@ -176,10 +222,13 @@ async def rincian(
         .order_by(TimbanganCetak.urutan)
     )).scalars())
 
+    pemeriksaan = await service.pemeriksaan_transaksi(db, b.trx.id)
+    keluar = await rincian_keluar.baca(db, b.trx, pemeriksaan, cetak) if b.trx.arah == logic.KELUAR and not b.trx.partai else None
     return render(
-        request, "rincian.html",
+        request, "rincian_keluar.html" if keluar else "rincian.html",
+        layar="rincian", keluar=keluar, produksi_url=settings.produksi_web_url,
         b=b, aturan=aturan,
-        pemeriksaan=await service.pemeriksaan_transaksi(db, b.trx.id),
+        pemeriksaan=pemeriksaan,
         cetak=cetak,
         boleh_ubah=boleh_ubah, sebab_terkunci=sebab,
         boleh_batal=service.boleh_membatalkan(akun, b.trx),
@@ -189,7 +238,7 @@ async def rincian(
             and b.trx.status_transaksi != "VOID" else None
         ),
         kategori_hasil=KATEGORI_HASIL,
-        kembali=f"{PREFIX}/",
+        kembali=_kembali_riwayat(request) or f"{PREFIX}/",
     )
 
 
@@ -207,19 +256,80 @@ async def form_koreksi(
     except service.LayananError as e:
         return redirect("/transaksi" if akun.is_admin else "/", err=str(e))
 
-    boleh, sebab = service.boleh_mengubah(b.trx, akun)
+    boleh, sebab = service.boleh_mengubah(b.trx, akun, (await service.setelan.semua(db))["jam_kunci_otomatis"])
     if not boleh:
         return redirect(f"/transaksi/{transaksi_id}", err=sebab)
 
+    batas_tautan = None
+    try:
+        async with db.begin_nested():
+            await service.pastikan_bebas_tautan(db, b.trx, tindakan="Koreksi identitas")
+    except service.LayananError:
+        batas_tautan = ("Tiket tertaut PadiFlow. Identitas yang sudah disalin dilindungi; nama sopir dan catatan mengikuti izin lama. Bobot dan kemasan retur tertaut dilindungi lebih ketat.")
+    except DBAPIError:
+        batas_tautan = "Tautan PadiFlow belum dapat dipastikan. Server tetap memeriksa pembatasannya saat menyimpan."
     return render(
         request, "koreksi.html",
-        versi=service.versi_tiket(b.trx),
+        versi=service.versi_tiket(b.trx), batas_tautan=batas_tautan,
+        sopir_pilihan=await sopir.daftar_pilihan(db),
+        kendaraan=await service.kendaraan_pilihan(db),
         b=b, aturan=await service.aturan_untuk(db, b.trx.jenis_kode),
-        pihak_pilihan=await service.pihak_pilihan(db, b.trx.arah),
-        kolom_nama=service.nama_kolom_pihak(b.trx.arah),
+        pihak_pilihan=await service.pihak_pilihan(db, b.trx.arah, jasa=b.trx.jasa),
+        kolom_nama=service.nama_kolom_pihak(b.trx.arah, jasa=b.trx.jasa),
         jenis=await service.daftar_jenis(db),
         kembali=f"{PREFIX}/transaksi/{transaksi_id}",
     )
+
+
+@router.post("/transaksi/{transaksi_id}/koreksi/pratinjau")
+async def pratinjau_koreksi(
+    transaksi_id: int, request: Request,
+    akun: TimbanganAkun = Depends(butuh_akun),
+    db: AsyncSession = Depends(get_db),
+):
+    """Tidak memanggil penyimpanan, audit, sinkronisasi atau stok."""
+    def jawab(data, status=200):
+        return JSONResponse(data, status_code=status, headers={"Cache-Control":"no-store"})
+    try:
+        b=await _ambil(db, transaksi_id, akun)
+        boleh,sebab=service.boleh_mengubah(b.trx,akun,(await service.setelan.semua(db))["jam_kunci_otomatis"])
+        if not boleh:return jawab({"tersedia":False,"pesan":sebab},403)
+        data=await request.form()
+        service.pastikan_versi(b.trx, str(data.get("versi", "")).strip() or None)
+        perubahan,muatan,ringkasan=borang_koreksi.baca(b.trx,data)
+        if data.get('perbarui_muatan') == '1':
+            sumber = await pengiriman.baca(db, transaksi_id)
+            if not b.trx.pengiriman_snapshot or sumber['kiriman_id'] != b.trx.pengiriman_snapshot['kiriman_id']:
+                raise service.LayananError('Rincian bukan dari kiriman yang tersimpan pada tiket.')
+            muatan = pengiriman.input_muatan(sumber)
+            if sumber != b.trx.pengiriman_snapshot:
+                ringkasan.append({'field':'pengiriman_snapshot','label':'Cuplikan muatan PadiFlow',
+                    'lama':pengiriman.ringkasan(b.trx.pengiriman_snapshot),'baru':pengiriman.ringkasan(sumber) + ' · data sumber terbaru'})
+                ringkasan.append({'field':'acuan_pengiriman','label':'Total acuan muatan PadiFlow',
+                    'lama':fmt.kg(sum(p['subtotal'] for p in pengiriman.kelompok(b.trx.pengiriman_snapshot))),
+                    'baru':fmt.kg(sum(p['subtotal'] for p in pengiriman.kelompok(sumber)))})
+        hasil=await borang_koreksi.pratinjau(db,b.trx,perubahan,muatan)
+        # Nama pihak dibaca dari keluarga ID yang benar; tidak membocorkan
+        # tabel kontak di luar cakupan yang sudah disediakan formulir.
+        pihak=service.pihak_untuk(b.trx.arah,jasa=b.trx.jasa)
+        if pihak:
+            model,kolom,_=pihak
+            for r in ringkasan:
+                if r["field"]==kolom:
+                    for k in ("lama","baru"):
+                        obj=await db.get(model,int(r[k])) if r[k].isdigit() else None
+                        if obj:r[k]=getattr(obj,service.nama_kolom_pihak(b.trx.arah,jasa=b.trx.jasa))
+        nilai={"Berat barang sebelum koreksi":borang_koreksi.tampil(b.trx.berat_barang_kg,"berat_acuan_kg")}
+        if hasil is None:
+            nilai.update({"Netto timbangan":"Belum tersedia", "Total tara":"Belum final", "Berat barang setelah koreksi":"Belum tersedia", "Status kontrol":"Belum dinilai"})
+        if hasil:
+            nilai.update({"Netto timbangan":borang_koreksi.tampil(hasil.netto_timbangan_kg,"timbang1_kg"),"Total tara":borang_koreksi.tampil(hasil.total_tara_kg,"timbang1_kg"),"Berat barang setelah koreksi":borang_koreksi.tampil(hasil.berat_barang_kg,"timbang1_kg"),"Status kontrol":hasil.status_label})
+            if hasil.berat_acuan_kg>0 and hasil.status!="TANPA_KONTROL":
+                nilai["Berat dokumen"]=borang_koreksi.tampil(hasil.berat_acuan_kg,"berat_acuan_kg")
+                nilai["Selisih"]=("+" if hasil.selisih_kg>0 else "")+borang_koreksi.tampil(hasil.selisih_kg,"timbang1_kg")
+        return jawab({"tersedia":True,"perubahan":ringkasan,"nilai":nilai,"terbuka":hasil is None})
+    except (service.LayananError,logic.ValidasiError,pengiriman.MuatanTidakSah,klien_produksi.ProduksiTakTersedia) as e:
+        return jawab({"tersedia":False,"pesan":str(e)},409 if "sudah diubah orang lain" in str(e) else 422)
 
 
 @router.post("/transaksi/{transaksi_id}/koreksi")
@@ -228,6 +338,7 @@ async def simpan_koreksi(
     request: Request,
     alasan: str = Form(...),
     versi: str = Form(""),
+    perbarui_muatan: str = Form(""),
     asli_timbang1_kg: str = Form(""),
     asli_timbang2_kg: str = Form(""),
     asli_nomor_polisi: str = Form(""),
@@ -260,79 +371,34 @@ async def simpan_koreksi(
             err="Koreksi harus disertai alasan.",
         )
 
-    # ── Hanya yang BERBEDA dari nilai aslinya yang diterapkan ──
-    #
-    # Borang mengisi ulang tiap kolom dengan nilai yang SUDAH DIBULATKAN, dan
-    # kode ini dulu memperlakukan tiap kolom terisi sebagai perubahan.
-    # Akibatnya memperbaiki nama sopir ikut mengubah tara 0,0858 → 0,086 dan
-    # nota 13.990,5 → 13.990 — dua angka yang tak pernah disentuh siapa pun.
-    # Temuan QA T-06.
-    def _berubah_angka(baru_: str, asli_: str) -> bool:
-        """Beda sungguhan, bukan beda ejaan. "13.990" dan "13990,0" sama."""
-        if not baru_.strip():
-            return False
-        if not asli_.strip():
-            return True
-        return abs(_angka(baru_) - _angka(asli_)) > 1e-9
-
-    def _berubah_teks(baru_: str, asli_: str) -> bool:
-        return bool(baru_.strip()) and baru_.strip() != (asli_ or "").strip()
-
-    perubahan: dict = {}
-    if _berubah_angka(timbang1_kg, asli_timbang1_kg):
-        perubahan["timbang1_kg"] = _angka(timbang1_kg)
-    if b.trx.timbang2_kg is not None and _berubah_angka(timbang2_kg, asli_timbang2_kg):
-        perubahan["timbang2_kg"] = _angka(timbang2_kg)
-    if _berubah_teks(nomor_polisi, asli_nomor_polisi):
-        perubahan["nomor_polisi"] = nomor_polisi
-    if _berubah_teks(nama_sopir, asli_nama_sopir):
-        perubahan["nama_sopir"] = nama_sopir
-    if supplier_id.isdigit():
-        # Kolomnya ditentukan arah transaksi, bukan nama isian di formulir.
-        pihak = service.pihak_untuk(b.trx.arah)
-        if pihak is not None:
-            perubahan[pihak[1]] = int(supplier_id)
-    if catatan:
-        perubahan["catatan"] = catatan.strip()
-
-    muatan = None
-    muatan_berubah = (
-        _berubah_angka(jumlah_karung, asli_jumlah_karung)
-        or _berubah_angka(berat_acuan_kg, asli_berat_acuan_kg)
-        or _berubah_angka(tara_per_karung_kg, asli_tara_per_karung_kg)
-        or _berubah_teks(nomor_acuan, asli_nomor_acuan)
-    )
-    if muatan_berubah:
-        lama = b.trx.muatan[0] if b.trx.muatan else None
-        muatan = [service.InputMuatan(
-            jenis_kode=b.trx.jenis_kode,
-            jumlah_karung=int(_angka(
-                jumlah_karung, lama.jumlah_karung if lama else 0
-            )),
-            tara_per_karung_kg=_angka(
-                tara_per_karung_kg, float(lama.tara_per_karung_kg) if lama else 0
-            ),
-            berat_acuan_kg=_angka(
-                berat_acuan_kg, float(lama.berat_acuan_kg) if lama else 0
-            ),
-            nomor_acuan=(nomor_acuan.strip() or (lama.nomor_acuan if lama else None)),
-        )]
-
+    data_form = locals()
     try:
+        perubahan, muatan, _ = borang_koreksi.baca(b.trx, data_form)
+        service.pastikan_versi(b.trx,versi.strip() or None)
+        await borang_koreksi.periksa_bacaan_terbuka(db,b.trx,perubahan)
+        sumber = await pengiriman.baca(db, transaksi_id) if perbarui_muatan == '1' else None
         await service.koreksi_transaksi(
             db, akun=akun, trx=b.trx, perubahan=perubahan, muatan=muatan,
             # Versi yang dilihat borang saat DIBUKA. Yang tak cocok ditolak
             # sambil menyebut jamnya — bukan menimpa koreksi orang lain.
             versi=versi.strip() or None,
-            alasan=alasan.strip(),
+            alasan=alasan.strip(), pengiriman_snapshot=sumber,
             ip=request.client.host if request.client else None,
         )
-    except (service.LayananError, logic.ValidasiError) as e:
+    except (service.LayananError, logic.ValidasiError, pengiriman.MuatanTidakSah, klien_produksi.ProduksiTakTersedia) as e:
         return redirect(f"/transaksi/{transaksi_id}/koreksi", err=str(e))
     except DBAPIError as e:
         # R-T-01: galat basis data bukan layar hitam.
         return redirect(f"/transaksi/{transaksi_id}/koreksi", err=await galat_db(db, e, "menyimpan koreksi"))
 
+    if sumber and akun.akun_id:
+        try:
+            hasil = await klien_produksi.selesaikan_pengiriman(transaksi_id, akun.akun_id,
+                         sidik_sumber=b.trx.pengiriman_snapshot.get('sidik_sumber'))
+            if not hasil.get('selesai'):
+                return redirect(f"/transaksi/{transaksi_id}", err="Koreksi tersimpan; verifikasi PadiFlow masih menunggu pemeriksaan.")
+        except klien_produksi.ProduksiTakTersedia as e:
+            return redirect(f"/transaksi/{transaksi_id}", err=f"Koreksi tersimpan; verifikasi PadiFlow belum terkonfirmasi: {e}")
     return redirect(
         f"/transaksi/{transaksi_id}",
         ok="Koreksi tersimpan. Angka sebelumnya tetap tercatat di jejak audit.",
@@ -434,7 +500,7 @@ async def pilih_cetak(
         request, "cetak_pilih.html",
         b=b, aturan=await service.aturan_untuk(db, b.trx.jenis_kode),
         cetak=await _riwayat_cetak(db, b.trx.id),
-        kembali=f"{PREFIX}/transaksi/{transaksi_id}",
+        kembali=_kembali_riwayat(request) or f"{PREFIX}/transaksi/{transaksi_id}",
     )
 
 
@@ -466,7 +532,7 @@ async def _isi_bukti(db, transaksi_id, akun):
     return b, aturan, dict(
         cetakan_ke=await service.cetakan_ke(db, b.trx.id),
         trx=b.trx, aturan=aturan,
-        pihak=(b.supplier_nama or b.trx.pihak_nama or ""),
+        pihak=b.pihak_tampil,
         # ── NAMA YANG MENCETAK, bukan yang menimbang ──
         #
         # Keputusan pemilik 30 September 2026: "yang di struk bukan petugas

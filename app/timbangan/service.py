@@ -17,13 +17,16 @@ import json
 import dataclasses
 import logging
 import math
+from hashlib import blake2b
 from typing import Sequence
 from dataclasses import dataclass, field
+from decimal import Decimal, ROUND_HALF_UP
 from datetime import date, datetime, time, timedelta
 
-from sqlalchemy import delete, func, literal, or_, select, text, update
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy import String, cast, case, delete, func, literal, or_, select, text, update
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import raiseload, selectinload
 from hmu_core import (JenisProses, ProsesTerpadu, StatusProses,
                        normalisasi_nomor_polisi)
 
@@ -481,16 +484,24 @@ async def kendaraan_dari_nopol(
     db: AsyncSession, nopol: str | None
 ) -> TimbanganKendaraan | None:
     """Cari armada; daftarkan bila belum ada. Master tumbuh sendiri dari pakai."""
-    bersih = normalisasi_nopol(nopol)
+    bersih = _format_nopol(nopol)
     if not bersih:
         return None
-    kendaraan = (await db.execute(
-        select(TimbanganKendaraan).where(TimbanganKendaraan.nomor_polisi == bersih)
-    )).scalars().first()
+    q = select(TimbanganKendaraan).where(TimbanganKendaraan.nomor_polisi == bersih)
+    kendaraan = (await db.execute(q)).scalars().first()
     if kendaraan is None:
         kendaraan = TimbanganKendaraan(nomor_polisi=bersih)
-        db.add(kendaraan)
-        await db.flush()
+        try:
+            # Dua perangkat dapat mengenalkan plat yang sama bersamaan.
+            # Constraint unik menentukan pemenangnya; savepoint menjaga
+            # transaksi timbang tetap bisa dilanjutkan oleh perangkat kedua.
+            async with db.begin_nested():
+                db.add(kendaraan)
+                await db.flush()
+        except IntegrityError:
+            kendaraan = (await db.execute(q)).scalars().first()
+            if kendaraan is None:
+                raise
     return kendaraan
 
 
@@ -524,6 +535,7 @@ PIHAK_ARAH: dict[str, tuple] = {
     logic.KELUAR: (Pelanggan, "pelanggan_id", "nama_pelanggan"),
     logic.RETUR_MASUK: (Pelanggan, "pelanggan_id", "nama_pelanggan"),
     logic.RETUR_KELUAR: (Supplier, "supplier_id", "nama_supplier"),
+    logic.BEBAS: (Pelanggan, "pelanggan_id", "nama_pelanggan"),
 }
 
 
@@ -585,8 +597,13 @@ async def daftar_pihak(db: AsyncSession, arah: str, *, jasa: bool = False) -> li
     if pihak is None:
         return []
     model, _, kolom_nama = pihak
+    q = _saring_hidup(select(model), model)
+    if model in (Supplier, Pelanggan):
+        # Master lokal lama tetap ada untuk riwayat, tetapi bukan calon
+        # pemasok tiket baru. Hanya kontak yang sudah tertaut Kledo ditawarkan.
+        q = q.where(model.kledo_contact_id.is_not(None))
     return list((await db.execute(
-        _saring_hidup(select(model), model).order_by(getattr(model, kolom_nama))
+        q.order_by(getattr(model, kolom_nama))
     )).scalars())
 
 
@@ -677,13 +694,48 @@ async def kendaraan_dikenal(
         )).scalars()
     }
     hasil = []
+    sudah = set()
+    from app.timbangan.sopir import nama_pengganti
     for r in terakhir:
         t = baris.get(r.id_akhir)
+        try:
+            nomor = _format_nopol(r.nomor_polisi)
+        except LayananError:
+            continue  # Nomor historis tidak lengkap bukan saran perjalanan baru.
+        if nomor in sudah:
+            continue
+        sudah.add(nomor)
         hasil.append(KendaraanDikenal(
-            nomor_polisi=r.nomor_polisi,
-            sopir_terakhir=(t.nama_sopir or None) if t else None,
+            nomor_polisi=nomor,
+            # Tiket lama tetap utuh, tetapi penanda tanpa identitas tidak
+            # boleh muncul lagi sebagai isian otomatis untuk perjalanan baru.
+            sopir_terakhir=(t.nama_sopir or None) if t and not nama_pengganti(t.nama_sopir) else None,
             terakhir=t.tanggal if t else None,
         ))
+    return hasil
+
+
+async def kendaraan_pilihan(db: AsyncSession) -> list[KendaraanDikenal]:
+    """Semua master aktif serta nomor valid pada tiket lama, tanpa menulis data.
+
+    Metadata sopir mengikuti kedatangan terakhir. Master yang belum memiliki
+    tiket juga bisa dipilih; variasi spasi tidak menghasilkan opsi kedua.
+    """
+    hasil = await kendaraan_dikenal(db)
+    sudah = {k.nomor_polisi for k in hasil}
+    masters = (await db.scalars(
+        select(TimbanganKendaraan).where(TimbanganKendaraan.status == "aktif")
+        .order_by(TimbanganKendaraan.nomor_polisi)
+    )).all()
+    for m in masters:
+        try:
+            nomor = _format_nopol(m.nomor_polisi)
+        except LayananError:
+            continue
+        if not nomor or nomor in sudah:
+            continue
+        sudah.add(nomor)
+        hasil.append(KendaraanDikenal(nomor, None, None))
     return hasil
 
 
@@ -951,6 +1003,30 @@ class InputTimbang:
     dibuat_offline: bool = False
 
 
+def periksa_jumlah_karung(muatan, *, wajib: bool = False) -> int:
+    """Jumlah kemasan harus bilangan bulat; wajib sebelum tiket ditutup.
+
+    Tidak dipasang sebagai CHECK basis data: tiket lama tetap dapat dibaca
+    dan dikirim ulang apa adanya. Validasi berlaku saat menyimpan pekerjaan
+    baru, termasuk kiriman luring yang tidak melewati validasi peramban.
+    """
+    total = 0
+    for m in muatan or []:
+        try:
+            nilai = _batas_angka(m.jumlah_karung or 0, "Jumlah karung", maksimum=BATAS_KARUNG)
+        except (TypeError, ValueError) as e:
+            raise LayananError("Jumlah karung harus berupa bilangan bulat.") from e
+        if not nilai.is_integer():
+            raise LayananError("Jumlah karung harus berupa bilangan bulat.")
+        total += int(nilai)
+    if wajib and total <= 0:
+        raise LayananError(
+            "Jumlah karung belum diisi. Wajib diisi lebih dari 0 sebelum "
+            "penimbangan diselesaikan. Jika belum pasti, simpan sementara."
+        )
+    return total
+
+
 def _baris_logic(muatan: list[TimbanganMuatan]) -> list[logic.BarisMuatan]:
     return [
         logic.BarisMuatan(
@@ -997,8 +1073,13 @@ def _terapkan_hasil(trx: TimbanganTransaksi, hasil: logic.Hasil) -> None:
 
 
 def _kosongkan_hasil(trx: TimbanganTransaksi) -> None:
+    trx.berat_bermuatan_kg = None
+    trx.berat_kosong_kg = None
     trx.netto_timbangan_kg = None
     trx.berat_barang_kg = None
+    trx.total_tara_kg = 0
+    trx.jumlah_karung = 0
+    trx.berat_acuan_kg = 0
     trx.selisih_kg = 0
     trx.selisih_persen = 0
     trx.batas_bawah_kg = None
@@ -1011,6 +1092,7 @@ async def _pasang_muatan(
     db: AsyncSession, trx: TimbanganTransaksi, muatan: list[InputMuatan]
 ) -> None:
     """Ganti seluruh baris muatan. Bentuk data sama untuk masuk & keluar."""
+    periksa_muatan(muatan)
     # Koleksi dimuat lebih dulu: di SQLAlchemy async, menyentuh relasi yang
     # belum termuat memicu I/O di tempat yang tidak mengizinkannya.
     await db.refresh(trx, ["muatan"])
@@ -1195,6 +1277,8 @@ def _isi_berbeda(trx: TimbanganTransaksi, data: InputTimbang) -> str | None:
     for kolom in _ISI_TIMBANG1:
         ada = getattr(trx, kolom)
         minta = diminta[kolom]
+        if kolom == "nomor_polisi":
+            ada = normalisasi_nopol(ada)
         if kolom == "timbang1_kg":
             # Pada PARTAI, `timbang1_kg` adalah JUMLAH seluruh baris — ia
             # memang berubah tiap barang susulan naik timbangan.
@@ -1209,6 +1293,45 @@ def _isi_berbeda(trx: TimbanganTransaksi, data: InputTimbang) -> str | None:
             continue
         if (ada or None) != (minta or None):
             return f"{kolom} ({ada or '-'} ≠ {minta or '-'})"
+    return None
+
+
+def _isi_kedua_berbeda(
+    trx: TimbanganTransaksi, *, muatan: list[InputMuatan] | None,
+    tara_lain_kg: float | None, catatan: str | None,
+    waktu_operator: datetime | None,
+) -> str | None:
+    """Replay boleh melewatkan kolom opsional, tetapi tidak mengganti isinya.
+
+    Berat kedua yang sama belum membuktikan muatan sama: jumlah karung, tara,
+    nota, dan metadata kemasan juga menentukan hasil. Bandingkan angka pada
+    presisi kolomnya agar replay angka sebelum pembulatan DB tetap dikenali.
+    """
+    def angka(nilai, digit):
+        # Penulis muatan mengirim float ke kolom NUMERIC; asyncpg mengodekan
+        # nilai biner itu sebagai Decimal. Pakai konversi yang sama supaya
+        # angka tepat di batas pembulatan tetap dikenali saat dikirim ulang.
+        return Decimal.from_float(float(nilai or 0)).quantize(
+            Decimal(1).scaleb(-digit), rounding=ROUND_HALF_UP)
+
+    if muatan is not None:
+        if len(muatan) != len(trx.muatan):
+            return "rincian muatan"
+        presisi = {"tara_per_karung_kg": 4, "berat_acuan_kg": 3}
+        for lama, baru in zip(trx.muatan, muatan):
+            for kolom in dataclasses.fields(InputMuatan):
+                a, b = getattr(lama, kolom.name), getattr(baru, kolom.name)
+                if kolom.name in presisi:
+                    a = angka(a, presisi[kolom.name])
+                    b = angka(b, presisi[kolom.name])
+                if (a or None) != (b or None):
+                    return "rincian muatan"
+    if tara_lain_kg is not None and angka(trx.tara_lain_kg, 3) != angka(tara_lain_kg, 3):
+        return "tara lain"
+    if catatan is not None and (trx.catatan or None) != (catatan or None):
+        return "catatan"
+    if waktu_operator is not None and berzona(waktu_operator) != berzona(trx.timbang2_waktu):
+        return "jam timbang kedua"
     return None
 
 
@@ -1264,7 +1387,7 @@ async def ambil_kode_terkunci(db: AsyncSession, kode: str) -> TimbanganTransaksi
     """
     return (await db.execute(
         select(TimbanganTransaksi).where(TimbanganTransaksi.kode == kode)
-        .with_for_update()
+        .with_for_update().execution_options(populate_existing=True)
     )).scalars().first()
 
 
@@ -1401,22 +1524,17 @@ def _wajib_pihak(arah: str, *, punya_id: bool, pihak_nama: str | None,
                  jasa: bool = False) -> None:
     """Setiap transaksi harus menyebut lawannya.
 
-    Pemasok: dari daftar ATAU diketik bebas untuk yang belum terdaftar.
-    Pelanggan: HANYA dari daftar Kledo — permintaan pemilik 4 Oktober 2026,
-    "nama pelanggan tidak boleh diketik bebas, harus yang dari kontak
-    kledo". Dulu keduanya sama-sama punya pintu ketik-bebas karena
-    sinkronisasi Kledo cuma berjalan mingguan; sejak tombol "Perbarui
-    Kontak" ada (app/services/kledo_sinkron.py di produksi), pelanggan baru
-    tak lagi harus menunggu jadwal — Admin tinggal menekannya sebelum truk
-    datang. Pemasok TIDAK ikut berubah: permintaannya hanya menyebut
-    pelanggan.
+    Pemasok dan pelanggan wajib dari daftar Kledo. Nama bebas hanya untuk
+    perpindahan internal yang menyebut lokasi, bukan nama kontak.
+    Keputusan pelanggan 4 Oktober 2026 diperluas ke pemasok pada 25 Oktober.
+    Kontak baru disegarkan lewat Perbarui Kontak, bukan dibuat dari ejaan
+    bebas yang kemudian memecah identitas dan riwayat pembeliannya.
 
     Dipusatkan lewat `pihak_untuk` (bukan membandingkan `arah` sendiri):
     satu tempat yang tahu "pelanggan atau pemasok", sama seperti alasan
     `pihak_untuk` sendiri dipusatkan — lihat docstring-nya.
 
-    "Salah satu dari dua" tidak bisa dinyatakan HTML, jadi pagarnya memang
-    harus di sini — bukan sekadar `required` di isian.
+    Pagar layanan juga melindungi formulir lama dan kiriman luring.
     """
     # Pengiriman memperoleh pelanggan dari perintah barang keluar Produksi.
     if arah == logic.KELUAR and not jasa:
@@ -1427,7 +1545,7 @@ def _wajib_pihak(arah: str, *, punya_id: bool, pihak_nama: str | None,
     sebutan = ("Pemilik barang" if jasa
                else logic.PIHAK_LABEL.get(arah, "Nama pihak"))
     pihak = pihak_untuk(arah, jasa=jasa)
-    if pihak is not None and pihak[0] is Pelanggan:
+    if pihak is not None:
         if punya_id:
             return
         raise LayananError(
@@ -1441,6 +1559,23 @@ def _wajib_pihak(arah: str, *, punya_id: bool, pihak_nama: str | None,
         f"{sebutan} wajib diisi — pilih dari daftar, atau ketik namanya "
         "bila belum terdaftar."
     )
+
+
+async def _periksa_kontak_kledo(db: AsyncSession, supplier_id: int | None,
+                               model=Supplier) -> None:
+    """ID dari formulir/luring juga harus menunjuk pemasok Kledo yang hidup.
+
+    Memeriksa dropdown saja membiarkan formulir lama dan ID lokal buatan
+    melewati aturan. Ini hanya gerbang identitas BARU; pembaca riwayat dan
+    koreksi bobot tiket lama tidak menyaring master historisnya.
+    """
+    pemasok = await db.get(model, supplier_id) if supplier_id else None
+    if (pemasok is None or not pemasok.kledo_contact_id
+            or pemasok.deleted_at is not None or pemasok.status == "nonaktif"):
+        raise LayananError(
+            f"{'Supplier' if model is Supplier else 'Pemilik barang'} wajib dipilih dari daftar Kledo yang aktif. Belum ada? "
+            "Minta Admin menekan “Perbarui Kontak” di Pengaturan."
+        )
 
 
 async def _periksa_jasa(
@@ -1497,6 +1632,14 @@ def _wajib_sopir(nama_sopir: str | None, *, cara: str = CARA_DUA_KALI) -> None:
         return
     if not (nama_sopir or "").strip():
         raise LayananError("Nama sopir wajib diisi.")
+
+
+def _format_nopol(nomor: str | None) -> str | None:
+    from hmu_core.armada import validasi_nomor_polisi
+    try:
+        return validasi_nomor_polisi(nomor)
+    except ValueError as e:
+        raise LayananError(str(e)) from e
 
 
 def _wajib_nopol(
@@ -1596,6 +1739,19 @@ def _batas_angka(nilai, nama: str, *, maksimum: float, minimum: float = 0.0):
     return n
 
 
+def periksa_muatan(muatan: list[InputMuatan]) -> None:
+    """Pagar angka berlaku pada setiap penulisan muatan, termasuk koreksi.
+
+    Memeriksa timbang pertama saja membiarkan tara negatif dari timbang
+    kedua menambah berat barang. Seluruh baris diperiksa sebelum ada mutasi.
+    """
+    periksa_jumlah_karung(muatan)
+    for m in muatan:
+        m.nomor_acuan = _batas_teks(m.nomor_acuan, "Nomor acuan", BATAS_NOMOR_ACUAN)
+        _batas_angka(m.tara_per_karung_kg, "Tara per karung", maksimum=1_000)
+        _batas_angka(m.berat_acuan_kg, "Berat acuan", maksimum=1_000_000)
+
+
 def _periksa_isian(data: "InputTimbang") -> None:
     """Seluruh batas diperiksa SEKALIGUS, sebelum satu baris pun ditulis.
 
@@ -1608,11 +1764,7 @@ def _periksa_isian(data: "InputTimbang") -> None:
     data.pihak_nama = _batas_teks(data.pihak_nama, "Nama pihak", BATAS_NAMA)
     _batas_angka(data.berat_kg, "Berat timbang", maksimum=1_000_000)
     _batas_angka(data.tara_lain_kg, "Tara lain", maksimum=1_000_000)
-    for m in (data.muatan or []):
-        m.nomor_acuan = _batas_teks(m.nomor_acuan, "Nomor acuan", BATAS_NOMOR_ACUAN)
-        _batas_angka(m.jumlah_karung, "Jumlah karung", maksimum=BATAS_KARUNG)
-        _batas_angka(m.tara_per_karung_kg, "Tara per karung", maksimum=1_000)
-        _batas_angka(m.berat_acuan_kg, "Berat acuan", maksimum=1_000_000)
+    periksa_muatan(data.muatan or [])
 
 
 def jepit_persen(nilai: float | None) -> float:
@@ -1701,7 +1853,7 @@ async def pastikan_waktu_wajar(
 
 
 async def simpan_timbang_pertama(
-    db: AsyncSession, *, akun: TimbanganAkun, data: InputTimbang, ip: str | None = None
+    db: AsyncSession, *, akun: TimbanganAkun, data: InputTimbang, ip: str | None = None, komit: bool = True
 ) -> TimbanganTransaksi:
     """Timbang pertama → tiket terbuka (atau langsung selesai bila SEKALI).
 
@@ -1722,12 +1874,6 @@ async def simpan_timbang_pertama(
 
     aturan = await aturan_untuk(db, data.jenis_kode)
     _wajib_nopol(aturan.arah, data.nomor_polisi, cara=data.cara_timbang)
-    _wajib_pihak(
-        aturan.arah,
-        punya_id=bool(data.pelanggan_id if data.jasa else data.supplier_id),
-        pihak_nama=data.pihak_nama,
-        jasa=data.jasa,
-    )
     if data.jasa:
         await _periksa_jasa(db, aturan=aturan, data=data)
     _wajib_sopir(data.nama_sopir, cara=data.cara_timbang)
@@ -1749,7 +1895,6 @@ async def simpan_timbang_pertama(
             "angka ini tidak mungkin."
         )
     waktu = sekarang()
-    kendaraan = await kendaraan_dari_nopol(db, data.nomor_polisi)
 
     # ── Siapa tiket ini: dicari lewat KUNCI, bukan lewat nomor ──
     #
@@ -1759,6 +1904,16 @@ async def simpan_timbang_pertama(
     # membuka layar bersamaan memegang angka yang sama.
     trx = None
     if data.kunci:
+        if db.get_bind().dialect.name == "postgresql":
+            # Baris belum ada pada kiriman pertama, jadi FOR UPDATE saja
+            # tidak bisa mengunci apa pun. Kunci transaksi ini menyamakan
+            # jalur formulir biasa dengan pagar kiriman PWA: replay baru
+            # membaca tiket sesudah penyimpanan sebelumnya selesai. Hash
+            # stabil 64 bit juga menerima kunci lama yang bukan UUID.
+            kunci = int.from_bytes(blake2b(
+                data.kunci.encode(), digest_size=8, person=b"timbang1"
+            ).digest(), "big", signed=True)
+            await db.execute(select(func.pg_advisory_xact_lock(kunci)))
         trx = await ambil_kunci(db, data.kunci)
     if trx is None and data.kode:
         # Kiriman LAMA dari antrean luring, dibuat sebelum kunci ada. Ia
@@ -1775,6 +1930,45 @@ async def simpan_timbang_pertama(
                     "menerbitkannya."
                 )
             trx = lama_
+
+    # Kiriman ulang nomor historis yang sama tetap dikenali, tanpa membuat
+    # master tidak valid. Format baru berlaku untuk masukan baru/perubahan.
+    nomor_lama_sama = trx is not None and normalisasi_nopol(data.nomor_polisi) == normalisasi_nopol(trx.nomor_polisi)
+    if nomor_lama_sama:
+        kendaraan = await db.get(TimbanganKendaraan, trx.kendaraan_id) if trx.kendaraan_id else None
+    else:
+        data.nomor_polisi = _format_nopol(data.nomor_polisi)
+        kendaraan = await kendaraan_dari_nopol(db, data.nomor_polisi)
+
+    # Tiket yang SUDAH tersimpan dengan nama bebas tetap dapat dikirim ulang
+    # dan diselesaikan. Aturan baru hanya berlaku saat membuat atau mengganti
+    # identitas, sehingga antrean luring tidak memutus riwayat lama.
+    pihak = pihak_untuk(aturan.arah, jasa=data.jasa)
+    id_pihak = data.pelanggan_id if data.jasa else data.supplier_id
+    identitas_berubah = (trx is None or trx.arah != data.arah
+                        or trx.jasa != data.jasa
+                        or (pihak is not None and getattr(trx, pihak[1]) != id_pihak)
+                        or (trx.pihak_nama or "") != (data.pihak_nama or ""))
+    if identitas_berubah:
+        _wajib_pihak(
+            aturan.arah,
+            punya_id=bool(data.pelanggan_id if data.jasa else data.supplier_id),
+            pihak_nama=data.pihak_nama, jasa=data.jasa,
+        )
+        if pihak is not None and aturan.arah != logic.KELUAR:
+            await _periksa_kontak_kledo(db, id_pihak, pihak[0])
+            if (data.pihak_nama or "").strip():
+                raise LayananError("Supplier wajib dipilih dari daftar Kledo, tanpa nama bebas.")
+
+    from app.timbangan.sopir import nama_utama, normalisasi_nama, NamaSopirTidakSah
+    if (trx is not None and data.nama_sopir and trx.nama_sopir
+            and normalisasi_nama(data.nama_sopir)[1] == normalisasi_nama(trx.nama_sopir)[1]):
+        data.nama_sopir = trx.nama_sopir  # salinan historis tidak ditulis ulang
+    else:
+        try:
+            data.nama_sopir = await nama_utama(db, data.nama_sopir)
+        except NamaSopirTidakSah as e:
+            raise LayananError(str(e)) from e
 
     baru = trx is None
     if trx is None:
@@ -1814,6 +2008,9 @@ async def simpan_timbang_pertama(
             # Kiriman ulang sejati atas transaksi yang sudah tuntas — abaikan,
             # jangan mundurkan statusnya.
             return trx
+
+    if data.cara_timbang == CARA_SEKALI:
+        periksa_jumlah_karung(data.muatan, wajib=True)
 
     trx.arah = data.arah
     trx.jenis_kode = data.jenis_kode
@@ -1924,7 +2121,10 @@ async def simpan_timbang_pertama(
         perangkat=trx.perangkat_kode, ip=ip,
     )
     await _sinkronkan_proses_bersama(db, trx)
-    await db.commit()
+    if komit:
+        await db.commit()
+    else:
+        await db.flush()
     await db.refresh(trx)
     return trx
 
@@ -1960,6 +2160,7 @@ async def tambah_penimbangan(
     catatan: str | None = None, waktu_operator: datetime | None = None,
     kunci: str | None = None,
     ip: str | None = None,
+    komit: bool = True,
 ) -> TimbanganTransaksi:
     """Naikkan satu atau beberapa barang lagi ke timbangan, pada kode yang sama.
 
@@ -1975,6 +2176,9 @@ async def tambah_penimbangan(
         raise LayananError("Berat timbang harus lebih dari 0 kg.")
 
     trx = _pastikan_partai_terbuka(await ambil_kode_terkunci(db, kode), kode)
+
+    await pastikan_waktu_wajar(db, akun=akun, waktu=waktu_operator,
+                              sesudah=trx.timbang1_waktu, kode=kode, ip=ip)
 
     # ── Kiriman ULANG tak menambah lagi ──
     #
@@ -2019,7 +2223,10 @@ async def tambah_penimbangan(
         perangkat=trx.perangkat_kode, ip=ip,
     )
     await _sinkronkan_proses_bersama(db, trx)
-    await db.commit()
+    if komit:
+        await db.commit()
+    else:
+        await db.flush()
     await db.refresh(trx)
     return trx
 
@@ -2058,14 +2265,22 @@ async def hapus_penimbangan(
 
 
 async def selesaikan_partai(
-    db: AsyncSession, *, akun: TimbanganAkun, kode: str, ip: str | None = None
+    db: AsyncSession, *, akun: TimbanganAkun, kode: str, ip: str | None = None, waktu_operator: datetime | None = None, komit: bool = True,
+    jumlah_karung: float | None = None,
 ) -> TimbanganTransaksi:
     """Tutup tiket partai kecil: nettonya jumlah seluruh baris."""
-    trx = _pastikan_partai_terbuka(await ambil_kode(db, kode), kode)
+    trx = _pastikan_partai_terbuka(await ambil_kode_terkunci(db, kode), kode)
+    await pastikan_waktu_wajar(db, akun=akun, waktu=waktu_operator,
+                              sesudah=trx.timbang1_waktu, kode=kode, ip=ip)
     if not trx.penimbangan:
         raise LayananError("Belum ada satu pun penimbangan.")
 
-    aturan = await aturan_untuk(db, trx.jenis_kode)
+    muatan = ([InputMuatan(jenis_kode=trx.jenis_kode, jumlah_karung=jumlah_karung)]
+              if jumlah_karung is not None else trx.muatan)
+    periksa_jumlah_karung(muatan, wajib=True)
+    if jumlah_karung is not None:
+        await _pasang_muatan(db, trx, muatan)
+    aturan = aturan_dari_snapshot(trx) or await aturan_untuk(db, trx.jenis_kode)
     _jumlahkan_partai(trx)
     trx.berat_bermuatan_kg = trx.timbang1_kg
     trx.berat_kosong_kg = None
@@ -2080,10 +2295,10 @@ async def selesaikan_partai(
         tara_lain_kg=trx.tara_lain_kg,
         kapasitas_kg=math.inf,
     ))
-    waktu = sekarang()
+    waktu = waktu_operator or sekarang()
     trx.timbang2_kg = None
     trx.timbang2_waktu = waktu
-    trx.timbang2_waktu_sistem = waktu
+    trx.timbang2_waktu_sistem = sekarang()
     trx.timbang2_petugas_id = akun.id
     trx.status_tiket = TIKET_SELESAI
     trx.tanggal = waktu.date()
@@ -2097,7 +2312,10 @@ async def selesaikan_partai(
         perangkat=trx.perangkat_kode, ip=ip,
     )
     await _sinkronkan_proses_bersama(db, trx)
-    await db.commit()
+    if komit:
+        await db.commit()
+    else:
+        await db.flush()
     await db.refresh(trx)
     return trx
 
@@ -2114,6 +2332,8 @@ async def simpan_timbang_kedua(
     catatan: str | None = None,
     selesaikan: bool = True,
     ip: str | None = None,
+    komit: bool = True,
+    pengiriman_snapshot: dict | None = None,
 ) -> TimbanganTransaksi:
     """Timbang kedua → hitung, beri status, tutup tiket.
 
@@ -2129,10 +2349,10 @@ async def simpan_timbang_kedua(
     selisih tanpa jumlah karung akan memberi angka yang salah sekaligus
     meyakinkan — tara total nol membuat barang tampak berlebih.
 
-    **Barang masuk tidak bisa diselesaikan tanpa jumlah karung.** Seluruh
-    komoditas masuk bertara per karung, jadi tanpa angka itu berat barang dan
-    selisihnya keliru — dan statusnya tersimpan permanen serta terbawa ke
-    ekspor.
+    **Setiap tiket wajib memiliki jumlah karung sebelum diselesaikan.**
+    Jumlah yang sudah dicatat saat timbang pertama dipertahankan; bila belum
+    diisi, petugas melengkapinya saat timbang kedua. Pengiriman mengambil
+    jumlah dari muatan Produksi. Tiket selesai lama tetap boleh dikirim ulang.
     """
     trx = await ambil_kode_terkunci(db, kode)
     if trx is None:
@@ -2141,6 +2361,23 @@ async def simpan_timbang_kedua(
         raise LayananError("Transaksi ini sudah dibatalkan.")
     if trx.status_tiket == TIKET_DITUTUP_PAKSA:
         raise LayananError("Tiket ini sudah ditutup paksa.")
+    if pengiriman_snapshot is not None:
+        from app.timbangan import pengiriman
+        if trx.arah != logic.KELUAR or not selesaikan:
+            raise LayananError("Cuplikan pengiriman hanya digunakan saat menyelesaikan tiket keluar.")
+        try:
+            pengiriman_snapshot = pengiriman.cuplikan(pengiriman_snapshot)
+        except pengiriman.MuatanTidakSah as e:
+            raise LayananError(str(e)) from e
+        if pengiriman_snapshot.get('nomor_polisi') and normalisasi_nopol(pengiriman_snapshot['nomor_polisi']) != normalisasi_nopol(trx.nomor_polisi):
+            raise LayananError('Nomor polisi sumber kiriman berbeda dari tiket armada.')
+        if trx.pengiriman_snapshot and trx.pengiriman_snapshot != pengiriman_snapshot:
+            raise LayananError("Muatan sumber berubah sejak timbang diselesaikan. Periksa koreksi kiriman di PadiFlow; cuplikan lama dipertahankan.")
+        muatan = pengiriman.input_muatan(pengiriman_snapshot)
+    _batas_angka(berat_kg, "Berat timbang", maksimum=1_000_000)
+    _batas_angka(tara_lain_kg, "Tara lain", maksimum=1_000_000)
+    if muatan is not None:
+        periksa_muatan(muatan)
     if trx.status_tiket == TIKET_SELESAI:
         # ── Kiriman ulang: isi sama lolos, isi BERBEDA ditolak ──
         #
@@ -2161,6 +2398,24 @@ async def simpan_timbang_kedua(
                 f"{fmt.kg(tersimpan)} — angka {fmt.kg(berat_kg)} tidak "
                 "disimpan. Pakai Koreksi bila angka yang tersimpan keliru."
             )
+        beda = _isi_kedua_berbeda(
+            trx, muatan=muatan, tara_lain_kg=tara_lain_kg,
+            catatan=catatan, waktu_operator=waktu_operator,
+        )
+        if beda:
+            raise LayananError(
+                f"Tiket {kode} sudah diselesaikan{await _oleh_siapa(db, trx)}. "
+                f"{beda.capitalize()} berbeda dari yang sudah tersimpan. "
+                "Pakai Koreksi bila isinya memang harus diubah."
+            )
+        # Replay juga mengambil FOR UPDATE. Lepaskan sebelum callback HTTP
+        # ke PadiFlow yang memerlukan kunci tiket yang sama. Tanpa commit,
+        # formulir biasa menunggu server yang sedang menunggu dirinya sendiri.
+        # Jalur PWA komit=False dilepas bersama receipt sebelum integrasi.
+        if komit:
+            await db.commit()
+        else:
+            await db.flush()
         return trx                      # kiriman ulang sejati — sudah tuntas
     if berat_kg <= 0:
         raise LayananError("Berat timbang harus lebih dari 0 kg.")
@@ -2171,7 +2426,10 @@ async def simpan_timbang_kedua(
         label="Jam timbang kedua", kode=trx.kode, ip=ip,
     )
 
-    aturan = await aturan_untuk(db, trx.jenis_kode)
+    # Tolak sebelum angka, tanggal, atau baris muatan tiket disentuh.
+    periksa_jumlah_karung(muatan if muatan is not None else trx.muatan,
+                          wajib=selesaikan)
+    aturan = aturan_dari_snapshot(trx) or await aturan_untuk(db, trx.jenis_kode)
     waktu = sekarang()
 
     trx.timbang2_kg = float(berat_kg)
@@ -2189,6 +2447,7 @@ async def simpan_timbang_kedua(
         await _pasang_muatan(db, trx, muatan)
 
     if not selesaikan:
+        _kosongkan_hasil(trx)
         await catat_audit(
             db, akun=akun, aksi="SIMPAN_SEMENTARA", entitas="transaksi",
             entitas_id=trx.kode,
@@ -2197,18 +2456,12 @@ async def simpan_timbang_kedua(
             perangkat=trx.perangkat_kode, ip=ip,
         )
         await _sinkronkan_proses_bersama(db, trx)
-        await db.commit()
+        if komit:
+            await db.commit()
+        else:
+            await db.flush()
         await db.refresh(trx)
         return trx
-
-    if trx.arah == logic.MASUK and not sum(
-        int(m.jumlah_karung or 0) for m in trx.muatan
-    ):
-        raise LayananError(
-            "Jumlah karung belum diisi. Barang masuk tidak bisa diselesaikan "
-            "tanpa angka itu — taranya dihitung per karung, jadi selisihnya "
-            "akan keliru. Pakai Simpan sementara sampai bongkar rampung."
-        )
 
     bermuatan, kosong = _bermuatan_dan_kosong(
         trx.arah, float(trx.timbang1_kg), float(trx.timbang2_kg)
@@ -2226,6 +2479,9 @@ async def simpan_timbang_kedua(
     ))
     trx.status_tiket = TIKET_SELESAI
 
+    if pengiriman_snapshot is not None:
+        trx.pengiriman_snapshot = pengiriman_snapshot
+
     await catat_audit(
         db, akun=akun, aksi="SIMPAN_TIMBANG_2", entitas="transaksi",
         entitas_id=trx.kode,
@@ -2235,6 +2491,7 @@ async def simpan_timbang_kedua(
             "timbang2_kg": float(trx.timbang2_kg),
             "selisih_kg": float(trx.selisih_kg),
             "status_kontrol": trx.status_kontrol,
+            **({"pengiriman_snapshot": trx.pengiriman_snapshot} if pengiriman_snapshot is not None else {}),
         },
         perangkat=trx.perangkat_kode, ip=ip,
     )
@@ -2243,7 +2500,10 @@ async def simpan_timbang_kedua(
         await buka_pemeriksaan(db, akun=akun, trx=trx)
 
     await _sinkronkan_proses_bersama(db, trx)
-    await db.commit()
+    if komit:
+        await db.commit()
+    else:
+        await db.flush()
     await db.refresh(trx)
     return trx
 
@@ -2432,6 +2692,7 @@ async def koreksi_transaksi(
     muatan: list[InputMuatan] | None = None,
     alasan: str | None = None,
     ip: str | None = None,
+    pengiriman_snapshot: dict | None = None,
 ) -> TimbanganTransaksi:
     """Koreksi input yang salah — dengan jejak sebelum & sesudah.
 
@@ -2452,6 +2713,22 @@ async def koreksi_transaksi(
     if not boleh:
         raise LayananError(sebab)
 
+    for kolom, label in (("timbang1_kg", "Timbang pertama"),
+                         ("timbang2_kg", "Timbang kedua"),
+                         ("tara_lain_kg", "Tara lain")):
+        if kolom not in perubahan:
+            continue
+        nilai = _batas_angka(perubahan[kolom], label, maksimum=1_000_000)
+        if kolom != "tara_lain_kg" and (nilai is None or nilai <= 0):
+            raise LayananError(f"{label} harus lebih dari 0 kg.")
+
+    if muatan is not None:
+        periksa_muatan(muatan)
+        # Koreksi tidak boleh menghapus jumlah yang sudah tercatat. Tiket
+        # lama yang memang kosong tetap dapat dikoreksi tanpa menebak isinya.
+        periksa_jumlah_karung(muatan, wajib=trx.selesai and
+                              periksa_jumlah_karung(trx.muatan) > 0)
+
     dapat_diubah = {
         "supplier_id", "pelanggan_id", "pihak_nama", "nomor_polisi",
         "nama_sopir",
@@ -2464,16 +2741,36 @@ async def koreksi_transaksi(
     # menjaga pintu lain: antrean luring dan pemakaian layanan langsung.
     if "nomor_polisi" in perubahan:
         _wajib_nopol(trx.arah, perubahan["nomor_polisi"])
-    if "nama_sopir" in perubahan:
+        nomor = normalisasi_nopol(perubahan["nomor_polisi"])
+        if nomor != normalisasi_nopol(trx.nomor_polisi):
+            nomor = _format_nopol(nomor)
+        perubahan = {**perubahan, "nomor_polisi": nomor}
+    if "nama_sopir" in perubahan and perubahan["nama_sopir"] != trx.nama_sopir:
         _wajib_sopir(perubahan["nama_sopir"])
-    if "pihak_nama" in perubahan or "supplier_id" in perubahan:
+        from app.timbangan.sopir import nama_utama, NamaSopirTidakSah
+        try:
+            perubahan = {**perubahan, "nama_sopir": await nama_utama(db, perubahan["nama_sopir"])}
+        except NamaSopirTidakSah as e:
+            raise LayananError(str(e)) from e
+    identitas_berubah = any(
+        k in perubahan and perubahan[k] != getattr(trx, k)
+        for k in ("pihak_nama", "supplier_id", "pelanggan_id")
+    )
+    if identitas_berubah:
         _wajib_pihak(
             trx.arah,
             punya_id=bool(
-                perubahan.get("supplier_id", trx.supplier_id or trx.pelanggan_id)
+                perubahan.get("pelanggan_id", trx.pelanggan_id) if trx.jasa
+                else perubahan.get("supplier_id", trx.supplier_id or trx.pelanggan_id)
             ),
             pihak_nama=perubahan.get("pihak_nama", trx.pihak_nama),
+            jasa=trx.jasa,
         )
+        pihak = pihak_untuk(trx.arah, jasa=trx.jasa)
+        if pihak is not None and trx.arah != logic.KELUAR:
+            await _periksa_kontak_kledo(db, perubahan.get(pihak[1], getattr(trx, pihak[1])), pihak[0])
+            if "pihak_nama" in perubahan and (perubahan["pihak_nama"] or "").strip():
+                raise LayananError("Supplier wajib dipilih dari daftar Kledo, tanpa nama bebas.")
 
     # ── Yang IKUT TERSALIN ke batch produksi tak boleh dikoreksi diam-diam ──
     #
@@ -2501,7 +2798,36 @@ async def koreksi_transaksi(
         await pastikan_bebas_tautan(
             db, trx, tindakan="Mengoreksi " + ", ".join(sorted(disentuh)))
 
+    snapshot_baru = None
+    if pengiriman_snapshot is not None:
+        from app.timbangan import pengiriman
+        if trx.arah != logic.KELUAR or not trx.pengiriman_snapshot:
+            raise LayananError("Tiket belum mempunyai cuplikan pengiriman yang dapat diperbarui.")
+        try:
+            snapshot_baru = pengiriman.cuplikan(pengiriman_snapshot)
+        except pengiriman.MuatanTidakSah as e:
+            raise LayananError(str(e)) from e
+        lama = trx.pengiriman_snapshot
+        if (snapshot_baru['kiriman_id'] != lama['kiriman_id'] or
+            (not lama['kiriman_id'] and snapshot_baru['kode_perintah'] != lama['kode_perintah'])):
+            raise LayananError("Rincian berasal dari perjalanan lain. Tautan tiket tidak boleh dipindahkan melalui koreksi.")
+        muatan = pengiriman.input_muatan(snapshot_baru) if snapshot_baru != lama else None
+        if muatan is not None:
+            periksa_muatan(muatan)
+            periksa_jumlah_karung(muatan, wajib=trx.selesai and periksa_jumlah_karung(trx.muatan)>0)
+
+    if trx.pengiriman_snapshot and muatan is not None and snapshot_baru is None:
+        beda = _isi_kedua_berbeda(trx, muatan=muatan, tara_lain_kg=None,
+                                  catatan=None, waktu_operator=None)
+        if beda:
+            raise LayananError("Rincian muatan pengiriman berasal dari PadiFlow. Koreksi sumber melalui PadiFlow; jangan mengganti alokasi pelanggan di formulir timbang.")
+        muatan = None
+
     sebelum, sesudah = {}, {}
+    if snapshot_baru is not None and snapshot_baru != trx.pengiriman_snapshot:
+        sebelum['pengiriman_snapshot'] = trx.pengiriman_snapshot
+        sesudah['pengiriman_snapshot'] = snapshot_baru
+        trx.pengiriman_snapshot = snapshot_baru
     for kolom, nilai in perubahan.items():
         if kolom not in dapat_diubah:
             continue
@@ -2624,7 +2950,10 @@ async def _hitung_ulang_koreksi(db: AsyncSession, trx: TimbanganTransaksi) -> bo
         ))
         return True
 
-    if trx.timbang2_kg is None:
+    if trx.timbang2_kg is None or trx.status_tiket == TIKET_TERBUKA:
+        # Bacaan kedua sementara bukan persetujuan menyelesaikan tiket.
+        # Koreksi identitas tetap sah, hasil final menunggu aksi Selesai.
+        _kosongkan_hasil(trx)
         return False          # DUA_KALI yang belum lengkap — tak ada hasilnya
     bermuatan, kosong = _bermuatan_dan_kosong(
         trx.arah, float(trx.timbang1_kg), float(trx.timbang2_kg)
@@ -3494,6 +3823,17 @@ async def selesaikan_pemeriksaan(
     """
     if not akun.is_admin:
         raise LayananError("Hanya Admin yang boleh menutup pemeriksaan.")
+    # Baca ulang di bawah kunci: sesi lain mungkin sudah menutup setelah
+    # objek ORM ini dimuat. Tanpa populate_existing, status lama di identity
+    # map tetap terbaca dan kiriman bersamaan dapat menimpa hasil/audit.
+    lembar = await db.scalar(
+        select(TimbanganPemeriksaan)
+        .where(TimbanganPemeriksaan.id == lembar.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if lembar is None:
+        raise LayananError("Lembar pemeriksaan tidak ditemukan.")
     # ── Sekali ditutup, selesai ──
     #
     # Penutupan kedua menimpa kategori hasil DAN nama penutupnya, jadi lembar
@@ -3679,7 +4019,12 @@ def _terapkan_filter(q, f: FilterTransaksi):
         else:
             q = q.where(TimbanganTransaksi.arah == f.arah)
     if f.jenis_kode:
-        q = q.where(TimbanganTransaksi.jenis_kode == f.jenis_kode)
+        q = q.where(or_(TimbanganTransaksi.jenis_kode == f.jenis_kode,
+            select(TimbanganMuatan.id).where(
+                TimbanganMuatan.transaksi_id == TimbanganTransaksi.id,
+                TimbanganMuatan.jenis_kode == f.jenis_kode,
+                TimbanganTransaksi.arah == logic.KELUAR,
+            ).correlate(TimbanganTransaksi).exists()))
     if f.status_kontrol:
         # Boleh satu status atau beberapa. Ringkasan memerlukan yang kedua:
         # petaknya menghitung SEMUA status di luar batas, jadi daftarnya harus
@@ -3705,7 +4050,19 @@ def _terapkan_filter(q, f: FilterTransaksi):
             TimbanganTransaksi.kode.ilike(pola),
             TimbanganTransaksi.nomor_polisi.ilike(pola),
             TimbanganTransaksi.pihak_nama.ilike(pola),
+            cast(TimbanganTransaksi.pengiriman_snapshot, String).ilike(pola),
             TimbanganTransaksi.nama_sopir.ilike(pola),
+            # Pihak yang dipilih dari master dapat mempunyai snapshot nama
+            # kosong. Cari nama yang ditampilkan juga, tanpa JOIN tambahan
+            # yang menggandakan baris atau membedakan kueri hitung/daftar.
+            select(Supplier.id).where(
+                Supplier.id == TimbanganTransaksi.supplier_id,
+                Supplier.nama_supplier.ilike(pola),
+            ).correlate(TimbanganTransaksi).exists(),
+            select(Pelanggan.id).where(
+                Pelanggan.id == TimbanganTransaksi.pelanggan_id,
+                Pelanggan.nama_pelanggan.ilike(pola),
+            ).correlate(TimbanganTransaksi).exists(),
         ))
     return q
 
@@ -3714,6 +4071,13 @@ def _terapkan_filter(q, f: FilterTransaksi):
 class BarisTransaksi:
     trx: TimbanganTransaksi
     supplier_nama: str | None
+    pengiriman_ringkasan: str | None = None
+
+    @property
+    def pihak_tampil(self):
+        from app.timbangan.pengiriman import ringkasan
+        return (ringkasan(self.trx.pengiriman_snapshot) or self.pengiriman_ringkasan
+                or self.supplier_nama or self.trx.pihak_nama or '—')
 
 
 async def daftar_transaksi(
@@ -3731,7 +4095,8 @@ async def daftar_transaksi(
     ).order_by(
         TimbanganTransaksi.tanggal.desc(), TimbanganTransaksi.id.desc()
     ).limit(batas).offset(offset)
-    return [BarisTransaksi(trx=t, supplier_nama=n) for t, n in (await db.execute(q)).all()]
+    from app.timbangan.pengiriman import ringkasan_hidup
+    return await ringkasan_hidup(db, [BarisTransaksi(trx=t, supplier_nama=n) for t, n in (await db.execute(q)).all()])
 
 
 async def hitung_transaksi(db: AsyncSession, f: FilterTransaksi) -> int:
@@ -3742,10 +4107,119 @@ async def hitung_transaksi(db: AsyncSession, f: FilterTransaksi) -> int:
 
 
 async def tiket_terbuka(db: AsyncSession) -> list[BarisTransaksi]:
-    """Truk yang sudah timbang pertama dan belum kembali."""
-    return await daftar_transaksi(
-        db, FilterTransaksi(status_tiket=TIKET_TERBUKA), batas=200
+    """Seluruh pekerjaan aktif, tertua dahulu; sumber Beranda dan Tiket Aktif.
+
+    Batas 200 terbaru pernah menyembunyikan tiket paling lama. Jangan memakai
+    batas riwayat untuk antrean kerja. Waktu timbang sebenarnya didahulukan
+    (termasuk pencatatan terlambat), dengan waktu sistem dan id sebagai dasar
+    cadangan yang tetap. Tidak mengubah aturan tanda Lama yang memakai setelan.
+    """
+    q = _terapkan_filter(
+        select(TimbanganTransaksi,
+               func.coalesce(Supplier.nama_supplier, Pelanggan.nama_pelanggan))
+        .outerjoin(Supplier, Supplier.id == TimbanganTransaksi.supplier_id)
+        .outerjoin(Pelanggan, Pelanggan.id == TimbanganTransaksi.pelanggan_id),
+        FilterTransaksi(status_tiket=TIKET_TERBUKA),
+    ).order_by(
+        func.coalesce(TimbanganTransaksi.timbang1_waktu,
+                      TimbanganTransaksi.timbang1_waktu_sistem,
+                      TimbanganTransaksi.created_at),
+        TimbanganTransaksi.id,
     )
+    from app.timbangan.pengiriman import ringkasan_hidup
+    return await ringkasan_hidup(db, [BarisTransaksi(trx=t, supplier_nama=n) for t, n in (await db.execute(q)).all()])
+
+
+def _waktu_antrean():
+    return func.coalesce(TimbanganTransaksi.timbang1_waktu,
+                         TimbanganTransaksi.timbang1_waktu_sistem,
+                         TimbanganTransaksi.created_at)
+
+
+def _kegiatan_antrean():
+    return case((TimbanganTransaksi.jasa.is_(True), "JASA"),
+                else_=TimbanganTransaksi.arah)
+
+
+def _filter_antrean(q, tab, cari="", kegiatan="", ids_pengiriman=()):
+    q = _terapkan_filter(q, FilterTransaksi(status_tiket=TIKET_TERBUKA))
+    partai = TimbanganTransaksi.cara_timbang == CARA_PARTAI
+    q = q.where(partai if tab == "partai" else ~partai)
+    if cari:
+        # Pencarian lama memakai substring harfiah di Python: % dan _
+        # milik nama pihak tidak boleh berubah menjadi wildcard SQL.
+        def pola(teks):
+            return "%" + teks.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+
+        nama = func.coalesce(Supplier.nama_supplier, Pelanggan.nama_pelanggan, "")
+        isi = (func.coalesce(TimbanganTransaksi.nomor_polisi, "") + " "
+               + TimbanganTransaksi.kode + " " + nama + " "
+               + func.coalesce(TimbanganTransaksi.pihak_nama, ""))
+        q = q.where(or_(
+            isi.ilike(pola(cari), escape="\\"),
+            TimbanganTransaksi.id.in_(ids_pengiriman),
+            func.replace(func.coalesce(TimbanganTransaksi.nomor_polisi, ""), " ", "")
+                .ilike(pola(cari.replace(" ", "")), escape="\\"),
+        ))
+    if tab != "partai" and kegiatan:
+        q = q.where(_kegiatan_antrean() == kegiatan)
+    return q
+
+
+async def jumlah_antrean(db: AsyncSession) -> dict[str, int]:
+    """Jumlah seluruh pekerjaan aktif, tanpa memuat satu pun objek tiket."""
+    truk, partai = (await db.execute(_terapkan_filter(select(
+        func.coalesce(func.sum(case((TimbanganTransaksi.cara_timbang != CARA_PARTAI, 1), else_=0)), 0),
+        func.coalesce(func.sum(case((TimbanganTransaksi.cara_timbang == CARA_PARTAI, 1), else_=0)), 0),
+    ), FilterTransaksi(status_tiket=TIKET_TERBUKA)))).one()
+    return {"truk": int(truk), "partai": int(partai)}
+
+
+async def kegiatan_antrean(db: AsyncSession) -> list[str]:
+    kegiatan = _kegiatan_antrean()
+    q = _filter_antrean(select(kegiatan), "truk").group_by(kegiatan).order_by(
+        func.min(_waktu_antrean()), func.min(TimbanganTransaksi.id))
+    return list((await db.scalars(q)).all())
+
+
+async def hitung_antrean(db: AsyncSession, tab: str, *, cari="", kegiatan="") -> int:
+    q = (select(func.count(TimbanganTransaksi.id))
+         .outerjoin(Supplier, Supplier.id == TimbanganTransaksi.supplier_id)
+         .outerjoin(Pelanggan, Pelanggan.id == TimbanganTransaksi.pelanggan_id))
+    from app.timbangan.pengiriman import id_dari_pencarian
+    return int(await db.scalar(_filter_antrean(q, tab, cari, kegiatan,
+                              await id_dari_pencarian(db, cari))))
+
+
+async def halaman_antrean(
+    db: AsyncSession, tab: str, *, batas: int, offset: int = 0, cari="", kegiatan=""
+) -> list[BarisTransaksi]:
+    """Saring dan potong di SQL; antrean besar tidak ikut menjadi objek ORM.
+
+    Kartu hanya membaca kolom tiket. Relasi penimbangan dibutuhkan untuk
+    jumlah langkah partai pada halaman ini; foto, muatan dan kendaraan tidak.
+    Pintu tiket_terbuka tetap tersedia bagi pemanggil yang memerlukan semuanya.
+    """
+    q = (select(TimbanganTransaksi,
+                func.coalesce(Supplier.nama_supplier, Pelanggan.nama_pelanggan))
+         .outerjoin(Supplier, Supplier.id == TimbanganTransaksi.supplier_id)
+         .outerjoin(Pelanggan, Pelanggan.id == TimbanganTransaksi.pelanggan_id)
+         .options(raiseload("*")))
+    if tab == "partai":
+        q = q.options(selectinload(TimbanganTransaksi.penimbangan))
+    from app.timbangan.pengiriman import id_dari_pencarian
+    q = _filter_antrean(q, tab, cari, kegiatan, await id_dari_pencarian(db, cari)).order_by(
+        _waktu_antrean(), TimbanganTransaksi.id).limit(batas).offset(offset)
+    from app.timbangan.pengiriman import ringkasan_hidup
+    return await ringkasan_hidup(db, [BarisTransaksi(trx=t, supplier_nama=n) for t, n in (await db.execute(q)).all()])
+
+
+async def id_menganggur_pada_halaman(db: AsyncSession, baris: list[BarisTransaksi]) -> set[int]:
+    """Tanda Lama memakai waktu sistem dan setelan yang sama, hanya pada kartu terlihat."""
+    jam = (await setelan.semua(db))["jam_tiket_menganggur"]
+    batas = sekarang() - timedelta(hours=jam)
+    return {b.trx.id for b in baris if b.trx.timbang1_waktu_sistem is not None
+            and berzona(b.trx.timbang1_waktu_sistem) < batas}
 
 
 async def tiket_menganggur(db: AsyncSession) -> list[BarisTransaksi]:
@@ -3764,7 +4238,8 @@ async def tiket_menganggur(db: AsyncSession) -> list[BarisTransaksi]:
         )
         .order_by(TimbanganTransaksi.timbang1_waktu_sistem)
     )
-    return [BarisTransaksi(trx=t, supplier_nama=n) for t, n in (await db.execute(q)).all()]
+    from app.timbangan.pengiriman import ringkasan_hidup
+    return await ringkasan_hidup(db, [BarisTransaksi(trx=t, supplier_nama=n) for t, n in (await db.execute(q)).all()])
 
 
 async def ambil_transaksi(
@@ -3779,38 +4254,33 @@ async def ambil_transaksi(
     )).first()
     if baris is None:
         return None
-    return BarisTransaksi(trx=baris[0], supplier_nama=baris[1])
+    from app.timbangan.pengiriman import ringkasan_hidup
+    return (await ringkasan_hidup(db, [BarisTransaksi(trx=baris[0], supplier_nama=baris[1])]))[0]
 
 
 def ke_ringkas(baris: list[BarisTransaksi]) -> list[logic.TransaksiRingkas]:
     """Bentuk yang dipakai deteksi pola & skor — tanpa objek DB."""
-    hasil = []
-    for b in baris:
-        t = b.trx
-        if t.selisih_kg is None or t.status_kontrol is None:
-            continue
-        selisih = float(t.selisih_kg or 0)
-        # Batas yang relevan adalah batas DI ARAH selisihnya. Untuk aturan yang
-        # tidak simetris — gabah kering boleh lebih, kiriman tidak boleh kurang
-        # — memakai satu angka saja akan salah menilai.
-        if selisih < 0:
-            batas = abs(float(t.batas_bawah_kg)) if t.batas_bawah_kg is not None else 0.0
-        else:
-            batas = float(t.batas_atas_kg) if t.batas_atas_kg is not None else 0.0
-        hasil.append(logic.TransaksiRingkas(
-            tanggal=t.tanggal,
-            selisih_kg=selisih,
-            selisih_persen=float(t.selisih_persen or 0),
-            batas_kg=batas,
-            berat_barang_kg=float(t.berat_barang_kg or 0),
-            berat_acuan_kg=float(t.berat_acuan_kg or 0),
-            nomor_polisi=t.nomor_polisi,
-            pihak_id=t.supplier_id,
-            pihak_nama=b.supplier_nama or (t.pihak_nama or ""),
-            dikoreksi=bool(t.jumlah_revisi),
-            kode=t.kode,
-        ))
-    return hasil
+    return [r for b in baris if (r := _transaksi_ringkas(b.trx, b.supplier_nama)) is not None]
+
+
+def _transaksi_ringkas(t, supplier_nama) -> logic.TransaksiRingkas | None:
+    """Rumus yang sama untuk objek tiket maupun proyeksi SQL monitoring."""
+    if t.selisih_kg is None or t.status_kontrol is None:
+        return None
+    selisih = float(t.selisih_kg or 0)
+    # Batas tetap mengikuti ARAH selisih, termasuk aturan tidak simetris.
+    if selisih < 0:
+        batas = abs(float(t.batas_bawah_kg)) if t.batas_bawah_kg is not None else 0.0
+    else:
+        batas = float(t.batas_atas_kg) if t.batas_atas_kg is not None else 0.0
+    return logic.TransaksiRingkas(
+        tanggal=t.tanggal, selisih_kg=selisih,
+        selisih_persen=float(t.selisih_persen or 0), batas_kg=batas,
+        berat_barang_kg=float(t.berat_barang_kg or 0),
+        berat_acuan_kg=float(t.berat_acuan_kg or 0), nomor_polisi=t.nomor_polisi,
+        pihak_id=t.supplier_id, pihak_nama=supplier_nama or (t.pihak_nama or ""),
+        dikoreksi=bool(t.jumlah_revisi), kode=t.kode,
+    )
 
 
 # ═══════════════════════════ Ringkasan & monitoring ═══════════════════════
@@ -3929,6 +4399,20 @@ HALAMAN_MONITORING = 1_000
 BATAS_MONITORING = 50_000
 
 
+async def _data_monitoring(db: AsyncSession, f: FilterTransaksi, *, batas: int, offset: int):
+    """Kolom skor saja; tidak membangun objek tiket beserta seluruh relasinya."""
+    t = TimbanganTransaksi
+    q = _terapkan_filter(select(
+        t.id, t.tanggal, t.supplier_id, t.kode, t.pihak_nama, t.nomor_polisi,
+        t.selisih_kg, t.selisih_persen, t.status_kontrol, t.batas_bawah_kg,
+        t.batas_atas_kg, t.berat_barang_kg, t.berat_acuan_kg, t.jumlah_revisi,
+        func.coalesce(Supplier.nama_supplier, Pelanggan.nama_pelanggan).label("supplier_nama"),
+    ).outerjoin(Supplier, Supplier.id == t.supplier_id)
+     .outerjoin(Pelanggan, Pelanggan.id == t.pelanggan_id), f)
+    return (await db.execute(q.order_by(t.tanggal.desc(), t.id.desc())
+                             .limit(batas).offset(offset))).all()
+
+
 async def monitoring_supplier(
     db: AsyncSession, f: FilterTransaksi, *, minimal_transaksi: int = 3
 ) -> list[BarisMonitoring]:
@@ -3942,31 +4426,44 @@ async def monitoring_supplier(
     # mungkin terpotong justru yang paling lama, yaitu riwayat yang membuat
     # pola terlihat. Temuan QA T-22.
     #
-    # Dibaca per halaman supaya yang ada di memori sekali waktu tetap
-    # terbatas, dan foto BLOB-nya kini tak ikut termuat (`deferred`).
-    semua: list[BarisTransaksi] = []
+    # Simpan hanya bentuk perhitungan per pihak. Jumlah mentah tetap
+    # dicatat terpisah: syarat minimal tiga tiket mencakup tiket yang belum
+    # mempunyai hasil kontrol, seperti perilaku sebelum optimasi.
+    per_supplier: dict[int, list[logic.TransaksiRingkas]] = {}
+    jumlah_per_supplier: dict[int, int] = {}
+    nama: dict[int, str] = {}
     halaman = 0
     while True:
-        potong = await daftar_transaksi(db, f, batas=HALAMAN_MONITORING,
-                                        offset=halaman * HALAMAN_MONITORING)
-        semua.extend(potong)
+        potong = await _data_monitoring(db, f, batas=HALAMAN_MONITORING,
+                                       offset=halaman * HALAMAN_MONITORING)
+        for t in potong:
+            if t.supplier_id is None:
+                continue
+            sid = t.supplier_id
+            jumlah_per_supplier[sid] = jumlah_per_supplier.get(sid, 0) + 1
+            kumpulan = per_supplier.setdefault(sid, [])
+            nama[sid] = t.supplier_nama or "(tanpa nama)"
+            ringkas = _transaksi_ringkas(t, t.supplier_nama)
+            if ringkas is not None:
+                kumpulan.append(ringkas)
         if len(potong) < HALAMAN_MONITORING:
             break
         halaman += 1
         if halaman * HALAMAN_MONITORING >= BATAS_MONITORING:
-            # Pagar terakhir, dan ia BERBUNYI — bukan memotong diam-diam.
-            log.warning(
-                "Monitoring pemasok berhenti di %s tiket; masih ada sisanya. "
-                "Persempit rentang tanggalnya.", BATAS_MONITORING)
+            # Halaman penuh belum membuktikan ada sisa. Periksa satu id
+            # dengan filter yang sama, tanpa memuat transaksi/foto ataupun
+            # memasukkannya ke skor. Batas pemrosesan tetap 50.000.
+            sisa = await db.scalar(
+                _terapkan_filter(select(TimbanganTransaksi.id), f)
+                .order_by(TimbanganTransaksi.tanggal.desc(),
+                          TimbanganTransaksi.id.desc())
+                .offset(BATAS_MONITORING).limit(1)
+            )
+            if sisa is not None:
+                log.warning(
+                    "Monitoring pemasok berhenti di %s tiket; masih ada sisanya. "
+                    "Persempit rentang tanggalnya.", BATAS_MONITORING)
             break
-
-    per_supplier: dict[int, list[BarisTransaksi]] = {}
-    nama: dict[int, str] = {}
-    for b in semua:
-        if b.trx.supplier_id is None:
-            continue
-        per_supplier.setdefault(b.trx.supplier_id, []).append(b)
-        nama[b.trx.supplier_id] = b.supplier_nama or "(tanpa nama)"
 
     profil = {
         p.supplier_id: p for p in (await db.execute(
@@ -3975,10 +4472,9 @@ async def monitoring_supplier(
     }
 
     hasil: list[BarisMonitoring] = []
-    for supplier_id, baris in per_supplier.items():
-        if len(baris) < minimal_transaksi:
+    for supplier_id, ringkas in per_supplier.items():
+        if jumlah_per_supplier[supplier_id] < minimal_transaksi:
             continue
-        ringkas = ke_ringkas(baris)
         skor = logic.hitung_skor_pihak(ringkas)
         pola = logic.deteksi_pola(ringkas)
         hasil.append(BarisMonitoring(

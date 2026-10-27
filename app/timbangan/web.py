@@ -12,12 +12,13 @@ from urllib.parse import quote
 
 from sqlalchemy.exc import DBAPIError
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.timbangan import format as fmt
 from app.timbangan import logic
+from app.timbangan.pengiriman import kelompok, ringkasan
 from app.timbangan.config import tsettings
 from app.timbangan.models import (
     JENIS_FOTO,
@@ -35,7 +36,7 @@ BASE_DIR = Path(__file__).parent
 PREFIX = "/timbangan"
 
 # Dinaikkan bila CSS/JS berubah, supaya perangkat tidak memakai berkas lama.
-VERSI = "60"
+VERSI = "82"
 
 #: Warna tiap status. Dipisahkan dari `logic` karena ini urusan tampilan.
 NADA_STATUS = {
@@ -108,6 +109,8 @@ templates.env.filters.update({
 })
 templates.env.globals.update({
     "PREFIX": PREFIX,
+    "kelompok_pengiriman": kelompok,
+    "ringkasan_pengiriman": ringkasan,
     "VERSI": VERSI,
     "PERUSAHAAN": tsettings.perusahaan_nama,
     "PRINTER_URL": tsettings.printer_url,
@@ -221,6 +224,8 @@ def pasang(app: FastAPI) -> None:
 
     @app.exception_handler(ButuhLogin)
     async def _butuh_login(request: Request, exc: ButuhLogin):
+        if request.headers.get("x-timbangan-kiriman") or request.url.path.endswith("/kiriman/sesi"):
+            return JSONResponse({"tersimpan": False, "pesan": "Sesi habis. Isian tetap di perangkat; masuk kembali dengan akun pembuatnya."}, status_code=401)
         tujuan = request.url.path
         if request.url.query:
             tujuan += "?" + request.url.query
@@ -228,6 +233,8 @@ def pasang(app: FastAPI) -> None:
 
     @app.exception_handler(AksesDitolak)
     async def _akses_ditolak(request: Request, exc: AksesDitolak):
+        if request.headers.get("x-timbangan-kiriman"):
+            return JSONResponse({"tersimpan": False, "pesan": str(exc)}, status_code=403)
         return templates.TemplateResponse(
             request, "error.html",
             {"akun": getattr(request.state, "akun", None),

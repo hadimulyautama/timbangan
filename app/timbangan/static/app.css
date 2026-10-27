@@ -32,6 +32,7 @@
 
   --mono: var(--teks);
   --judul: var(--teks);
+  /* Ikuti font mockup portal pelanggan di seluruh layar. */
   --teks: 'IBM Plex Sans', -apple-system, 'Segoe UI', system-ui, sans-serif;
 }
 
@@ -495,7 +496,7 @@ tr[data-buka] { cursor: pointer; }
 
 /* ── Penanda luring ──────────────────────────────────────── */
 
-.luring {
+.bingkai > .luring {
   background: var(--hati-muda); border-bottom: 1px solid #f0d29a;
   color: #7a5c14; font-size: 13px; font-weight: 600;
   padding: 9px 16px; display: none; align-items: center; gap: 8px;
@@ -643,3 +644,10 @@ body :is(strong,b,.petak__nilai,.hasil__angka) { font-weight: 600; }
 body :is(.baris__nama,.tindakan__nama,.pilihan__nama,.anak__nama,.kartu__judul) { font-size: var(--tipe-isi); font-weight: 500; }
 body :is(.petak__nilai,.beranda-ringkasan .petak__nilai) { font-size: 27px; line-height: 1.3; font-weight: 600; letter-spacing: -1px; }
 body .beranda-sambut h1 { font-size: var(--tipe-judul); }
+
+/* Rincian sumber pengiriman: mengalir pada 320 px tanpa tabel bergeser. */
+.kg-kiriman {min-width:0;overflow-wrap:anywhere}.kg-kiriman h3,.kg-kiriman h4{margin:8px 0}
+.kg-penerima{border:1px solid var(--garis);border-radius:12px;padding:12px;margin:12px 0;min-width:0}
+.kg-barang{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:10px 0;border-bottom:1px solid var(--garis)}
+.kg-barang>div{min-width:0}.kg-tara{grid-column:1/-1}.kg-subtotal{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;padding-top:12px}
+@media(max-width:360px){.kg-barang{grid-template-columns:minmax(0,1fr)}.kg-tara{grid-column:auto}}

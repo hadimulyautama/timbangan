@@ -28,6 +28,48 @@
 {% endmacro %}
 
 
+{% macro pilihan_sopir(daftar, nilai='', wajib=false, atribut='') %}
+  <div class="grup">
+    <label class="lbl" for="f-nama_sopir">Nama sopir{% if not wajib %}
+      <span style="text-transform:none;letter-spacing:0;font-weight:500">(boleh kosong)</span>{% endif %}</label>
+    <div class="cari">
+      <input class="fld teks" id="f-nama_sopir" name="nama_sopir" type="text" {% if wajib %}required{% endif %}
+             value="{{ nilai }}" autocomplete="off" maxlength="100"
+             list="sopir-dikenal" data-pilihan-sopir
+             aria-describedby="bantu-pilihan-sopir"
+             {{ atribut|safe }}>
+      <datalist id="sopir-dikenal">
+        {% for s in daftar %}
+          <option value="{{ s.nama }}" data-alias="{{ s.alias|join(' ') }}"></option>
+        {% endfor %}
+      </datalist>
+    </div>
+    <div class="bantu" id="bantu-pilihan-sopir">Pilih nama yang ada atau ketik nama sopir baru.</div>
+  </div>
+{% endmacro %}
+
+
+{% macro pilihan_kendaraan(daftar, nilai='', wajib=false, atribut='', asli=none) %}
+  <div class="grup">
+    <label class="lbl" for="f-nomor_polisi">Nomor polisi{% if not wajib %}
+      <span style="text-transform:none;letter-spacing:0;font-weight:500">(boleh kosong)</span>{% endif %}</label>
+    <div class="cari">
+      <input class="fld teks" id="f-nomor_polisi" name="nomor_polisi" type="text" {% if wajib %}required{% endif %}
+             value="{{ nilai }}" autocomplete="off" autocapitalize="characters" maxlength="20"
+             list="nopol-dikenal" data-pilihan-nopol data-format-nopol
+             aria-describedby="bantu-pilihan-nopol" {{ atribut|safe }}
+             {% if asli is not none %}data-nopol-asli="{{ asli }}"{% endif %}>
+      <datalist id="nopol-dikenal">
+        {% for k in daftar %}
+          <option value="{{ k.nomor_polisi }}"{% if k.sopir_terakhir %} data-sopir="{{ k.sopir_terakhir }}"{% endif %}></option>
+        {% endfor %}
+      </datalist>
+    </div>
+    <div class="bantu" id="bantu-pilihan-nopol">Pilih kendaraan yang ada atau ketik nomor baru. Contoh: AD1234XY menjadi AD 1234 XY.</div>
+  </div>
+{% endmacro %}
+
+
 {% macro berat(nama, label, nilai='', bantu='', wajib=true) %}
   {# Papan angka langsung terbuka di ponsel; desimal dipisah koma maupun titik. #}
   {{ isian(nama, label, nilai, 'kg', 'text', bantu, wajib, false,
@@ -106,3 +148,6 @@
     {{ lencana(b.trx.status_kontrol) }}
   </a>
 {% endmacro %}
+
+{# Nilai input dipertahankan tanpa pembulatan tampilan; parser menerima koma. #}
+{% macro angka_isian(v) -%}{{ ((v|string).rstrip('0').rstrip('.') if '.' in (v|string) else (v|string))|replace('.', ',') if v is not none else '' }}{%- endmacro %}

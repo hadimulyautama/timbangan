@@ -1,24 +1,36 @@
 {% extends "base.html" %}
-{% from "macros.html" import isian, berat, konteks_jenis %}
+{% from "pengiriman_muatan.html" import rincian_kiriman %}
+{% from "macros.html" import isian, berat, konteks_jenis, pilihan_sopir, pilihan_kendaraan %}
 
 {% set trx = b.trx %}
 {% set m = trx.muatan[0] if trx.muatan else None %}
 
-{% block judul %}Koreksi {{ trx.kode }}{% endblock %}
+{% macro angka_isian(v) -%}{{ ((v|string).rstrip('0').rstrip('.') if '.' in (v|string) else (v|string))|replace('.', ',') if v is not none else '' }}{%- endmacro %}
+
+{% block judul %}Koreksi tiket timbang · {{ trx.kode }}{% endblock %}
 {% block bar_judul %}Koreksi{% endblock %}
 {% block bar_sub %}{{ trx.kode }}{% endblock %}
-{% block konteks %}{{ konteks_jenis(aturan) }}{% endblock %}
+{% block lebar %}lebar{% endblock %}
 
 {% block isi %}
+<div class="cf-page">
+  <h1>Koreksi tiket timbang</h1>
+  <section class="cf-panel cf-identity">
+    <div class="cf-row"><strong>{{ trx.kode }}</strong><span class="lencana">{{ 'Batal' if trx.status_transaksi == 'VOID' else ('Selesai' if trx.status_tiket == TIKET_SELESAI else ('Ditutup tanpa timbang kedua' if trx.status_tiket == TIKET_DITUTUP_PAKSA else 'Tiket terbuka')) }}</span></div>
+    <div>{{ aturan.nama }} · {{ ARAH_LABEL.get(trx.arah, trx.arah) }}{{ ' · Titipan pelanggan' if trx.jasa }}</div>
+    <div class="cf-row"><b>{{ trx.nomor_polisi or 'Tanpa kendaraan' }}</b><span>{{ b.pihak_tampil }}</span></div>
+    <small class="redup">Revisi {{ trx.jumlah_revisi or 0 }} · versi tiket diperiksa saat menyimpan.</small>
+  </section>
+
   <div class="pesan pesan--ok">
     Angka lama tidak hilang. Setiap koreksi menulis baris baru di jejak audit
     berisi nilai sebelum dan sesudah.
   </div>
 
+  {% if batas_tautan %}<p class="pesan" data-cf-batas>{{ batas_tautan }}</p>{% endif %}
   <div class="bantu">Kosongkan kolom yang tidak perlu diubah.</div>
 
-  <form method="post" action="{{ PREFIX }}/transaksi/{{ trx.id }}/koreksi"
-        style="display:flex;flex-direction:column;gap:14px">
+  <form method="post" action="{{ PREFIX }}/transaksi/{{ trx.id }}/koreksi" class="cf-form" data-correction-form data-cf-preview="{{ PREFIX }}/transaksi/{{ trx.id }}/koreksi/pratinjau">
   {# Versi tiket saat halaman ini DIBUKA. Tanpa ini, formulir yang terbuka
      sebelum orang lain mengoreksi akan menimpa koreksi itu saat disimpan —
      diam-diam, dan yang kehilangan tak pernah tahu. Temuan QA T-04. #}
@@ -33,30 +45,35 @@
 
      Nilai asli dikirim di sini supaya rutenya bisa membandingkan dan hanya
      menerapkan yang benar-benar berbeda. #}
-  <input type="hidden" name="asli_timbang1_kg" value="{{ trx.timbang1_kg }}">
-  <input type="hidden" name="asli_timbang2_kg" value="{{ trx.timbang2_kg if trx.timbang2_kg is not none else '' }}">
+  <input type="hidden" name="asli_timbang1_kg" value="{{ angka_isian(trx.timbang1_kg) }}">
+  <input type="hidden" name="asli_timbang2_kg" value="{{ angka_isian(trx.timbang2_kg) }}">
   <input type="hidden" name="asli_nomor_polisi" value="{{ trx.nomor_polisi or '' }}">
   <input type="hidden" name="asli_nama_sopir" value="{{ trx.nama_sopir or '' }}">
   <input type="hidden" name="asli_nomor_acuan" value="{{ m.nomor_acuan if m else '' }}">
-  <input type="hidden" name="asli_berat_acuan_kg" value="{{ m.berat_acuan_kg if m else '' }}">
+  <input type="hidden" name="asli_berat_acuan_kg" value="{{ angka_isian(m.berat_acuan_kg) if m else '' }}">
   <input type="hidden" name="asli_jumlah_karung" value="{{ m.jumlah_karung if m else '' }}">
-  <input type="hidden" name="asli_tara_per_karung_kg" value="{{ m.tara_per_karung_kg if m else '' }}">
+  <input type="hidden" name="asli_tara_per_karung_kg" value="{{ angka_isian(m.tara_per_karung_kg) if m else '' }}">
 
-    {{ berat('timbang1_kg', 'Timbang pertama', trx.timbang1_kg|angka, '', false) }}
+    <div class="cf-columns"><div class="cf-main">
+    <section class="cf-panel"><h2>Angka timbang</h2>
+    <p class="bantu">{% if trx.partai %}Partai kecil: hasil dihitung dari seluruh baris penimbangan. Mengoreksi kolom ini tidak mengganti rincian tiap penimbangan.{% elif trx.cara_timbang == 'SEKALI' %}Sekali timbang: bacaan ini langsung menjadi dasar berat barang.{% elif timbang_pertama_bermuatan(trx.arah) %}Bermuatan dahulu, kemudian kosong setelah bongkar.{% else %}Kosong dahulu, kemudian bermuatan setelah muat.{% endif %}</p>
+    <div class="cf-paired">
+    {{ berat('timbang1_kg', 'Timbang pertama', angka_isian(trx.timbang1_kg), '', false) }}
     {% if trx.timbang2_kg is not none %}
-      {{ berat('timbang2_kg', 'Timbang kedua', trx.timbang2_kg|angka, '', false) }}
+      {{ berat('timbang2_kg', 'Timbang kedua', angka_isian(trx.timbang2_kg), '', false) }}
     {% endif %}
 
+    </div></section>
+    <section class="cf-panel"><h2>Identitas kendaraan &amp; pihak</h2><div class="cf-paired">
     {# Wajib pada arah yang memang mewajibkannya — koreksi tidak boleh jadi
        jalan memutar untuk mengosongkannya. #}
-    {{ isian('nomor_polisi', 'Nomor polisi', trx.nomor_polisi or '', '', 'text',
-             '', trx.arah in (MASUK, KELUAR), true,
-             'autocapitalize="characters"') }}
-    {{ isian('nama_sopir', 'Nama sopir', trx.nama_sopir or '', '', 'text',
-             '', false, true) }}
+    {{ pilihan_kendaraan(kendaraan, trx.nomor_polisi or '', trx.arah in (MASUK, KELUAR),
+             '', trx.nomor_polisi or '') }}
+    {{ pilihan_sopir(sopir_pilihan, trx.nama_sopir or '') }}
 
-    <div class="grup">
-      <div class="lbl">{{ PIHAK_LABEL.get(trx.arah, 'Pihak') }}</div>
+    </div><div class="grup">
+      <div class="lbl">{{ 'Pemilik barang · titipan pelanggan' if trx.jasa else PIHAK_LABEL.get(trx.arah, 'Pihak') }}</div>
+      {% if trx.pengiriman_snapshot %}<p class="bantu">Pelanggan mengikuti kiriman PadiFlow; tidak diganti menjadi satu pihak di tiket.</p>{% else %}
       <select class="fld" name="supplier_id"
               data-cari="Ketik nama {{ PIHAK_LABEL.get(trx.arah, 'pihak')|lower }}…">
         <option value="">— tidak diubah —</option>
@@ -72,34 +89,46 @@
             </optgroup>
           {% endif %}
         {% endfor %}
-      </select>
+      </select>{% endif %}
     </div>
 
-    <div class="kartu">
-      <div class="kartu__judul">Dokumen &amp; muatan</div>
+    </section><section class="cf-panel">
+      <h2>Dokumen &amp; muatan</h2>
+      {% if trx.pengiriman_snapshot %}
+      <p class="bantu">Koreksi muatan dan pelanggan melalui PadiFlow. Cuplikan bukti ini dipertahankan; koreksi bacaan jembatan tetap memakai alur dan izin lama.</p>
+      {{ rincian_kiriman(trx.pengiriman_snapshot, true) }}
+      <label class="bantu"><input type="checkbox" name="perbarui_muatan" value="1"> Baca ulang rincian dari PadiFlow dan hitung ulang total. Bacaan jembatan tetap mengikuti isian angka timbang.</label>
+      {% else %}
+      {% if trx.arah in (RETUR_MASUK, RETUR_KELUAR) %}<p class="bantu">Retur memakai selisih jembatan tanpa potongan tara kemasan.</p>{% endif %}
       <div style="display:flex;flex-direction:column;gap:14px">
         {{ isian('nomor_acuan', 'Nomor dokumen', m.nomor_acuan if m else '',
                  '', 'text', '', false, true) }}
         {{ berat('berat_acuan_kg', 'Berat menurut dokumen',
-                 m.berat_acuan_kg|angka if m else '', '', false) }}
+                 angka_isian(m.berat_acuan_kg) if m else '', '', false) }}
         {{ isian('jumlah_karung', 'Jumlah karung',
                  m.jumlah_karung if m else '', 'karung', 'text', '', false,
                  false, 'inputmode="numeric"') }}
         {{ isian('tara_per_karung_kg', 'Tara per karung',
-                 '%.3f'|format(m.tara_per_karung_kg) if m else '', 'kg',
+                 angka_isian(m.tara_per_karung_kg) if m else '', 'kg',
                  'text', '', false, false, 'inputmode="decimal" data-berat') }}
       </div>
-    </div>
 
+      {% endif %}
+    </section></div><aside class="cf-panel cf-review">
+    <section data-cf-hasil aria-live="polite"><h2>Perubahan yang akan disimpan</h2><p>Memeriksa isian…</p></section>
     <div class="grup">
       <div class="lbl">Alasan koreksi</div>
       <textarea class="fld" name="alasan" rows="2" required
                 placeholder="Contoh: salah ketik berat nota"></textarea>
     </div>
 
+    <small class="bantu">Wajib diisi. Nilai sebelum dan sesudah, alasan, pelaku, perangkat serta revisi tetap tercatat sesuai audit lama.</small>
+    </aside></div>
+    <p class="pesan pesan--err" data-cf-error role="alert" hidden></p>
+    <div class="cf-actions"><a class="tbl halus" data-cf-cancel href="{{ PREFIX }}/transaksi/{{ trx.id }}">Batal</a>
     <button type="submit" class="tbl blok" data-sibuk="Menyimpan…">
       Simpan koreksi
-    </button>
+    </button></div>
   </form>
 
   {# Formulir TERPISAH dari koreksi di atas, dan sengaja diletakkan sesudah
@@ -111,7 +140,7 @@
      menghitung ulang seluruh hasil kontrol. Diletakkan di halaman ini karena
      inilah tempat orang mencarinya begitu sadar salah pilih. #}
   {% if akun.is_admin %}
-    <details class="kartu tanpa-cetak" style="margin-top:16px">
+    <details class="cf-panel cf-admin tanpa-cetak" style="margin-top:16px">
       <summary style="cursor:pointer;font-weight:700;font-size:14px">
         Salah pilih jenis atau arah barang?
       </summary>
@@ -127,7 +156,7 @@
           Hasil kontrolnya dihitung ulang seketika.
         {% endif %}
       </div>
-      <form method="post" action="{{ PREFIX }}/transaksi/{{ trx.id }}/jenis"
+      <form method="post" data-cf-jenis action="{{ PREFIX }}/transaksi/{{ trx.id }}/jenis"
             style="margin-top:12px;display:flex;flex-direction:column;gap:12px">
         <div class="grup">
           <div class="lbl">Jenis barang</div>
@@ -168,4 +197,6 @@
       </form>
     </details>
   {% endif %}
+  <dialog class="cf-panel" data-cf-discard><h2>Isian belum disimpan</h2><p>Buang perubahan dan kembali ke rincian?</p><div class="cf-actions"><button type="button" class="tbl halus" data-cf-keep>Tetap isi</button><button type="button" class="tbl bahaya" data-cf-leave>Buang &amp; kembali</button></div></dialog>
+</div>
 {% endblock %}

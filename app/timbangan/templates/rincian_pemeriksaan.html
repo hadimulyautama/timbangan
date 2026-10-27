@@ -1,0 +1,95 @@
+  {# ── Lembar pemeriksaan SOP butir 6 ── #}
+  {% if pemeriksaan %}<span id="pemeriksaan"></span>
+    <div class="kartu">
+      <div class="kartu__judul">
+        Pemeriksaan
+        {% if pemeriksaan.status == 'SELESAI' %}
+          <span class="lencana lencana--aman">Selesai</span>
+        {% else %}
+          <span class="lencana lencana--hati">Terbuka</span>
+        {% endif %}
+      </div>
+
+      {# Lembar yang alasannya sudah hilang.
+         Lembar dibuka otomatis saat statusnya menuntut pemeriksaan. Bila
+         angkanya kemudian dikoreksi dan statusnya turun, lembarnya TETAP
+         terbuka — menutupnya keputusan manusia, bukan mesin. Tetapi Admin
+         yang membukanya berbulan-bulan kemudian tidak punya petunjuk apa pun
+         tentang apa yang dulu dipersoalkan, jadi keadaannya disebutkan di
+         sini. Riwayat lengkapnya ada di Jejak audit. #}
+      {% if pemeriksaan.status != 'SELESAI'
+            and trx.status_kontrol not in STATUS_WAJIB_PERIKSA %}
+        <div class="pesan pesan--ok" style="margin:10px 0 2px">
+          Angkanya sudah berubah sejak lembar ini dibuka — statusnya kini
+          <b>{{ STATUS_LABEL.get(trx.status_kontrol, trx.status_kontrol) }}</b>,
+          yang tidak menuntut pemeriksaan. Lembarnya tetap terbuka sampai
+          Anda menutupnya, supaya tercatat apa yang ditemukan.
+        </div>
+      {% endif %}
+
+      {% if pemeriksaan.status == 'SELESAI' %}
+        <div class="baris">
+          <span>Hasil</span>
+          <b style="font-family:var(--teks);font-size:14px">
+            {{ kategori_hasil.get(pemeriksaan.kategori_hasil,
+                                  pemeriksaan.kategori_hasil) }}</b>
+        </div>
+        <div style="font-size:14px;line-height:1.55;margin-top:8px">
+          {{ pemeriksaan.catatan_resolusi }}
+        </div>
+        <div class="bantu" style="margin-top:8px">
+          Ditutup {{ pemeriksaan.ditutup_pada|tgl_jam }}
+          {% if pemeriksaan.dilaporkan_ke %}
+            · dilaporkan ke {{ pemeriksaan.dilaporkan_ke }}
+          {% endif %}
+        </div>
+
+      {% elif akun.is_admin %}
+        <form method="post" data-tutup-pemeriksaan action="{{ PREFIX }}/transaksi/{{ trx.id }}/periksa"
+              style="display:flex;flex-direction:column;gap:12px;margin-top:6px">
+          <div class="bantu">
+            Enam langkah SOP butir 6. Isi yang dikerjakan; yang tidak relevan
+            boleh dikosongkan.
+          </div>
+          {% for nama, label in [
+              ('langkah_ulang_timbang', 'Timbang ulang'),
+              ('langkah_hitung_karung', 'Hitung ulang karung'),
+              ('langkah_periksa_tara', 'Periksa tara karung'),
+              ('langkah_periksa_dokumen', 'Periksa dokumen'),
+              ('langkah_periksa_muatan', 'Periksa muatan'),
+              ('langkah_lapor', 'Laporkan') ] %}
+            <div class="grup">
+              <label class="lbl" for="periksa-{{ nama }}">{{ label }}</label>
+              <input class="fld teks" id="periksa-{{ nama }}" name="{{ nama }}" type="text">
+            </div>
+          {% endfor %}
+
+          <div class="grup">
+            <label class="lbl" for="periksa-dilaporkan_ke">Dilaporkan kepada</label>
+            <input class="fld teks" id="periksa-dilaporkan_ke" name="dilaporkan_ke" type="text" value="Miftah">
+          </div>
+          <div class="grup">
+            <label class="lbl" for="periksa-kategori_hasil">Kategori hasil</label>
+            <select class="fld" id="periksa-kategori_hasil" name="kategori_hasil" required>
+              <option value="">— pilih —</option>
+              {% for kode, label in kategori_hasil.items() %}
+                <option value="{{ kode }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="grup">
+            <label class="lbl" for="periksa-catatan_resolusi">Catatan resolusi</label>
+            <textarea class="fld" id="periksa-catatan_resolusi" name="catatan_resolusi" rows="3" required
+                      placeholder="Apa yang ditemukan dan apa kesimpulannya"></textarea>
+          </div>
+          <p class="pesan pesan--err" data-hasil-pemeriksaan role="alert" hidden></p>
+          <button type="submit" class="tbl blok">Tutup pemeriksaan</button>
+        </form>
+      {% else %}
+        <div class="bantu">
+          Menunggu Admin menutup pemeriksaan ini.
+        </div>
+      {% endif %}
+    </div>
+  {% endif %}
+

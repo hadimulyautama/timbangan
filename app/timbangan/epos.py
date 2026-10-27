@@ -27,6 +27,7 @@ from xml.sax.saxutils import escape
 from app.timbangan import format as fmt
 from app.timbangan import logic
 from app.timbangan.bukti import baris_angka
+from app.timbangan.pengiriman import rincian_bukti
 
 #: Font A, kertas 80 mm, kepala cetak 203 dpi.
 KOLOM = 48
@@ -192,6 +193,11 @@ def struk_timbang(*, trx, aturan, pihak: str, petugas: str, muatan,
     # Tanda tangan. Dua kolom berdampingan seperti pada PDF; garisnya dibuat
     # dari garis bawah supaya tetap ada ruang menulis di kertas 80 mm.
     #
+    import textwrap
+    for baris in rincian_bukti(trx, berat=tampilkan_selisih):
+        for r in textwrap.wrap(baris, KOLOM):
+            p.append(_teks(r))
+
     # Siapa yang menandatangani kolom kedua tergantung siapa yang datang.
     # Pada truk itu sopir — dialah yang menyaksikan jarum timbangan. Pada
     # partai kecil tidak ada sopir: petani membawa barangnya sendiri, dan

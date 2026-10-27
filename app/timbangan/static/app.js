@@ -32,6 +32,49 @@
   // Daftarnya diambil dari <datalist> yang sudah ada di halaman, bukan
   // salinan kedua yang bisa berbeda suatu hari, sehingga tetap bekerja tanpa
   // jaringan.
+  function bacaNomorPolisi(nilai) {
+    var kata = (nilai || '').normalize('NFKC').replace(/\s+/g, '').toUpperCase();
+    var cocok = kata.match(/^([A-Z]+)([0-9]+)([A-Z]+)$/);
+    var rapi = cocok ? cocok.slice(1).join(' ') : null;
+    return rapi && rapi.length <= 20 ? rapi : null;
+  }
+  document.querySelectorAll('[data-format-nopol]').forEach(function (input) {
+    function periksa() {
+      var asli = input.getAttribute('data-nopol-asli');
+      var samaLama = asli !== null && input.value === asli;
+      input.setCustomValidity(!input.value.trim() || bacaNomorPolisi(input.value) || samaLama
+        ? '' : 'Format nomor polisi harus huruf, angka, lalu huruf. Contoh: AD 1234 XY.');
+    }
+    input.addEventListener('input', periksa);
+    input.addEventListener('blur', function () {
+      var rapi = bacaNomorPolisi(input.value);
+      if (rapi && rapi !== input.value) {
+        input.value = rapi;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      periksa();
+    });
+    periksa();
+  });
+
+  // Jumlah karung tidak boleh dipotong diam-diam (1,5 menjadi 1).
+  // Bekerja juga ketika halaman tersimpan dibuka tanpa jaringan.
+  document.querySelectorAll('[data-jumlah-karung]').forEach(function (input) {
+    function periksa() {
+      var mode = input.form && input.form.querySelector('[name="cara_timbang"]:checked');
+      if (input.hasAttribute('data-karung-sekali')) input.required = !!mode && mode.value === 'SEKALI';
+      var teks = input.value.trim().replace(/\s+/g, '');
+      if (/^[1-9][0-9]{0,2}(\.[0-9]{3})+$/.test(teks)) teks = teks.replace(/\./g, '');
+      var n = Number(teks);
+      input.setCustomValidity(!teks ? '' : !/^\d+$/.test(teks) || n < 1 || n > 100000
+        ? 'Jumlah karung harus bilangan bulat lebih dari 0, maksimal 100.000.' : '');
+    }
+    input.addEventListener('input', periksa);
+    if (input.form) input.form.querySelectorAll('[name="cara_timbang"]').forEach(function (el) { el.addEventListener('change', periksa); });
+    periksa();
+  });
+
   function pasangSopirMenyusul() {
     var nopol = document.querySelector('[data-nopol]');
     var sopir = document.querySelector('[data-sopir-isian]');
@@ -44,11 +87,11 @@
     var dariSistem = false;
 
     function cariSopir(nilai) {
-      var cari = (nilai || '').trim().toUpperCase();
+      var cari = bacaNomorPolisi(nilai);
       if (!cari) { return ''; }
       var opsi = daftar.options;
       for (var i = 0; i < opsi.length; i++) {
-        if ((opsi[i].value || '').toUpperCase() === cari) {
+        if (bacaNomorPolisi(opsi[i].value) === cari) {
           return opsi[i].dataset.sopir || '';
         }
       }
@@ -90,63 +133,9 @@
     pasangSopirMenyusul();
   }
 
-  // ── Antrean kiriman ────────────────────────────────────────────────
-
-  function bacaAntrean() {
-    try { return JSON.parse(localStorage.getItem(GUDANG) || '[]'); }
-    catch (e) { return []; }
-  }
-
-  function tulisAntrean(daftar) {
-    try { localStorage.setItem(GUDANG, JSON.stringify(daftar)); }
-    catch (e) { /* penyimpanan penuh atau diblokir — abaikan diam-diam */ }
-    tampilkanJumlah();
-  }
-
-  function tampilkanJumlah() {
-    var n = bacaAntrean().length;
-    document.querySelectorAll('[data-antrean]').forEach(function (el) {
-      el.textContent = n ? '· ' + n + ' menunggu terkirim' : '';
-    });
-  }
-
-  function antrekan(kiriman) {
-    var daftar = bacaAntrean();
-    /* Dikunci pada KUNCI KIRIMAN, bukan nomor transaksi.
-     *
-     * Nomor dulu dibentuk saat formulir dibuka, jadi dua formulir yang
-     * terbuka bersamaan menghasilkan nomor yang SAMA — dan antrean ini lalu
-     * menganggap dua penimbangan yang berbeda sebagai satu, lalu membuang
-     * salah satunya sebelum sempat terkirim. Temuan QA T-01.
-     *
-     * Kunci dibuat sekali per formulir dan tak pernah berulang, jadi yang
-     * dilebur di sini benar-benar kiriman yang sama. */
-    var i = daftar.findIndex(function (k) {
-      return k.kunci && k.kunci === kiriman.kunci && k.url === kiriman.url;
-    });
-    if (i >= 0) { daftar[i] = kiriman; } else { daftar.push(kiriman); }
-    tulisAntrean(daftar);
-  }
-
-  function kirimAntrean() {
-    var daftar = bacaAntrean();
-    if (!daftar.length || !navigator.onLine) { return; }
-
-    var kiriman = daftar[0];
-    fetch(kiriman.url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(kiriman.data),
-      credentials: 'same-origin'
-    }).then(function (r) {
-      // 4xx berarti server menolak isinya — mengirim ulang selamanya tidak
-      // akan menolong, jadi baris itu dibuang agar antrean tidak macet.
-      if (r.ok || (r.status >= 400 && r.status < 500)) {
-        tulisAntrean(bacaAntrean().slice(1));
-        kirimAntrean();
-      }
-    }).catch(function () { /* masih tanpa jaringan — coba lagi nanti */ });
-  }
+  // Antrean dan draf atomik dikelola luring.js. Kunci lama di atas hanya
+  // dibaca sebagai penjaga penyegaran; kiriman lama tidak dihapus diam-diam.
+  function tampilkanJumlah() { /* luring.js menampilkan jumlah dari IndexedDB */ }
 
   // ── Data acuan untuk saat sinyal hilang ────────────────────────────
   //
@@ -199,8 +188,8 @@
   // ── Penanda luring ─────────────────────────────────────────────────
 
   function perbaruiStatusJaringan() {
-    document.body.classList.toggle('luring', !navigator.onLine);
-    if (navigator.onLine) { kirimAntrean(); }
+    document.body.classList.toggle('luring', !navigator.onLine || document.body.hasAttribute('data-salinan-luring'));
+    if (navigator.onLine && window.timbanganLuring) { window.timbanganLuring.sinkronkan(); }
   }
 
   window.addEventListener('online', perbaruiStatusJaringan);
@@ -227,6 +216,10 @@
 
   document.addEventListener('blur', function (e) {
     if (!e.target.matches || !e.target.matches('[data-berat]')) { return; }
+    // Koreksi mempertahankan ejaan asli sampai parser server membacanya.
+    // Mengubah 9.990,500 menjadi 9990.500 membuat titiknya terbaca ribuan
+    // pada kiriman berikutnya, padahal pengguna tidak mengubah nilainya.
+    if (e.target.closest('[data-correction-form]')) { return; }
     var bersih = bakukanAngka(e.target.value);
     if (bersih !== '' && !isNaN(Number(bersih))) { e.target.value = bersih; }
   }, true);
@@ -235,6 +228,8 @@
 
   document.addEventListener('submit', function (e) {
     var form = e.target;
+    if (e.defaultPrevented) { return; }
+    if (form.matches('[data-simpan-luring]') && window.timbanganLuring) { return; }
     if (form.dataset.terkirim === '1') { e.preventDefault(); return; }
     form.dataset.terkirim = '1';
 
@@ -336,6 +331,10 @@
     kotak.setAttribute('autocomplete', 'off');
     kotak.setAttribute('enterkeyhint', 'search');
     kotak.placeholder = pilih.dataset.cari || 'Ketik untuk mencari…';
+    // Select disembunyikan setelah ditingkatkan menjadi pencarian. Pindahkan
+    // validasi ke kotak yang dapat difokuskan, tetapi sahkan hanya ID pilihan.
+    var wajib = pilih.required;
+    if (wajib) { pilih.required = false; kotak.required = true; }
     var hasil = document.createElement('div');
     hasil.className = 'cari__hasil';
 
@@ -369,6 +368,9 @@
       // menolak isian kosong tetap `_wajib_pihak` di layanan, karena "salah
       // satu dari dua" tidak bisa dinyatakan HTML.
       if (gabung) { gabung.value = pilih.value ? '' : kotak.value.trim(); }
+      if (wajib) {
+        kotak.setCustomValidity(pilih.value ? '' : 'Pilih kontak dari daftar Kledo.');
+      }
     }
 
     function cocok(o, kata) {
@@ -405,6 +407,7 @@
           pilih.value = o.nilai;
           kotak.value = o.label;
           if (gabung) { gabung.value = ''; }
+          if (wajib) { kotak.setCustomValidity(''); }
           hasil.innerHTML = '';
         });
         hasil.appendChild(b);
@@ -450,9 +453,125 @@
     }
 
     tampilkanTerpilih();
+    selaraskan();
+    pilih.addEventListener('change', function () {
+      tampilkanTerpilih();
+      selaraskan();
+    });
   }
 
   document.querySelectorAll('select[data-cari]').forEach(pasangPencarian);
+
+  // Nama sopir boleh baru. Nilai tetap milik input asli agar pemulihan draf,
+  // antrean luring, dan isian dari kendaraan memakai kolom yang sama.
+  function pasangPilihanTeks(kotak) {
+    var daftar = document.getElementById(kotak.getAttribute('list'));
+    if (!daftar) return;
+    var nopol = kotak.hasAttribute('data-pilihan-nopol');
+    var bungkus = kotak.parentNode;
+    var opsi = Array.prototype.map.call(daftar.options, function (o) {
+      return { nama: o.value, cari: bakukan(o.value + ' ' + (o.dataset.alias || '')) };
+    });
+    var hasil = document.createElement('div');
+    hasil.className = 'cari__hasil';
+    hasil.id = kotak.id + '-hasil';
+    hasil.setAttribute('role', 'listbox');
+    hasil.setAttribute('aria-label', nopol ? 'Nomor polisi tersimpan' : 'Nama sopir tersimpan');
+    bungkus.appendChild(hasil);
+    // Datalist tetap menjadi cadangan bila JavaScript tidak berjalan.
+    kotak.removeAttribute('list');
+    kotak.setAttribute('role', 'combobox');
+    kotak.setAttribute('aria-autocomplete', 'list');
+    kotak.setAttribute('aria-controls', hasil.id);
+    kotak.setAttribute('aria-expanded', 'false');
+    var aktif = -1;
+
+    function bakukan(teks) {
+      return teks.normalize('NFKC').trim().replace(/\s+/g, nopol ? '' : ' ').toLowerCase();
+    }
+    function tutup() {
+      hasil.replaceChildren();
+      aktif = -1;
+      kotak.setAttribute('aria-expanded', 'false');
+      kotak.removeAttribute('aria-activedescendant');
+    }
+    function pilih(nama) {
+      kotak.value = nama;
+      kotak.dispatchEvent(new Event('input', { bubbles: true }));
+      kotak.dispatchEvent(new Event('change', { bubbles: true }));
+      tutup();
+    }
+    function gambar() {
+      tutup();
+      var kata = bakukan(kotak.value);
+      var cocok = opsi.filter(function (o) { return !kata || o.cari.indexOf(kata) >= 0; });
+      cocok.slice(0, 25).forEach(function (o, i) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.tabIndex = -1;
+        b.id = hasil.id + '-' + i;
+        b.setAttribute('role', 'option');
+        b.setAttribute('aria-selected', 'false');
+        b.textContent = o.nama;
+        b.addEventListener('mousedown', function (e) { e.preventDefault(); });
+        b.addEventListener('click', function () { pilih(o.nama); });
+        hasil.appendChild(b);
+      });
+      if (!cocok.length || cocok.length > 25) {
+        var pesan = document.createElement('div');
+        pesan.className = 'cari__kosong';
+        pesan.setAttribute('role', 'status');
+        if (cocok.length > 25) {
+          pesan.textContent = (cocok.length - 25) + ' lainnya — ketik lebih lengkap';
+        } else if (nopol) {
+          pesan.textContent = !kata ? 'Belum ada nomor polisi tersimpan.'
+            : (bacaNomorPolisi(kotak.value) ? 'Belum ada di daftar. Kendaraan baru disimpan bersama tiket.'
+              : 'Ketik nomor lengkap: huruf, angka, lalu huruf.');
+        } else {
+          pesan.textContent = kata ? 'Belum ada di daftar. Nama baru disimpan bersama tiket.' : 'Belum ada nama sopir tersimpan.';
+        }
+        hasil.appendChild(pesan);
+      }
+      kotak.setAttribute('aria-expanded', 'true');
+    }
+    kotak.addEventListener('focus', gambar);
+    kotak.addEventListener('input', gambar);
+    kotak.addEventListener('keydown', function (e) {
+      if (e.isComposing) return;
+      var terbuka = kotak.getAttribute('aria-expanded') === 'true';
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (!terbuka) gambar();
+        var tombol = hasil.querySelectorAll('[role="option"]');
+        if (!tombol.length) return;
+        aktif = e.key === 'ArrowDown' ? (aktif + 1) % tombol.length
+          : (aktif <= 0 ? tombol.length - 1 : aktif - 1);
+        tombol.forEach(function (b, i) {
+          b.classList.toggle('sorot', i === aktif);
+          b.setAttribute('aria-selected', String(i === aktif));
+        });
+        kotak.setAttribute('aria-activedescendant', tombol[aktif].id);
+        tombol[aktif].scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter' && terbuka) {
+        e.preventDefault();
+        var pilihan = hasil.querySelector('[aria-selected="true"]');
+        // Tanpa pilihan eksplisit, pertahankan ketikan sebagai calon nama
+        // baru. Jangan menggantinya dengan hasil parsial pertama.
+        if (pilihan) pilihan.click();
+        else tutup();
+      } else if (e.key === 'Escape') {
+        if (terbuka) e.preventDefault();
+        tutup();
+      }
+    });
+    kotak.addEventListener('blur', function () {
+      setTimeout(function () { if (!bungkus.contains(document.activeElement)) tutup(); }, 0);
+    });
+    document.addEventListener('click', function (e) {
+      if (!bungkus.contains(e.target)) tutup();
+    });
+  }
+  document.querySelectorAll('[data-pilihan-sopir], [data-pilihan-nopol]').forEach(pasangPilihanTeks);
 
   // ── Mulai ──────────────────────────────────────────────────────────
 
@@ -471,7 +590,7 @@
       .catch(function () { /* tanpa service worker aplikasi tetap jalan */ });
   }
 
-  window.timbangan = { antrekan: antrekan, kirimAntrean: kirimAntrean };
+  window.timbangan = window.timbangan || {};
 
   /* Baris tabel yang bisa dibuka.
    *
@@ -540,6 +659,8 @@
 
   function unduhBerkas(tautan) {
     if (tautan.dataset.sibuk === '1') { return; }
+    var kotakUnduh = document.querySelector('[data-hasil-unduh]');
+    if (kotakUnduh) { kotakUnduh.hidden = true; }
     // Yang diganti hanya elemen berlabel `data-teks` bila ada. Tautan pilihan
     // cetak berisi ikon dan keterangan; mengganti seluruh isinya dengan kata
     // "Menyiapkan…" akan menghapus semuanya, dan tidak kembali utuh bila
@@ -560,6 +681,12 @@
         // Nama berkas diambil dari jawaban server, bukan disusun ulang di
         // sini — supaya hanya ada satu tempat yang menentukannya.
         var cd = r.headers.get('Content-Disposition') || '';
+        if (new URL(tautan.href).pathname.endsWith('/ekspor.csv') &&
+            (!/attachment/i.test(cd) || !/text\/csv/i.test(r.headers.get('Content-Type') || ''))) {
+          // Sesi habis dapat berakhir pada HTML login dengan HTTP 200.
+          // Halaman itu bukan berkas CSV yang berhasil diunduh.
+          throw new Error('Ekspor belum tersedia; periksa sesi dan coba lagi.');
+        }
         var cocok = cd.match(/filename="?([^"]+)"?/);
         return r.blob().then(function (blob) {
           return { blob: blob, nama: cocok ? cocok[1] : 'unduhan.csv' };
@@ -590,6 +717,11 @@
         selesai();
         // Pengguna menutup lembar bagikan — bukan kegagalan.
         if (err && err.name === 'AbortError') { return; }
+        if (kotakUnduh) {
+          kotakUnduh.textContent = kotakUnduh.dataset.pesan || 'Unduhan belum berhasil. Periksa jaringan lalu coba lagi; filter riwayat tetap tersimpan pada halaman ini.';
+          kotakUnduh.hidden = false;
+          return;
+        }
         window.location.href = tautan.href;
       });
   }
@@ -1001,6 +1133,7 @@
       /* Antrean luring berisi = sinyal sedang buruk. Reload saat itu bisa
          mendarat di halaman luring, dan petugas kehilangan layarnya karena
          kami mencoba menolongnya. */
+      if (window.timbanganLuring && window.timbanganLuring.adaTertunda()) { return true; }
       try {
         var isi = JSON.parse(localStorage.getItem(GUDANG) || '[]');
         return isi.length > 0;
@@ -1140,6 +1273,8 @@
       if (!bolehSegar()) { return; }
       var sekarang = document.querySelector('.bingkai');
       if (!sekarang) { return; }
+      sekarang = sekarang.cloneNode(true);
+      sekarang.querySelectorAll('[data-luring-panel]').forEach(function (e) { e.remove(); });
       var lama = sekarang.innerHTML;
 
       fetch(location.href, { credentials: 'same-origin', cache: 'no-store' })
@@ -1151,6 +1286,7 @@
           if (!bolehSegar()) { return; }
           var doc = new DOMParser().parseFromString(teks, 'text/html');
           var baru = doc.querySelector('.bingkai');
+          if (baru) baru.querySelectorAll('[data-luring-panel]').forEach(function (e) { e.remove(); });
           if (!baru || baru.innerHTML === lama) { return; }
           adaPerubahan();   // bukan location.reload(): pil dulu, orangnya yang memutuskan
         })

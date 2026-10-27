@@ -35,7 +35,7 @@ def terkonfigurasi() -> bool:
     return bool(settings.produksi_api_url and settings.produksi_api_token)
 
 
-async def _minta(metode: str, path: str, *, operator_akun_id: int | None = None) -> dict:
+async def _minta(metode: str, path: str, *, operator_akun_id: int | None = None, body: dict | None = None) -> dict:
     if not terkonfigurasi():
         raise ProduksiTakTersedia(
             "Sambungan ke sistem produksi belum diatur (PRODUKSI_API_URL/TOKEN)."
@@ -46,7 +46,7 @@ async def _minta(metode: str, path: str, *, operator_akun_id: int | None = None)
             headers = {"X-Internal-Token": settings.produksi_api_token}
             if operator_akun_id is not None:
                 headers["X-Operator-Akun"] = str(int(operator_akun_id))
-            r = await c.request(metode, url, headers=headers)
+            r = await c.request(metode, url, headers=headers, **({'json':body} if body is not None else {}))
         r.raise_for_status()
         return r.json()
     except httpx.HTTPStatusError as e:
@@ -63,7 +63,7 @@ async def _minta(metode: str, path: str, *, operator_akun_id: int | None = None)
                 "Sistem produksi menolak permintaan (token/API internal belum aktif)."
             ) from e
         raise ProduksiTakTersedia("Sistem produksi sedang bermasalah.") from e
-    except httpx.HTTPError as e:
+    except (httpx.HTTPError, ValueError) as e:
         log.warning("API produksi tak terjangkau %s", path, exc_info=True)
         raise ProduksiTakTersedia("Sistem produksi sedang tak bisa dihubungi.") from e
 
@@ -91,11 +91,12 @@ async def muatan_pengiriman(tiket_id: int) -> dict:
     return await _minta("GET", f"/internal/pengiriman/tiket/{int(tiket_id)}/muatan")
 
 
-async def selesaikan_pengiriman(tiket_id: int, operator_akun_id: int) -> dict:
+async def selesaikan_pengiriman(tiket_id: int, operator_akun_id: int, *, sidik_sumber: str | None = None) -> dict:
     """Minta Produksi menautkan tiket dan memverifikasi transaksi keluar."""
     return await _minta(
         "POST", f"/internal/pengiriman/tiket/{int(tiket_id)}/verifikasi",
         operator_akun_id=operator_akun_id,
+        **({"body":{"sidik_sumber":sidik_sumber}} if sidik_sumber else {}),
     )
 
 

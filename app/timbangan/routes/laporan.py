@@ -9,16 +9,18 @@ from __future__ import annotations
 import csv
 import io
 from datetime import date, timedelta
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.timbangan import format as fmt
 from app.timbangan import logic, service
 from app.timbangan.db import get_db, hari_ini
-from app.timbangan.models import TimbanganAkun
+from app.timbangan.models import TimbanganAkun, TimbanganPemeriksaan
 from app.timbangan.security import butuh_admin
 from app.timbangan.web import PREFIX, render
 
@@ -41,22 +43,42 @@ async def laporan(
     akun: TimbanganAkun = Depends(butuh_admin),
     db: AsyncSession = Depends(get_db),
 ):
+    return await _halaman(request, db)
+
+
+async def _halaman(request, db, tab_awal="rekap"):
+    """Hanya susunan baca: cakupan dan rumus tetap milik layanan lama."""
     dari, sampai = _rentang(request.query_params)
     f = service.FilterTransaksi(dari=dari, sampai=sampai)
-    return render(
-        request, "laporan.html",
-        f=f,
-        ringkasan=await service.ringkasan_dashboard(db, f),
-        lembar_terbuka=await service.daftar_pemeriksaan_terbuka(db),
-        perlu_periksa=await service.daftar_transaksi(
+    tab = request.query_params.get("tab", tab_awal)
+    if tab not in ("rekap", "pemeriksaan", "pemantauan"):
+        tab = tab_awal
+    tautan = {t: f"{PREFIX}/laporan?" + urlencode({
+        "tab": t, "dari": dari.isoformat(), "sampai": sampai.isoformat(),
+    }) for t in ("rekap", "pemeriksaan", "pemantauan")}
+    ctx = dict(f=f, tab=tab, tautan=tautan, konteks=tautan[tab],
+               lembar_terbuka=await service.daftar_pemeriksaan_terbuka(db),
+               kembali=f"{PREFIX}/")
+    if tab == "rekap":
+        ctx["ringkasan"] = await service.ringkasan_dashboard(db, f)
+        ctx["perlu_periksa"] = await service.daftar_transaksi(
             db, service.FilterTransaksi(
                 dari=dari, sampai=sampai,
                 status_kontrol=sorted(logic.STATUS_WAJIB_PERIKSA)),
             batas=20,
-        ),
-        tara_jatuh_tempo=await service.tara_jatuh_tempo(db),
-        kembali=f"{PREFIX}/",
-    )
+        )
+        ctx["tara_jatuh_tempo"] = await service.tara_jatuh_tempo(db)
+    elif tab == "pemantauan":
+        ctx["baris"] = await service.monitoring_supplier(db, f)
+    # Status lembar dipisahkan dari status kontrol; tidak disimpulkan dari
+    # angka selisih. Query terbatas pada tiket yang benar-benar ditampilkan.
+    ids = {b.trx.id for b in ctx["lembar_terbuka"]}
+    ids.update(b.trx.id for b in ctx.get("perlu_periksa", []))
+    lembar = (await db.scalars(select(TimbanganPemeriksaan).where(
+        TimbanganPemeriksaan.transaksi_id.in_(ids)
+    ).order_by(TimbanganPemeriksaan.id))).all() if ids else []
+    ctx["lembar_per_tiket"] = {l.transaksi_id: l for l in lembar}
+    return render(request, "laporan.html", **ctx)
 
 
 @router.get("/monitoring")
@@ -70,13 +92,7 @@ async def monitoring(
     Bahasanya selalu 'perlu diperiksa', tidak pernah menuduh. Angka di sini
     adalah alasan untuk bertanya, bukan kesimpulan.
     """
-    dari, sampai = _rentang(request.query_params)
-    f = service.FilterTransaksi(dari=dari, sampai=sampai)
-    return render(
-        request, "monitoring.html",
-        f=f, baris=await service.monitoring_supplier(db, f),
-        kembali=f"{PREFIX}/laporan",
-    )
+    return await _halaman(request, db, "pemantauan")
 
 
 @router.get("/ekspor.csv")
@@ -104,7 +120,7 @@ async def ekspor(
         t = b.trx
         tulis.writerow([jinakkan_sel(x) for x in [
             t.kode, t.tanggal, t.arah, t.jenis_kode,
-            b.supplier_nama or t.pihak_nama or "", t.nomor_polisi or "",
+            (b.pihak_tampil if t.pengiriman_snapshot else b.supplier_nama or t.pihak_nama or ""), t.nomor_polisi or "",
             # Lewat fmt.jam, bukan strftime langsung: Postgres mengembalikan
             # waktu dalam UTC, dan ekspor ini dibandingkan dengan nota cetak.
             t.timbang1_kg, fmt.jam(t.timbang1_waktu) if t.timbang1_waktu else "",

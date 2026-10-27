@@ -1,0 +1,7 @@
+body.padiflow-ui .luring-panel { border:1px solid var(--pd-line); border-radius:12px; background:var(--pd-sheet); padding:14px; display:flex; flex-wrap:wrap; align-items:center; gap:10px; overflow-wrap:anywhere; font-size:13px; }
+body.padiflow-ui .luring-panel[hidden] { display:none; }
+body.padiflow-ui .luring-panel p { margin:0; width:100%; }
+body.padiflow-ui .luring-panel__baris { width:100%; display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:space-between; border-top:1px solid var(--pd-line); padding-top:8px; }
+body.padiflow-ui .luring-panel a { color:var(--tf-accent); min-height:40px; display:inline-flex; align-items:center; }
+body.padiflow-ui form[data-simpan-luring][inert] { opacity:.8; }
+@media print { .luring-panel,[data-status-draf] { display:none!important; } }

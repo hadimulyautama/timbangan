@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "pengiriman_muatan.html" import rincian_kiriman %}
 {% from "macros.html" import kartu_hasil, lencana, konteks_jenis %}
 
 {% set trx = b.trx %}
@@ -87,7 +88,7 @@
     <div class="baris">
       <span>{{ PIHAK_LABEL.get(trx.arah, 'Pihak') }}</span>
       <b style="font-family:var(--teks);font-size:14px">
-        {{ b.supplier_nama or trx.pihak_nama or '—' }}</b>
+        {{ b.pihak_tampil }}</b>
     </div>
     <div class="baris">
       <span>Nomor polisi</span><b>{{ trx.nomor_polisi or '—' }}</b>
@@ -96,7 +97,8 @@
       <span>Sopir</span>
       <b style="font-family:var(--teks);font-size:14px">{{ trx.nama_sopir or '—' }}</b>
     </div>
-    {% for m in trx.muatan %}
+    {{ rincian_kiriman(trx.pengiriman_snapshot, true) }}
+    {% for m in trx.muatan if not trx.pengiriman_snapshot %}
       {# Transfer internal tidak punya dokumen pembanding, jadi tidak ada
          nomor maupun berat menurut dokumen yang bisa disebut. Menampilkan
          "Surat jalan (tanpa nomor) — 0 kg" hanya membingungkan. #}
@@ -164,99 +166,7 @@
     {% endif %}
   </div>
 
-  {# ── Lembar pemeriksaan SOP butir 6 ── #}
-  {% if pemeriksaan %}
-    <div class="kartu">
-      <div class="kartu__judul">
-        Pemeriksaan
-        {% if pemeriksaan.status == 'SELESAI' %}
-          <span class="lencana lencana--aman">Selesai</span>
-        {% else %}
-          <span class="lencana lencana--hati">Terbuka</span>
-        {% endif %}
-      </div>
-
-      {# Lembar yang alasannya sudah hilang.
-         Lembar dibuka otomatis saat statusnya menuntut pemeriksaan. Bila
-         angkanya kemudian dikoreksi dan statusnya turun, lembarnya TETAP
-         terbuka — menutupnya keputusan manusia, bukan mesin. Tetapi Admin
-         yang membukanya berbulan-bulan kemudian tidak punya petunjuk apa pun
-         tentang apa yang dulu dipersoalkan, jadi keadaannya disebutkan di
-         sini. Riwayat lengkapnya ada di Jejak audit. #}
-      {% if pemeriksaan.status != 'SELESAI'
-            and trx.status_kontrol not in STATUS_WAJIB_PERIKSA %}
-        <div class="pesan pesan--ok" style="margin:10px 0 2px">
-          Angkanya sudah berubah sejak lembar ini dibuka — statusnya kini
-          <b>{{ STATUS_LABEL.get(trx.status_kontrol, trx.status_kontrol) }}</b>,
-          yang tidak menuntut pemeriksaan. Lembarnya tetap terbuka sampai
-          Anda menutupnya, supaya tercatat apa yang ditemukan.
-        </div>
-      {% endif %}
-
-      {% if pemeriksaan.status == 'SELESAI' %}
-        <div class="baris">
-          <span>Hasil</span>
-          <b style="font-family:var(--teks);font-size:14px">
-            {{ kategori_hasil.get(pemeriksaan.kategori_hasil,
-                                  pemeriksaan.kategori_hasil) }}</b>
-        </div>
-        <div style="font-size:14px;line-height:1.55;margin-top:8px">
-          {{ pemeriksaan.catatan_resolusi }}
-        </div>
-        <div class="bantu" style="margin-top:8px">
-          Ditutup {{ pemeriksaan.ditutup_pada|tgl_jam }}
-          {% if pemeriksaan.dilaporkan_ke %}
-            · dilaporkan ke {{ pemeriksaan.dilaporkan_ke }}
-          {% endif %}
-        </div>
-
-      {% elif akun.is_admin %}
-        <form method="post" action="{{ PREFIX }}/transaksi/{{ trx.id }}/periksa"
-              style="display:flex;flex-direction:column;gap:12px;margin-top:6px">
-          <div class="bantu">
-            Enam langkah SOP butir 6. Isi yang dikerjakan; yang tidak relevan
-            boleh dikosongkan.
-          </div>
-          {% for nama, label in [
-              ('langkah_ulang_timbang', 'Timbang ulang'),
-              ('langkah_hitung_karung', 'Hitung ulang karung'),
-              ('langkah_periksa_tara', 'Periksa tara karung'),
-              ('langkah_periksa_dokumen', 'Periksa dokumen'),
-              ('langkah_periksa_muatan', 'Periksa muatan'),
-              ('langkah_lapor', 'Laporkan') ] %}
-            <div class="grup">
-              <div class="lbl">{{ label }}</div>
-              <input class="fld teks" name="{{ nama }}" type="text">
-            </div>
-          {% endfor %}
-
-          <div class="grup">
-            <div class="lbl">Dilaporkan kepada</div>
-            <input class="fld teks" name="dilaporkan_ke" type="text" value="Miftah">
-          </div>
-          <div class="grup">
-            <div class="lbl">Kategori hasil</div>
-            <select class="fld" name="kategori_hasil" required>
-              <option value="">— pilih —</option>
-              {% for kode, label in kategori_hasil.items() %}
-                <option value="{{ kode }}">{{ label }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="grup">
-            <div class="lbl">Catatan resolusi</div>
-            <textarea class="fld" name="catatan_resolusi" rows="3" required
-                      placeholder="Apa yang ditemukan dan apa kesimpulannya"></textarea>
-          </div>
-          <button type="submit" class="tbl blok">Tutup pemeriksaan</button>
-        </form>
-      {% else %}
-        <div class="bantu">
-          Menunggu Admin menutup pemeriksaan ini.
-        </div>
-      {% endif %}
-    </div>
-  {% endif %}
+  {% include "rincian_pemeriksaan.html" %}
 
   {# ── Aksi ──
      Urutannya mengikuti apa yang sebenarnya dilakukan petugas: cetak bila
@@ -290,70 +200,7 @@
       {% endif %}
     {% endif %}
 
-    {% if boleh_ubah and trx.status_transaksi != 'VOID' %}
-      <a href="{{ PREFIX }}/transaksi/{{ trx.id }}/koreksi" class="tbl halus blok">
-        Koreksi
-      </a>
-    {% elif sebab_terkunci %}
-      <div class="bantu">{{ sebab_terkunci }}</div>
-    {% endif %}
-
-    {% if boleh_batal and trx.status_transaksi != 'VOID' %}
-      {# Kata yang dipakai mengikuti KEADAAN tiketnya, bukan peran orangnya.
-         Tiket yang belum ditimbang kedua belum punya netto dan belum masuk
-         pembukuan mana pun — yang dibatalkan cuma niat menimbang, dan
-         "Batalkan transaksi" terdengar jauh lebih berat daripada yang
-         sebenarnya terjadi. #}
-      <details class="kartu">
-        <summary style="cursor:pointer;font-weight:700;font-size:14px">
-          {{ "Hapus tiket ini" if trx.status_tiket == 'TERBUKA'
-             else "Batalkan transaksi" }}
-        </summary>
-        <form method="post" action="{{ PREFIX }}/transaksi/{{ trx.id }}/batal"
-              style="margin-top:12px;display:flex;flex-direction:column;gap:10px">
-          <div class="grup">
-            <div class="lbl">Alasan pembatalan</div>
-            <textarea class="fld" name="alasan" rows="2" required></textarea>
-          </div>
-          <button type="submit" class="tbl bahaya">Batalkan</button>
-          <div class="bantu">
-            Data tidak dihapus. Transaksi ditandai batal, tetap tertera di
-            catatan, dan tidak dihitung dalam ringkasan.
-          </div>
-        </form>
-      </details>
-    {% endif %}
-
-    {% if akun.is_super %}
-      {# Satu-satunya tindakan yang tidak meninggalkan barisnya. Karena itu
-         terbatas pada Super Admin, terkunci di balik nomor transaksi yang
-         harus diketik, dan tetap menuliskan salinan penuh ke jejak audit. #}
-      <details class="kartu">
-        <summary style="cursor:pointer;font-weight:700;font-size:14px">
-          Hapus permanen
-        </summary>
-        <div class="bantu" style="margin-top:10px">
-          Berbeda dari membatalkan: barisnya hilang dari catatan sama sekali.
-          Jejak auditnya tetap ada beserta salinan penuh angkanya dan alasan
-          yang Anda tulis. Untuk truk yang batal bongkar, pakai
-          <b>Batalkan</b> — bukan ini.
-        </div>
-        <form method="post" action="{{ PREFIX }}/transaksi/{{ trx.id }}/hapus"
-              style="margin-top:12px;display:flex;flex-direction:column;gap:10px">
-          <div class="grup">
-            <div class="lbl">Alasan penghapusan</div>
-            <textarea class="fld" name="alasan" rows="2" required></textarea>
-          </div>
-          <div class="grup">
-            <div class="lbl">Nomor transaksi</div>
-            <input class="fld" name="ketik_kode" required autocomplete="off"
-                   autocapitalize="characters">
-            <div class="bantu">Ketik persis: {{ trx.kode }}</div>
-          </div>
-          <button type="submit" class="tbl bahaya">Hapus permanen</button>
-        </form>
-      </details>
-    {% endif %}
+    {% include "rincian_tindakan.html" %}
   </div>
 
 {% endblock %}
