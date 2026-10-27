@@ -124,3 +124,23 @@ async def test_parameter_rahasia_dan_skema_hanya_admin(klien,monkeypatch):
     assert 'data-uji="skema-tertinggal"' not in r.text and 'Kunci penanda sesi' not in r.text
     await login(klien,'wahid');r=await klien.get(PREFIX+'/pengaturan?bagian=sistem')
     assert 'data-uji="skema-tertinggal"' in r.text and 'Kunci penanda sesi' in r.text
+
+async def test_master_gagal_simpan_tidak_merusak_kategori_lain(klien):
+    await login(klien,'wahid')
+    r=await klien.post(PREFIX+'/pengaturan/tara-kemasan',data={'tara_id':'1','tara_per_karung_kg':'0,0858'})
+    assert 'Master tara kemasan belum tersedia' in r.text and 'err=' in str(r.url)
+    assert (await klien.get(PREFIX+'/pengaturan?bagian=sistem')).status_code==200
+
+async def test_master_tara_tidak_mengubah_snapshot_historis(klien):
+    from test_rincian_supplier import tiket
+    from app.timbangan.models import TimbanganMuatan
+    await _master_tara_kemasan();tid=await tiket();await login(klien,'wahid')
+    async def rekam():
+        async with database.SessionLocal() as db:
+            t=await db.get(TimbanganTransaksi,tid)
+            rows=(await db.scalars(select(TimbanganMuatan).where(TimbanganMuatan.transaksi_id==tid))).all()
+            return ({c.name:getattr(t,c.name) for c in t.__table__.columns},
+                    [{c.name:getattr(x,c.name) for c in x.__table__.columns} for x in rows])
+    before=await rekam()
+    r=await klien.post(PREFIX+'/pengaturan/tara-kemasan',data={'tara_id':'1','tara_per_karung_kg':'0,0858'})
+    assert 'tersimpan' in r.text and await rekam()==before
