@@ -846,22 +846,45 @@
     e.preventDefault();
     if (tombol.dataset.sibuk === '1') { return; }
 
+    // Alasan diperiksa SEBELUM perintah dikirim. Pemeriksaan sesudahnya
+    // hanya melindungi audit, sedangkan kertas telanjur dapat keluar.
+    var formCetak = document.querySelector('form[data-catat-cetak]');
+    var alasanCetak = formCetak && formCetak.querySelector('input[name="alasan"]');
+    if (alasanCetak && alasanCetak.required && !alasanCetak.value.trim()) {
+      lapor('Isi alasan cetak ulang sebelum mengirim ke printer.', 'err');
+      alasanCetak.focus();
+      alasanCetak.reportValidity();
+      return;
+    }
+    var catatTombol = formCetak && formCetak.querySelector('button[type="submit"]');
+    var bacaSaja = alasanCetak && alasanCetak.readOnly;
+    var nonaktif = catatTombol && catatTombol.disabled;
+    if (alasanCetak) alasanCetak.readOnly = true;
+    if (catatTombol) catatTombol.disabled = true;
+
     var label = tombol.querySelector('[data-teks]') || tombol;
     var semula = label.textContent;
     tombol.dataset.sibuk = '1';
     label.textContent = 'Mencetak…';
     lapor('');
 
+    function pulihkanCetak() {
+      tombol.dataset.sibuk = '';
+      label.textContent = semula;
+      if (alasanCetak) alasanCetak.readOnly = bacaSaja;
+      if (catatTombol) catatTombol.disabled = nonaktif;
+    }
     cetakKePrinter(tombol.dataset.cetak)
       .then(function () {
-        tombol.dataset.sibuk = '';
-        label.textContent = semula;
         lapor('Struk keluar di printer.', 'ok');
-        catatCetak();
+        if (catatCetak()) {
+          // Kunci tetap dipegang selama POST audit dan perpindahan halaman.
+          // Klik sesudah ACK printer pun tidak boleh mengirim kertas lagi.
+          label.textContent = 'Mencatat cetakan…';
+        } else pulihkanCetak();
       })
       .catch(function (err) {
-        tombol.dataset.sibuk = '';
-        label.textContent = semula;
+        pulihkanCetak();
         lapor(err.message, 'err', err.penyiapan);
       });
   });
@@ -884,20 +907,20 @@
 
   /* Kertas sudah keluar, jadi jejak audit harus menyebutkannya.
    *
-   * Hanya cetakan PERTAMA yang dicatat sendiri. Cetak ulang wajib beralasan,
-   * dan alasan tidak boleh dikarang aplikasi — formulirnya dibiarkan terisi
-   * separuh supaya petugas mengetiknya. */
+   * Cetak ulang memakai alasan petugas yang sudah diperiksa sebelum kirim.
+   * Pencatatan tetap melalui endpoint lama setelah ACK printer diterima. */
   function catatCetak() {
     var form = document.querySelector('form[data-catat-cetak]');
-    if (!form) { return; }
+    if (!form) { return false; }
     var pilihan = form.querySelector('select[name="format"]');
     if (pilihan) { pilihan.value = '80MM'; }
     var alasan = form.querySelector('input[name="alasan"]');
-    if (alasan && alasan.required) {
+    if (alasan && alasan.required && !alasan.value.trim()) {
       alasan.focus();
-      return;
+      return false;
     }
     form.submit();
+    return true;
   }
 
   /* Penyiapan printer: simpan alamat, lalu uji. */
