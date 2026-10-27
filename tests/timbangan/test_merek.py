@@ -14,8 +14,14 @@ def test_tidak_ada_merek_lama_di_tampilan_dan_metadata():
         text = path.read_text().replace('class="padiflow-ui ', 'class="')
         # PadiFlow kini disebut sebagai sumber muatan, sesuai integrasi yang
         # diminta pemilik; identitas/header aplikasi tetap TeraFlow.
-        if path.name in {'pengiriman_muatan.html','koreksi.html','rincian_keluar.html','rincian_retur.html'}:
+        if path.name in {'pengiriman_muatan.html','koreksi.html','rincian_keluar.html','rincian_retur.html',
+                         'rincian_supplier.html','rincian_masuk.html','rincian_transfer.html'}:
             text = text.replace('PadiFlow', 'Sistem Produksi')
+        # Keterangan lokasi menyebut sistem stok yang sebenarnya. Izinkan
+        # frasa ini saja, agar identitas/header TeraFlow tetap diperiksa.
+        if path.name == 'timbang1.html':
+            text = text.replace('bukan perintah pemindahan stok PadiFlow.',
+                                'bukan perintah pemindahan stok Sistem Produksi.')
         assert not re.search(r'padi\s*flow', text, re.I), path.name
 
 

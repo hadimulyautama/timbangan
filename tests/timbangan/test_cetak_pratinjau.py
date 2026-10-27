@@ -1,6 +1,5 @@
 """Bukti, versi dan pekerjaan cetak diuji pada SQLite terpisah per kasus."""
 import io,re,json,uuid
-from pathlib import Path
 import pytest
 from pypdf import PdfReader
 from sqlalchemy import select,func
@@ -11,8 +10,6 @@ from hmu_identitas import peran as P
 from app import database
 from app.timbangan import cetak,pdf,epos,service
 from app.timbangan.models import TimbanganCetak,TimbanganTransaksi,TimbanganAkun,TimbanganPekerjaanCetak as Job
-
-OUT=Path('/Users/wahidnurhani/Developer/Hadi Mulya Systems/output/pratinjau-cetak-20261027')
 
 async def siapkan(klien,tid,format='80MM',keluaran='printer',alasan=''):
     r=await klien.get(f'/timbangan/transaksi/{tid}/cetak');assert r.status_code==200,r.text
@@ -26,7 +23,7 @@ async def jumlah():
     async with database.SessionLocal() as db:return await db.scalar(select(func.count()).select_from(TimbanganCetak))
 
 @pytest.mark.parametrize('role',[P.OPERATOR,P.ADMIN,P.SUPERADMIN])
-async def test_pratinjau_dan_dokumen_tidak_mencatat_cetak(klien,role):
+async def test_pratinjau_dan_dokumen_tidak_mencatat_cetak(klien,role,tmp_path):
     tid=await tiket();await tautkan('miftah',role);await login(klien,'miftah')
     r=await klien.get(f'/timbangan/transaksi/{tid}/cetak');assert r.status_code==200
     assert 'Pratinjau &amp; cetak' in r.text or 'Pratinjau & cetak' in r.text
@@ -35,7 +32,7 @@ async def test_pratinjau_dan_dokumen_tidak_mencatat_cetak(klien,role):
         if fmt!='epos':
             reader=PdfReader(io.BytesIO(r.content));assert float(reader.pages[0].mediabox.width)==pytest.approx((80 if fmt=='80mm' else 215)*72/25.4,abs=.01)
             assert 'Petugas pencetak' in ''.join(p.extract_text() for p in reader.pages)
-            OUT.mkdir(parents=True,exist_ok=True);(OUT/f'struk-{fmt}.pdf').write_bytes(r.content)
+            (tmp_path/f'struk-{fmt}.pdf').write_bytes(r.content)
         else:assert '<feed unit="160"/>' in r.text
     assert await jumlah()==0
 
