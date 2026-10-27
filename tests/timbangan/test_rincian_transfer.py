@@ -32,7 +32,8 @@ async def tiket(*,selesai=True,terstruktur=True,karung=100,tara='.0858',lain=2,n
 async def test_pilihan_simpan_replay_dan_snapshot(klien,tujuan):
     await master();await login(klien)
     page=await klien.get('/timbangan/timbang/TRANSFER');assert page.status_code==200
-    assert 'name="pihak_nama"' not in page.text
+    assert '<input type="hidden" name="pihak_nama"' in page.text
+    assert 'name="pihak_nama" type="text"' not in page.text
     assert 'Tong beras' not in page.text and 'Silo tidak aktif' not in page.text
     key=kode_dari(page.text)
     body=dict(kunci=key,berat_kg='10.500',nama_sopir='Sopir Uji',lintasan_format='1',transfer_asal='101',transfer_tujuan=tujuan)

@@ -187,3 +187,28 @@ async def test_cetak_pdf_printer_sintetis_dan_audit(klien,alamat_ui,role):
             rows=(await db.scalars(select(TimbanganCetak).order_by(TimbanganCetak.urutan))).all()
             assert len(rows)==2 and rows[-1].alasan=='Kertas uji rusak, cetak ulang sintetis'
         await browser.close()
+
+async def test_draf_formulir_lama_tidak_kehilangan_catatan_lintasan(klien,alamat_ui):
+    await master();await login(klien)
+    async with async_playwright() as pw:
+        b,ctx,page=await browser_uji(pw,klien,alamat_ui,320)
+        await buka(page,alamat_ui+'/timbangan/timbang/TRANSFER')
+        await page.wait_for_function('window.timbanganLuring && window.timbanganLuring.siap()')
+        await page.locator('[name=berat_kg]').fill('10500');await page.locator('[name=nama_sopir]').fill('Sopir Lama')
+        await page.wait_for_function('window.timbanganLuring.draf().then(a=>a.length===1)')
+        key=await page.locator('[name=kunci]').input_value()
+        await page.evaluate('''async ()=>{
+          const db=await new Promise((y,n)=>{const r=indexedDB.open('timbangan-luring-v2',1);r.onsuccess=()=>y(r.result);r.onerror=()=>n(r.error)});
+          await new Promise((y,n)=>{const tx=db.transaction('draf','readwrite'),s=tx.objectStore('draf'),r=s.openCursor();r.onsuccess=()=>{let c=r.result;if(c){let d=c.value;d.data=d.data.filter(p=>!['transfer_asal','transfer_tujuan','lintasan_format','pihak_nama'].includes(p[0]));d.data.push(['pihak_nama','Lintasan lama tanpa format khusus']);c.update(d);c.continue()}};tx.oncomplete=y;tx.onerror=()=>n(tx.error)});db.close();
+        }''')
+        await page.reload();await page.wait_for_function('window.timbanganLuring && window.timbanganLuring.siap()')
+        await page.locator('[name=nama_sopir]').fill('Sopir Diperbaiki')
+        await page.wait_for_function('window.timbanganLuring.draf().then(a=>a.some(d=>d.data.some(p=>p[0]==="nama_sopir"&&p[1]==="Sopir Diperbaiki")))')
+        drafts=await page.evaluate('window.timbanganLuring.draf()')
+        assert ['pihak_nama','Lintasan lama tanpa format khusus'] in drafts[0]['data']
+        assert await page.locator('[name=kunci]').input_value()==key
+        assert await page.locator('[name=berat_kg]').input_value()=='10500'
+        assert await page.locator('[data-lintasan-lama]').is_visible()
+        assert await page.locator('input[type=text][name=pihak_nama],textarea[name=pihak_nama]:not([readonly])').count()==0
+        await page.screenshot(path=str(OUT/'draf-lintasan-lama-320.png'),full_page=True)
+        await b.close()

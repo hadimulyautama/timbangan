@@ -338,6 +338,10 @@
           "type": "text"
         },
         {
+          "name": "pihak_nama",
+          "type": "hidden"
+        },
+        {
           "name": "tara_per_karung_kg",
           "type": "text"
         },

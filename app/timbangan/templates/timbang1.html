@@ -93,6 +93,10 @@
     <div class="bantu">Pelanggan ditentukan pada perintah barang keluar di Produksi.</div>
   {% elif transfer %}
     <input type="hidden" name="lintasan_format" value="1">
+    {# Draf sebelum pilihan master masih membawa teks ini. Tetap disalin
+       untuk pemulihan lokal; server memakai pilihan ID pada formulir baru. #}
+    <input type="hidden" name="pihak_nama" value="">
+    <p class="bantu" data-lintasan-lama hidden>Catatan lintasan dari draf lama: <span></span>. Pilih asal dan tujuan dari daftar untuk melanjutkan.</p>
     {% include "pilihan_lintasan.html" %}
     <p class="bantu">Pilihan lokasi tiket, bukan perintah pemindahan stok PadiFlow.</p>
   {% else %}

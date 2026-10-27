@@ -5,6 +5,17 @@
   var page = document.querySelector('.fw-page');
   if (!page || page.dataset.fwTerpasang) return;
   page.dataset.fwTerpasang = '1';
+  // Teks lintasan draf lama tetap terbawa tanpa membuka input bebas baru.
+  var lintasanLama = page.querySelector('[data-lintasan-lama]');
+  function tampilLintasanLama() {
+    if (!lintasanLama) return;
+    var input = page.querySelector('input[type=hidden][name=pihak_nama]');
+    var nilai = input && input.value;
+    lintasanLama.hidden = !nilai;
+    lintasanLama.querySelector('span').textContent = nilai || '';
+  }
+  page.addEventListener('draf-dipulihkan', tampilLintasanLama);
+  tampilLintasanLama();
   function buka(el) {
     var parent = el && el.parentElement;
     while (parent && parent !== page) {
