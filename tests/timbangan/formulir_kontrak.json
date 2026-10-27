@@ -1,0 +1,1059 @@
+{
+  "/timbang/GABAH_BASAH": [
+    {
+      "action": "/timbangan/timbang/GABAH_BASAH",
+      "method": "post",
+      "fields": [
+        {
+          "name": "berat_acuan_kg",
+          "type": "text"
+        },
+        {
+          "name": "berat_kg",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "catatan"
+        },
+        {
+          "name": "jumlah_karung",
+          "type": "text"
+        },
+        {
+          "name": "kunci",
+          "type": "hidden"
+        },
+        {
+          "name": "nama_sopir",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "nomor_acuan",
+          "type": "text"
+        },
+        {
+          "name": "nomor_polisi",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "supplier_id",
+          "required": null
+        },
+        {
+          "name": "tara_per_karung_kg",
+          "type": "text"
+        },
+        {
+          "name": "waktu",
+          "type": "datetime-local"
+        }
+      ]
+    }
+  ],
+  "/timbang/GABAH_KERING": [
+    {
+      "action": "/timbangan/timbang/GABAH_KERING",
+      "method": "post",
+      "fields": [
+        {
+          "name": "berat_acuan_kg",
+          "type": "text"
+        },
+        {
+          "name": "berat_kg",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "catatan"
+        },
+        {
+          "name": "jumlah_karung",
+          "type": "text"
+        },
+        {
+          "name": "kunci",
+          "type": "hidden"
+        },
+        {
+          "name": "nama_sopir",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "nomor_acuan",
+          "type": "text"
+        },
+        {
+          "name": "nomor_polisi",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "supplier_id",
+          "required": null
+        },
+        {
+          "name": "tara_per_karung_kg",
+          "type": "text"
+        },
+        {
+          "name": "waktu",
+          "type": "datetime-local"
+        }
+      ]
+    }
+  ],
+  "/timbang/BERAS_PK": [
+    {
+      "action": "/timbangan/timbang/BERAS_PK",
+      "method": "post",
+      "fields": [
+        {
+          "name": "berat_acuan_kg",
+          "type": "text"
+        },
+        {
+          "name": "berat_kg",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "catatan"
+        },
+        {
+          "name": "jumlah_karung",
+          "type": "text"
+        },
+        {
+          "name": "kunci",
+          "type": "hidden"
+        },
+        {
+          "name": "nama_sopir",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "nomor_acuan",
+          "type": "text"
+        },
+        {
+          "name": "nomor_polisi",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "supplier_id",
+          "required": null
+        },
+        {
+          "name": "tara_per_karung_kg",
+          "type": "text"
+        },
+        {
+          "name": "waktu",
+          "type": "datetime-local"
+        }
+      ]
+    }
+  ],
+  "/timbang/BERAS_MASUK": [
+    {
+      "action": "/timbangan/timbang/BERAS_MASUK",
+      "method": "post",
+      "fields": [
+        {
+          "name": "berat_acuan_kg",
+          "type": "text"
+        },
+        {
+          "name": "berat_kg",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "catatan"
+        },
+        {
+          "name": "jumlah_karung",
+          "type": "text"
+        },
+        {
+          "name": "kunci",
+          "type": "hidden"
+        },
+        {
+          "name": "nama_sopir",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "nomor_acuan",
+          "type": "text"
+        },
+        {
+          "name": "nomor_polisi",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "supplier_id",
+          "required": null
+        },
+        {
+          "name": "tara_per_karung_kg",
+          "type": "text"
+        },
+        {
+          "name": "waktu",
+          "type": "datetime-local"
+        }
+      ]
+    }
+  ],
+  "/timbang/BROKEN_MASUK": [
+    {
+      "action": "/timbangan/timbang/BROKEN_MASUK",
+      "method": "post",
+      "fields": [
+        {
+          "name": "berat_acuan_kg",
+          "type": "text"
+        },
+        {
+          "name": "berat_kg",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "catatan"
+        },
+        {
+          "name": "jumlah_karung",
+          "type": "text"
+        },
+        {
+          "name": "kunci",
+          "type": "hidden"
+        },
+        {
+          "name": "nama_sopir",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "nomor_acuan",
+          "type": "text"
+        },
+        {
+          "name": "nomor_polisi",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "supplier_id",
+          "required": null
+        },
+        {
+          "name": "tara_per_karung_kg",
+          "type": "text"
+        },
+        {
+          "name": "waktu",
+          "type": "datetime-local"
+        }
+      ]
+    }
+  ],
+  "/timbang/PENGIRIMAN": [
+    {
+      "action": "/timbangan/timbang/PENGIRIMAN",
+      "method": "post",
+      "fields": [
+        {
+          "name": "berat_kg",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "catatan"
+        },
+        {
+          "name": "kunci",
+          "type": "hidden"
+        },
+        {
+          "name": "nama_sopir",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "nomor_polisi",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "waktu",
+          "type": "datetime-local"
+        }
+      ]
+    }
+  ],
+  "/timbang/TRANSFER": [
+    {
+      "action": "/timbangan/timbang/TRANSFER",
+      "method": "post",
+      "fields": [
+        {
+          "name": "berat_kg",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "catatan"
+        },
+        {
+          "name": "jumlah_karung",
+          "type": "text"
+        },
+        {
+          "name": "kunci",
+          "type": "hidden"
+        },
+        {
+          "name": "nama_sopir",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "nomor_polisi",
+          "type": "text"
+        },
+        {
+          "name": "pihak_nama",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "tara_per_karung_kg",
+          "type": "text"
+        },
+        {
+          "name": "waktu",
+          "type": "datetime-local"
+        }
+      ]
+    }
+  ],
+  "/timbang/RETUR_PELANGGAN": [
+    {
+      "action": "/timbangan/timbang/RETUR_PELANGGAN",
+      "method": "post",
+      "fields": [
+        {
+          "name": "berat_acuan_kg",
+          "type": "text"
+        },
+        {
+          "name": "berat_kg",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "catatan"
+        },
+        {
+          "name": "jumlah_karung",
+          "type": "text"
+        },
+        {
+          "name": "kunci",
+          "type": "hidden"
+        },
+        {
+          "name": "nama_sopir",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "nomor_acuan",
+          "type": "text"
+        },
+        {
+          "name": "nomor_polisi",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "supplier_id",
+          "required": null
+        },
+        {
+          "name": "waktu",
+          "type": "datetime-local"
+        }
+      ]
+    }
+  ],
+  "/timbang/RETUR_SUPPLIER": [
+    {
+      "action": "/timbangan/timbang/RETUR_SUPPLIER",
+      "method": "post",
+      "fields": [
+        {
+          "name": "berat_acuan_kg",
+          "type": "text"
+        },
+        {
+          "name": "berat_kg",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "catatan"
+        },
+        {
+          "name": "jumlah_karung",
+          "type": "text"
+        },
+        {
+          "name": "kunci",
+          "type": "hidden"
+        },
+        {
+          "name": "nama_sopir",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "nomor_acuan",
+          "type": "text"
+        },
+        {
+          "name": "nomor_polisi",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "supplier_id",
+          "required": null
+        },
+        {
+          "name": "waktu",
+          "type": "datetime-local"
+        }
+      ]
+    }
+  ],
+  "/timbang/BEBAS": [
+    {
+      "action": "/timbangan/timbang/BEBAS",
+      "method": "post",
+      "fields": [
+        {
+          "name": "berat_kg",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "cara_timbang",
+          "type": "radio",
+          "value": "DUA_KALI"
+        },
+        {
+          "name": "cara_timbang",
+          "type": "radio",
+          "value": "SEKALI"
+        },
+        {
+          "name": "catatan"
+        },
+        {
+          "name": "jumlah_karung",
+          "type": "text"
+        },
+        {
+          "name": "kunci",
+          "type": "hidden"
+        },
+        {
+          "name": "nama_sopir",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "nomor_polisi",
+          "type": "text"
+        },
+        {
+          "name": "supplier_id",
+          "required": null
+        },
+        {
+          "name": "tara_lain_kg",
+          "type": "text"
+        },
+        {
+          "name": "waktu",
+          "type": "datetime-local"
+        }
+      ]
+    }
+  ],
+  "/jasa/GABAH_KERING": [
+    {
+      "action": "/timbangan/jasa/GABAH_KERING",
+      "method": "post",
+      "fields": [
+        {
+          "name": "berat_acuan_kg",
+          "type": "text"
+        },
+        {
+          "name": "berat_kg",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "catatan"
+        },
+        {
+          "name": "jumlah_karung",
+          "type": "text"
+        },
+        {
+          "name": "kunci",
+          "type": "hidden"
+        },
+        {
+          "name": "nama_sopir",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "nomor_acuan",
+          "type": "text"
+        },
+        {
+          "name": "nomor_polisi",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "pelanggan_id",
+          "required": null
+        },
+        {
+          "name": "tara_per_karung_kg",
+          "type": "text"
+        },
+        {
+          "name": "waktu",
+          "type": "datetime-local"
+        }
+      ]
+    }
+  ],
+  "/kedua/GABAH_BASAH": [
+    {
+      "action": "/timbangan/tiket/1",
+      "method": "post",
+      "fields": [
+        {
+          "name": "aksi",
+          "type": "submit",
+          "formnovalidate": null,
+          "value": "sementara"
+        },
+        {
+          "name": "aksi",
+          "type": "submit",
+          "value": "selesai"
+        },
+        {
+          "name": "berat_acuan_kg",
+          "type": "text"
+        },
+        {
+          "name": "berat_kg",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "catatan"
+        },
+        {
+          "name": "jumlah_karung",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "kunci",
+          "type": "hidden"
+        },
+        {
+          "name": "nomor_acuan",
+          "type": "text"
+        },
+        {
+          "name": "tara_per_karung_kg",
+          "type": "text"
+        },
+        {
+          "name": "waktu",
+          "type": "datetime-local"
+        }
+      ]
+    },
+    {
+      "action": "/timbangan/transaksi/1/batal",
+      "method": "post",
+      "fields": [
+        {
+          "name": "alasan",
+          "required": null
+        }
+      ]
+    },
+    {
+      "action": "/timbangan/tiket/1/tutup",
+      "method": "post",
+      "fields": [
+        {
+          "name": "alasan",
+          "required": null
+        },
+        {
+          "name": "tanpa_timbang_keluar",
+          "type": "checkbox",
+          "required": null
+        }
+      ]
+    }
+  ],
+  "/kedua/GABAH_KERING": [
+    {
+      "action": "/timbangan/tiket/1",
+      "method": "post",
+      "fields": [
+        {
+          "name": "aksi",
+          "type": "submit",
+          "formnovalidate": null,
+          "value": "sementara"
+        },
+        {
+          "name": "aksi",
+          "type": "submit",
+          "value": "selesai"
+        },
+        {
+          "name": "berat_acuan_kg",
+          "type": "text"
+        },
+        {
+          "name": "berat_kg",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "catatan"
+        },
+        {
+          "name": "jumlah_karung",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "kunci",
+          "type": "hidden"
+        },
+        {
+          "name": "nomor_acuan",
+          "type": "text"
+        },
+        {
+          "name": "tara_per_karung_kg",
+          "type": "text"
+        },
+        {
+          "name": "waktu",
+          "type": "datetime-local"
+        }
+      ]
+    },
+    {
+      "action": "/timbangan/transaksi/1/batal",
+      "method": "post",
+      "fields": [
+        {
+          "name": "alasan",
+          "required": null
+        }
+      ]
+    },
+    {
+      "action": "/timbangan/tiket/1/tutup",
+      "method": "post",
+      "fields": [
+        {
+          "name": "alasan",
+          "required": null
+        },
+        {
+          "name": "tanpa_timbang_keluar",
+          "type": "checkbox",
+          "required": null
+        }
+      ]
+    }
+  ],
+  "/kedua/PENGIRIMAN": [
+    {
+      "action": "/timbangan/tiket/1",
+      "method": "post",
+      "fields": [
+        {
+          "name": "aksi",
+          "type": "submit",
+          "formnovalidate": null,
+          "value": "sementara"
+        },
+        {
+          "name": "aksi",
+          "type": "submit",
+          "value": "selesai"
+        },
+        {
+          "name": "berat_kg",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "catatan"
+        },
+        {
+          "name": "kunci",
+          "type": "hidden"
+        },
+        {
+          "name": "waktu",
+          "type": "datetime-local"
+        }
+      ]
+    },
+    {
+      "action": "/timbangan/transaksi/1/batal",
+      "method": "post",
+      "fields": [
+        {
+          "name": "alasan",
+          "required": null
+        }
+      ]
+    },
+    {
+      "action": "/timbangan/tiket/1/tutup",
+      "method": "post",
+      "fields": [
+        {
+          "name": "alasan",
+          "required": null
+        },
+        {
+          "name": "tanpa_timbang_keluar",
+          "type": "checkbox",
+          "required": null
+        }
+      ]
+    }
+  ],
+  "/kedua/TRANSFER": [
+    {
+      "action": "/timbangan/tiket/1",
+      "method": "post",
+      "fields": [
+        {
+          "name": "aksi",
+          "type": "submit",
+          "formnovalidate": null,
+          "value": "sementara"
+        },
+        {
+          "name": "aksi",
+          "type": "submit",
+          "value": "selesai"
+        },
+        {
+          "name": "berat_kg",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "catatan"
+        },
+        {
+          "name": "jumlah_karung",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "kunci",
+          "type": "hidden"
+        },
+        {
+          "name": "tara_per_karung_kg",
+          "type": "text"
+        },
+        {
+          "name": "waktu",
+          "type": "datetime-local"
+        }
+      ]
+    },
+    {
+      "action": "/timbangan/transaksi/1/batal",
+      "method": "post",
+      "fields": [
+        {
+          "name": "alasan",
+          "required": null
+        }
+      ]
+    },
+    {
+      "action": "/timbangan/tiket/1/tutup",
+      "method": "post",
+      "fields": [
+        {
+          "name": "alasan",
+          "required": null
+        },
+        {
+          "name": "tanpa_timbang_keluar",
+          "type": "checkbox",
+          "required": null
+        }
+      ]
+    }
+  ],
+  "/kedua/RETUR_SUPPLIER": [
+    {
+      "action": "/timbangan/tiket/1",
+      "method": "post",
+      "fields": [
+        {
+          "name": "aksi",
+          "type": "submit",
+          "formnovalidate": null,
+          "value": "sementara"
+        },
+        {
+          "name": "aksi",
+          "type": "submit",
+          "value": "selesai"
+        },
+        {
+          "name": "berat_acuan_kg",
+          "type": "text"
+        },
+        {
+          "name": "berat_kg",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "catatan"
+        },
+        {
+          "name": "jumlah_karung",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "kunci",
+          "type": "hidden"
+        },
+        {
+          "name": "nomor_acuan",
+          "type": "text"
+        },
+        {
+          "name": "waktu",
+          "type": "datetime-local"
+        }
+      ]
+    },
+    {
+      "action": "/timbangan/transaksi/1/batal",
+      "method": "post",
+      "fields": [
+        {
+          "name": "alasan",
+          "required": null
+        }
+      ]
+    },
+    {
+      "action": "/timbangan/tiket/1/tutup",
+      "method": "post",
+      "fields": [
+        {
+          "name": "alasan",
+          "required": null
+        },
+        {
+          "name": "tanpa_timbang_keluar",
+          "type": "checkbox",
+          "required": null
+        }
+      ]
+    }
+  ],
+  "/kedua/BEBAS": [
+    {
+      "action": "/timbangan/tiket/1",
+      "method": "post",
+      "fields": [
+        {
+          "name": "aksi",
+          "type": "submit",
+          "formnovalidate": null,
+          "value": "sementara"
+        },
+        {
+          "name": "aksi",
+          "type": "submit",
+          "value": "selesai"
+        },
+        {
+          "name": "berat_kg",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "catatan"
+        },
+        {
+          "name": "jumlah_karung",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "kunci",
+          "type": "hidden"
+        },
+        {
+          "name": "tara_per_karung_kg",
+          "type": "text"
+        },
+        {
+          "name": "waktu",
+          "type": "datetime-local"
+        }
+      ]
+    },
+    {
+      "action": "/timbangan/transaksi/1/batal",
+      "method": "post",
+      "fields": [
+        {
+          "name": "alasan",
+          "required": null
+        }
+      ]
+    },
+    {
+      "action": "/timbangan/tiket/1/tutup",
+      "method": "post",
+      "fields": [
+        {
+          "name": "alasan",
+          "required": null
+        },
+        {
+          "name": "tanpa_timbang_keluar",
+          "type": "checkbox",
+          "required": null
+        }
+      ]
+    }
+  ],
+  "/kedua/RETUR_PELANGGAN": [
+    {
+      "action": "/timbangan/tiket/1",
+      "method": "post",
+      "fields": [
+        {
+          "name": "aksi",
+          "type": "submit",
+          "formnovalidate": null,
+          "value": "sementara"
+        },
+        {
+          "name": "aksi",
+          "type": "submit",
+          "value": "selesai"
+        },
+        {
+          "name": "berat_acuan_kg",
+          "type": "text"
+        },
+        {
+          "name": "berat_kg",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "catatan"
+        },
+        {
+          "name": "jumlah_karung",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "kunci",
+          "type": "hidden"
+        },
+        {
+          "name": "nomor_acuan",
+          "type": "text"
+        },
+        {
+          "name": "waktu",
+          "type": "datetime-local"
+        }
+      ]
+    },
+    {
+      "action": "/timbangan/transaksi/1/batal",
+      "method": "post",
+      "fields": [
+        {
+          "name": "alasan",
+          "required": null
+        }
+      ]
+    },
+    {
+      "action": "/timbangan/tiket/1/tutup",
+      "method": "post",
+      "fields": [
+        {
+          "name": "alasan",
+          "required": null
+        },
+        {
+          "name": "tanpa_timbang_keluar",
+          "type": "checkbox",
+          "required": null
+        }
+      ]
+    }
+  ]
+}

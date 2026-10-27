@@ -40,6 +40,7 @@ jobs:
           python -m venv produksi/.venv
           produksi/.venv/bin/pip install -r produksi/requirements.txt
           python -m pip install -r timbangan/requirements.txt -r timbangan/requirements-dev.txt
+          python -m pip install playwright==1.56.0
           python -m playwright install --with-deps chromium
       - name: Bangun skema kedua rantai tanpa melompati migrasi
         run: |

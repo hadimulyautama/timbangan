@@ -1,0 +1,706 @@
+{
+  "budi-DUA_KALI-True": [
+    {
+      "action": "/timbangan/transaksi/1/koreksi",
+      "method": "post",
+      "fields": [
+        {
+          "name": "alasan",
+          "required": null
+        },
+        {
+          "name": "asli_berat_acuan_kg",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_jumlah_karung",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_nama_sopir",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_nomor_acuan",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_nomor_polisi",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_tara_per_karung_kg",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_timbang1_kg",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_timbang2_kg",
+          "type": "hidden"
+        },
+        {
+          "name": "berat_acuan_kg",
+          "type": "text"
+        },
+        {
+          "name": "jumlah_karung",
+          "type": "text"
+        },
+        {
+          "name": "nama_sopir",
+          "type": "text"
+        },
+        {
+          "name": "nomor_acuan",
+          "type": "text"
+        },
+        {
+          "name": "nomor_polisi",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "supplier_id"
+        },
+        {
+          "name": "tara_per_karung_kg",
+          "type": "text"
+        },
+        {
+          "name": "timbang1_kg",
+          "type": "text"
+        },
+        {
+          "name": "timbang2_kg",
+          "type": "text"
+        },
+        {
+          "name": "versi",
+          "type": "hidden"
+        }
+      ]
+    }
+  ],
+  "wahid-DUA_KALI-True": [
+    {
+      "action": "/timbangan/transaksi/1/koreksi",
+      "method": "post",
+      "fields": [
+        {
+          "name": "alasan",
+          "required": null
+        },
+        {
+          "name": "asli_berat_acuan_kg",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_jumlah_karung",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_nama_sopir",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_nomor_acuan",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_nomor_polisi",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_tara_per_karung_kg",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_timbang1_kg",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_timbang2_kg",
+          "type": "hidden"
+        },
+        {
+          "name": "berat_acuan_kg",
+          "type": "text"
+        },
+        {
+          "name": "jumlah_karung",
+          "type": "text"
+        },
+        {
+          "name": "nama_sopir",
+          "type": "text"
+        },
+        {
+          "name": "nomor_acuan",
+          "type": "text"
+        },
+        {
+          "name": "nomor_polisi",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "supplier_id"
+        },
+        {
+          "name": "tara_per_karung_kg",
+          "type": "text"
+        },
+        {
+          "name": "timbang1_kg",
+          "type": "text"
+        },
+        {
+          "name": "timbang2_kg",
+          "type": "text"
+        },
+        {
+          "name": "versi",
+          "type": "hidden"
+        }
+      ]
+    },
+    {
+      "action": "/timbangan/transaksi/1/jenis",
+      "method": "post",
+      "fields": [
+        {
+          "name": "alasan",
+          "required": null
+        },
+        {
+          "name": "jenis_kode",
+          "required": null
+        },
+        {
+          "name": "tukar_timbangan",
+          "type": "checkbox"
+        }
+      ]
+    }
+  ],
+  "budi-DUA_KALI-False": [
+    {
+      "action": "/timbangan/transaksi/1/koreksi",
+      "method": "post",
+      "fields": [
+        {
+          "name": "alasan",
+          "required": null
+        },
+        {
+          "name": "asli_berat_acuan_kg",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_jumlah_karung",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_nama_sopir",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_nomor_acuan",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_nomor_polisi",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_tara_per_karung_kg",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_timbang1_kg",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_timbang2_kg",
+          "type": "hidden"
+        },
+        {
+          "name": "berat_acuan_kg",
+          "type": "text"
+        },
+        {
+          "name": "jumlah_karung",
+          "type": "text"
+        },
+        {
+          "name": "nama_sopir",
+          "type": "text"
+        },
+        {
+          "name": "nomor_acuan",
+          "type": "text"
+        },
+        {
+          "name": "nomor_polisi",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "supplier_id"
+        },
+        {
+          "name": "tara_per_karung_kg",
+          "type": "text"
+        },
+        {
+          "name": "timbang1_kg",
+          "type": "text"
+        },
+        {
+          "name": "versi",
+          "type": "hidden"
+        }
+      ]
+    }
+  ],
+  "wahid-DUA_KALI-False": [
+    {
+      "action": "/timbangan/transaksi/1/koreksi",
+      "method": "post",
+      "fields": [
+        {
+          "name": "alasan",
+          "required": null
+        },
+        {
+          "name": "asli_berat_acuan_kg",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_jumlah_karung",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_nama_sopir",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_nomor_acuan",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_nomor_polisi",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_tara_per_karung_kg",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_timbang1_kg",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_timbang2_kg",
+          "type": "hidden"
+        },
+        {
+          "name": "berat_acuan_kg",
+          "type": "text"
+        },
+        {
+          "name": "jumlah_karung",
+          "type": "text"
+        },
+        {
+          "name": "nama_sopir",
+          "type": "text"
+        },
+        {
+          "name": "nomor_acuan",
+          "type": "text"
+        },
+        {
+          "name": "nomor_polisi",
+          "type": "text",
+          "required": null
+        },
+        {
+          "name": "supplier_id"
+        },
+        {
+          "name": "tara_per_karung_kg",
+          "type": "text"
+        },
+        {
+          "name": "timbang1_kg",
+          "type": "text"
+        },
+        {
+          "name": "versi",
+          "type": "hidden"
+        }
+      ]
+    },
+    {
+      "action": "/timbangan/transaksi/1/jenis",
+      "method": "post",
+      "fields": [
+        {
+          "name": "alasan",
+          "required": null
+        },
+        {
+          "name": "jenis_kode",
+          "required": null
+        }
+      ]
+    }
+  ],
+  "budi-SEKALI-True": [
+    {
+      "action": "/timbangan/transaksi/1/koreksi",
+      "method": "post",
+      "fields": [
+        {
+          "name": "alasan",
+          "required": null
+        },
+        {
+          "name": "asli_berat_acuan_kg",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_jumlah_karung",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_nama_sopir",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_nomor_acuan",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_nomor_polisi",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_tara_per_karung_kg",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_timbang1_kg",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_timbang2_kg",
+          "type": "hidden"
+        },
+        {
+          "name": "berat_acuan_kg",
+          "type": "text"
+        },
+        {
+          "name": "jumlah_karung",
+          "type": "text"
+        },
+        {
+          "name": "nama_sopir",
+          "type": "text"
+        },
+        {
+          "name": "nomor_acuan",
+          "type": "text"
+        },
+        {
+          "name": "nomor_polisi",
+          "type": "text"
+        },
+        {
+          "name": "supplier_id"
+        },
+        {
+          "name": "tara_per_karung_kg",
+          "type": "text"
+        },
+        {
+          "name": "timbang1_kg",
+          "type": "text"
+        },
+        {
+          "name": "versi",
+          "type": "hidden"
+        }
+      ]
+    }
+  ],
+  "wahid-SEKALI-True": [
+    {
+      "action": "/timbangan/transaksi/1/koreksi",
+      "method": "post",
+      "fields": [
+        {
+          "name": "alasan",
+          "required": null
+        },
+        {
+          "name": "asli_berat_acuan_kg",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_jumlah_karung",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_nama_sopir",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_nomor_acuan",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_nomor_polisi",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_tara_per_karung_kg",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_timbang1_kg",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_timbang2_kg",
+          "type": "hidden"
+        },
+        {
+          "name": "berat_acuan_kg",
+          "type": "text"
+        },
+        {
+          "name": "jumlah_karung",
+          "type": "text"
+        },
+        {
+          "name": "nama_sopir",
+          "type": "text"
+        },
+        {
+          "name": "nomor_acuan",
+          "type": "text"
+        },
+        {
+          "name": "nomor_polisi",
+          "type": "text"
+        },
+        {
+          "name": "supplier_id"
+        },
+        {
+          "name": "tara_per_karung_kg",
+          "type": "text"
+        },
+        {
+          "name": "timbang1_kg",
+          "type": "text"
+        },
+        {
+          "name": "versi",
+          "type": "hidden"
+        }
+      ]
+    },
+    {
+      "action": "/timbangan/transaksi/1/jenis",
+      "method": "post",
+      "fields": [
+        {
+          "name": "alasan",
+          "required": null
+        },
+        {
+          "name": "jenis_kode",
+          "required": null
+        }
+      ]
+    }
+  ],
+  "budi-PARTAI-False": [
+    {
+      "action": "/timbangan/transaksi/1/koreksi",
+      "method": "post",
+      "fields": [
+        {
+          "name": "alasan",
+          "required": null
+        },
+        {
+          "name": "asli_berat_acuan_kg",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_jumlah_karung",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_nama_sopir",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_nomor_acuan",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_nomor_polisi",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_tara_per_karung_kg",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_timbang1_kg",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_timbang2_kg",
+          "type": "hidden"
+        },
+        {
+          "name": "berat_acuan_kg",
+          "type": "text"
+        },
+        {
+          "name": "jumlah_karung",
+          "type": "text"
+        },
+        {
+          "name": "nama_sopir",
+          "type": "text"
+        },
+        {
+          "name": "nomor_acuan",
+          "type": "text"
+        },
+        {
+          "name": "nomor_polisi",
+          "type": "text"
+        },
+        {
+          "name": "supplier_id"
+        },
+        {
+          "name": "tara_per_karung_kg",
+          "type": "text"
+        },
+        {
+          "name": "timbang1_kg",
+          "type": "text"
+        },
+        {
+          "name": "versi",
+          "type": "hidden"
+        }
+      ]
+    }
+  ],
+  "wahid-PARTAI-False": [
+    {
+      "action": "/timbangan/transaksi/1/koreksi",
+      "method": "post",
+      "fields": [
+        {
+          "name": "alasan",
+          "required": null
+        },
+        {
+          "name": "asli_berat_acuan_kg",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_jumlah_karung",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_nama_sopir",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_nomor_acuan",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_nomor_polisi",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_tara_per_karung_kg",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_timbang1_kg",
+          "type": "hidden"
+        },
+        {
+          "name": "asli_timbang2_kg",
+          "type": "hidden"
+        },
+        {
+          "name": "berat_acuan_kg",
+          "type": "text"
+        },
+        {
+          "name": "jumlah_karung",
+          "type": "text"
+        },
+        {
+          "name": "nama_sopir",
+          "type": "text"
+        },
+        {
+          "name": "nomor_acuan",
+          "type": "text"
+        },
+        {
+          "name": "nomor_polisi",
+          "type": "text"
+        },
+        {
+          "name": "supplier_id"
+        },
+        {
+          "name": "tara_per_karung_kg",
+          "type": "text"
+        },
+        {
+          "name": "timbang1_kg",
+          "type": "text"
+        },
+        {
+          "name": "versi",
+          "type": "hidden"
+        }
+      ]
+    },
+    {
+      "action": "/timbangan/transaksi/1/jenis",
+      "method": "post",
+      "fields": [
+        {
+          "name": "alasan",
+          "required": null
+        },
+        {
+          "name": "jenis_kode",
+          "required": null
+        }
+      ]
+    }
+  ]
+}
