@@ -512,6 +512,7 @@ async def pilih_cetak(
     """Dua ukuran bukti: struk 80 mm dan lembar setengah NCR."""
     try:
         b = await _ambil(db, transaksi_id, akun)
+        service.pastikan_boleh_cetak(b.trx)
     except service.LayananError as e:
         return redirect("/transaksi" if akun.is_admin else "/", err=str(e))
 

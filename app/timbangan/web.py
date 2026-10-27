@@ -36,7 +36,7 @@ BASE_DIR = Path(__file__).parent
 PREFIX = "/timbangan"
 
 # Dinaikkan bila CSS/JS berubah, supaya perangkat tidak memakai berkas lama.
-VERSI = "89"
+VERSI = "90"
 
 #: Warna tiap status. Dipisahkan dari `logic` karena ini urusan tampilan.
 NADA_STATUS = {
