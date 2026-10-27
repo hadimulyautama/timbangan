@@ -1,7 +1,7 @@
 /* Tab hanya mengatur visibilitas; tidak mengambil atau mengirim transaksi. */
 (() => {
   'use strict';
-  const akar = document.querySelector('[data-detail-keluar], [data-detail-retur], [data-detail-masuk]');
+  const akar = document.querySelector('[data-detail-keluar], [data-detail-retur], [data-detail-masuk], [data-detail-transfer]');
   if (!akar || akar.dataset.siap) return;
   akar.dataset.siap = '1';
   const tabs = [...akar.querySelectorAll('[data-dk-tab]')];

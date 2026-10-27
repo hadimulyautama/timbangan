@@ -92,10 +92,9 @@
   {% if aturan.arah == KELUAR %}
     <div class="bantu">Pelanggan ditentukan pada perintah barang keluar di Produksi.</div>
   {% elif transfer %}
-    {# Tidak ada pihak lawan — yang perlu diketahui barangnya berpindah dari
-       mana ke mana. Ditulis bebas, tanpa master lokasi tersendiri. #}
-    {{ isian('pihak_nama', PIHAK_LABEL[TRANSFER], '', '', 'text',
-             'Contoh: Gudang 1 → Gudang 2', true, true) }}
+    <input type="hidden" name="lintasan_format" value="1">
+    {% include "pilihan_lintasan.html" %}
+    <p class="bantu">Pilihan lokasi tiket, bukan perintah pemindahan stok PadiFlow.</p>
   {% else %}
     {% set is_pelanggan = kolom_nama == 'nama_pelanggan' %}
     <div class="grup">

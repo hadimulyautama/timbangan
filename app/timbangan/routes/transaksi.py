@@ -23,7 +23,7 @@ from app.timbangan.security import (
 )
 from app.timbangan.web import galat_db, PREFIX, redirect, render
 
-from app.timbangan import pengiriman, klien_produksi, rincian_keluar, rincian_retur, rincian_masuk, format as fmt
+from app.timbangan import pengiriman, klien_produksi, rincian_keluar, rincian_retur, rincian_masuk, rincian_transfer, lintasan_transfer, format as fmt
 
 router = APIRouter(prefix=PREFIX)
 
@@ -230,9 +230,10 @@ async def rincian(
     retur = await rincian_retur.baca(db, b.trx, akun, pemeriksaan, cetak) if b.trx.arah == logic.RETUR_MASUK and not b.trx.partai else None
     masuk = await rincian_masuk.baca(db, b.trx, akun, pemeriksaan, cetak,
         lihat=request.cookies.get('produksi_lihat')) if b.trx.arah == logic.MASUK and not b.trx.partai else None
+    transfer = await rincian_transfer.baca(db, b.trx, pemeriksaan, cetak) if b.trx.arah == logic.TRANSFER and not b.trx.partai else None
     response = render(
-        request, "rincian_masuk.html" if masuk else "rincian_retur.html" if retur else "rincian_keluar.html" if keluar else "rincian.html",
-        layar="rincian", keluar=keluar, retur=retur, masuk=masuk, produksi_url=settings.produksi_web_url,
+        request, "rincian_transfer.html" if transfer else "rincian_masuk.html" if masuk else "rincian_retur.html" if retur else "rincian_keluar.html" if keluar else "rincian.html",
+        layar="rincian", keluar=keluar, retur=retur, masuk=masuk, transfer=transfer, produksi_url=settings.produksi_web_url,
         b=b, aturan=aturan,
         pemeriksaan=pemeriksaan,
         cetak=cetak,
@@ -280,6 +281,7 @@ async def form_koreksi(
     return render(
         request, "koreksi.html",
         versi=service.versi_tiket(b.trx), batas_tautan=batas_tautan,
+        lokasi_transfer=await lintasan_transfer.pilihan(db,b.trx.lintasan_transfer) if b.trx.arah == logic.TRANSFER else None,
         sopir_pilihan=await sopir.daftar_pilihan(db),
         kendaraan=await service.kendaraan_pilihan(db),
         b=b, aturan=await service.aturan_untuk(db, b.trx.jenis_kode),
@@ -306,6 +308,8 @@ async def pratinjau_koreksi(
         data=await request.form()
         service.pastikan_versi(b.trx, str(data.get("versi", "")).strip() or None)
         perubahan,muatan,ringkasan=borang_koreksi.baca(b.trx,data)
+        lokasi, ringkasan_lokasi = await lintasan_transfer.perubahan(db,b.trx,data)
+        perubahan.update(lokasi); ringkasan.extend(ringkasan_lokasi)
         if data.get('perbarui_muatan') == '1':
             sumber = await pengiriman.baca(db, transaksi_id)
             if not b.trx.pengiriman_snapshot or sumber['kiriman_id'] != b.trx.pengiriman_snapshot['kiriman_id']:
@@ -337,7 +341,7 @@ async def pratinjau_koreksi(
                 nilai["Berat dokumen"]=borang_koreksi.tampil(hasil.berat_acuan_kg,"berat_acuan_kg")
                 nilai["Selisih"]=("+" if hasil.selisih_kg>0 else "")+borang_koreksi.tampil(hasil.selisih_kg,"timbang1_kg")
         return jawab({"tersedia":True,"perubahan":ringkasan,"nilai":nilai,"terbuka":hasil is None})
-    except (service.LayananError,logic.ValidasiError,pengiriman.MuatanTidakSah,klien_produksi.ProduksiTakTersedia) as e:
+    except (lintasan_transfer.LintasanTidakSah,service.LayananError,logic.ValidasiError,pengiriman.MuatanTidakSah,klien_produksi.ProduksiTakTersedia) as e:
         return jawab({"tersedia":False,"pesan":str(e)},409 if "sudah diubah orang lain" in str(e) else 422)
 
 
@@ -361,6 +365,8 @@ async def simpan_koreksi(
     nomor_polisi: str = Form(""),
     nama_sopir: str = Form(""),
     supplier_id: str = Form(""),
+    transfer_asal: str = Form(""),
+    transfer_tujuan: str = Form(""),
     jumlah_karung: str = Form(""),
     tara_per_karung_kg: str = Form(""),
     berat_acuan_kg: str = Form(""),
@@ -383,6 +389,8 @@ async def simpan_koreksi(
     data_form = locals()
     try:
         perubahan, muatan, _ = borang_koreksi.baca(b.trx, data_form)
+        lokasi, _ = await lintasan_transfer.perubahan(db,b.trx,data_form)
+        perubahan.update(lokasi)
         service.pastikan_versi(b.trx,versi.strip() or None)
         await borang_koreksi.periksa_bacaan_terbuka(db,b.trx,perubahan)
         sumber = await pengiriman.baca(db, transaksi_id) if perbarui_muatan == '1' else None
@@ -394,7 +402,7 @@ async def simpan_koreksi(
             alasan=alasan.strip(), pengiriman_snapshot=sumber,
             ip=request.client.host if request.client else None,
         )
-    except (service.LayananError, logic.ValidasiError, pengiriman.MuatanTidakSah, klien_produksi.ProduksiTakTersedia) as e:
+    except (lintasan_transfer.LintasanTidakSah, service.LayananError, logic.ValidasiError, pengiriman.MuatanTidakSah, klien_produksi.ProduksiTakTersedia) as e:
         return redirect(f"/transaksi/{transaksi_id}/koreksi", err=str(e))
     except DBAPIError as e:
         # R-T-01: galat basis data bukan layar hitam.

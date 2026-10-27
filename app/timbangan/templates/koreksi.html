@@ -73,7 +73,10 @@
 
     </div><div class="grup">
       <div class="lbl">{{ 'Pemilik barang · titipan pelanggan' if trx.jasa else PIHAK_LABEL.get(trx.arah, 'Pihak') }}</div>
-      {% if trx.pengiriman_snapshot %}<p class="bantu">Pelanggan mengikuti kiriman PadiFlow; tidak diganti menjadi satu pihak di tiket.</p>{% else %}
+      {% if trx.arah == TRANSFER %}
+      {% include "pilihan_lintasan.html" %}
+      {% if not trx.lintasan_transfer %}<p class="bantu">Catatan lama: {{ trx.pihak_nama or 'Belum tercatat' }}. Kosongkan kedua pilihan untuk mempertahankannya.</p>{% endif %}
+      {% elif trx.pengiriman_snapshot %}<p class="bantu">Pelanggan mengikuti kiriman PadiFlow; tidak diganti menjadi satu pihak di tiket.</p>{% else %}
       <select class="fld" name="supplier_id"
               data-cari="Ketik nama {{ PIHAK_LABEL.get(trx.arah, 'pihak')|lower }}…">
         <option value="">— tidak diubah —</option>

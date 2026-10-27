@@ -325,6 +325,10 @@
           "type": "hidden"
         },
         {
+          "name": "lintasan_format",
+          "type": "hidden"
+        },
+        {
           "name": "nama_sopir",
           "type": "text",
           "required": null
@@ -334,13 +338,16 @@
           "type": "text"
         },
         {
-          "name": "pihak_nama",
-          "type": "text",
+          "name": "tara_per_karung_kg",
+          "type": "text"
+        },
+        {
+          "name": "transfer_asal",
           "required": null
         },
         {
-          "name": "tara_per_karung_kg",
-          "type": "text"
+          "name": "transfer_tujuan",
+          "required": null
         },
         {
           "name": "waktu",

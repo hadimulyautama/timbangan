@@ -360,12 +360,14 @@ async def form_timbang_pertama(
     if aturan.arah == logic.KELUAR and aturan.kode != "PENGIRIMAN":
         return redirect("/timbang/PENGIRIMAN")
     tara, asal = await service.tara_disarankan(db, supplier_id=None, aturan=aturan)
+    from app.timbangan import lintasan_transfer
+    lokasi_transfer = await lintasan_transfer.pilihan(db) if aturan.arah == logic.TRANSFER else None
     # Daftar mengikuti arah: barang masuk hanya supplier, pengiriman
     # hanya pelanggan. Lihat `service.PIHAK_ARAH`.
     sering, lainnya = await service.pihak_pilihan(db, aturan.arah)
     return render(
         request, "timbang1.html",
-        aturan=aturan,
+        aturan=aturan, lokasi_transfer=lokasi_transfer,
         # PERKIRAAN, bukan nomor yang sudah jadi milik layar ini.
         # Nomor sungguhannya diterbitkan server saat menyimpan —
         # lihat `service.alokasi_nomor`. Dua layar yang terbuka
@@ -538,6 +540,9 @@ async def simpan_timbang_pertama(
     cara_timbang: str = Form(CARA_DUA_KALI),
     supplier_id: str = Form(""),
     pihak_nama: str = Form(""),
+    transfer_asal: str = Form(""),
+    transfer_tujuan: str = Form(""),
+    lintasan_format: str = Form(""),
     nomor_polisi: str = Form(""),
     nama_sopir: str = Form(""),
     nomor_acuan: str = Form(""),
@@ -579,6 +584,7 @@ async def simpan_timbang_pertama(
         cara_timbang=cara_timbang,
         supplier_id=int(supplier_id) if supplier_id.isdigit() else None,
         pihak_nama=pihak_nama.strip() or None,
+        transfer_asal=transfer_asal, transfer_tujuan=transfer_tujuan,
         nomor_polisi=nomor_polisi.strip() or None,
         nama_sopir=nama_sopir.strip() or None,
         tara_lain_kg=_angka(tara_lain_kg),
@@ -588,6 +594,10 @@ async def simpan_timbang_pertama(
     )
 
     try:
+        # Formulir baru harus memakai master. Antrean/API lama tanpa penanda
+        # ini tetap diterima tanpa menebak hubungan dari teks historis.
+        if aturan.arah == logic.TRANSFER and lintasan_format and not (transfer_asal and transfer_tujuan):
+            raise service.LayananError("Pilih asal dan tujuan transfer dari daftar.")
         trx = await service.simpan_timbang_pertama(
             db, akun=akun, data=data,
             ip=request.client.host if request.client else None, komit=not kiriman.aktif(request))

@@ -48,6 +48,7 @@ MIGRASI = (
     AKAR / "migrations" / "versions" / "0045_sopir_unik.py",
     AKAR / "migrations" / "versions" / "0046_sopir_alias.py",
     AKAR / "migrations" / "versions" / "0047_pengiriman_snapshot.py",
+    AKAR / "migrations" / "versions" / "0048_lintasan_transfer.py",
 )
 
 # Daftar di atas DITULIS TANGAN, dan karena itu ia basi tiap kali ada migrasi

@@ -1,0 +1,9 @@
+{% set tersimpan = trx.lintasan_transfer if trx is defined else none %}
+{% for nama,label,daftar,nilai in [('transfer_asal','Asal',lokasi_transfer.asal,tersimpan.asal.gudang_id|string if tersimpan else ''),('transfer_tujuan','Tujuan',lokasi_transfer.tujuan,tersimpan.tujuan.pilihan if tersimpan else '')] %}
+<div class="grup"><label class="lbl" for="{{ nama }}">{{ label }}</label>
+<select class="fld" id="{{ nama }}" name="{{ nama }}" {{ 'required' if trx is not defined }}>
+<option value="">{{ '— tidak diubah —' if trx is defined else '— pilih ' ~ label|lower ~ ' —' }}</option>
+{% for o in daftar %}<option value="{{ o.nilai }}" {{ 'selected' if o.nilai == nilai }}>{{ o.nama }}</option>{% endfor %}
+</select></div>
+{% endfor %}
+{% if not lokasi_transfer.asal or not lokasi_transfer.tujuan %}<p class="pesan pesan--err">Master lokasi aktif belum lengkap. Hubungi Admin untuk memeriksa Gudang 1 dan Gudang 2.</p>{% endif %}

@@ -402,6 +402,8 @@ class TimbanganTransaksi(Base, TimestampMixin):
     # pelanggan dan ID item. Bukan salinan harga atau hasil timbang per pihak.
     # NULL menjaga tiket lama apa adanya, tanpa mengarang alokasi pelanggan.
     pengiriman_snapshot: Mapped[dict | None] = mapped_column(JSON(none_as_null=True))
+    # ID master dan nama saat dipilih; bukan relasi ke transaksi/stok PadiFlow.
+    lintasan_transfer: Mapped[dict | None] = mapped_column(JSON(none_as_null=True))
 
     #: ⚠⚠ TIKET INI MEMBAWA BARANG TITIPAN, bukan barang yang dibeli — dan ini
     #: SATU-SATUNYA tempat faktanya hidup. Migrasi 0041 (2 Oktober 2026),

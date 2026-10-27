@@ -64,3 +64,5 @@ body.padiflow-ui .bingkai.dk-bingkai {max-width:1320px;width:100%;min-width:0}
 /* QC Barang Masuk dapat dibuka tanpa mengecilkan sasaran sentuh. */
 [data-detail-masuk] .dk-barang summary {min-height:44px;padding:12px 0;cursor:pointer}
 [data-detail-masuk] .dk-barang h4 {overflow-wrap:anywhere}
+
+[data-detail-transfer] .kartu>summary {min-height:44px;padding:12px 0;cursor:pointer}

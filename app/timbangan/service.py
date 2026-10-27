@@ -132,6 +132,7 @@ async def _sinkronkan_proses_bersama(
         "netto_timbangan_kg": trx.netto_timbangan_kg,
         "berat_barang_kg": trx.berat_barang_kg,
         "total_tara_kg": trx.total_tara_kg,
+        "lintasan_transfer": trx.lintasan_transfer,
         "jumlah_karung": trx.jumlah_karung,
         "berat_acuan_kg": trx.berat_acuan_kg,
         "selisih_kg": trx.selisih_kg,
@@ -1001,6 +1002,9 @@ class InputTimbang:
     catatan: str | None = None
     perangkat_kode: str | None = None
     dibuat_offline: bool = False
+    # Tambahan di akhir mempertahankan urutan argumen pemanggil lama.
+    transfer_asal: str = ""
+    transfer_tujuan: str = ""
 
 
 def periksa_jumlah_karung(muatan, *, wajib: bool = False) -> int:
@@ -1931,6 +1935,21 @@ async def simpan_timbang_pertama(
                 )
             trx = lama_
 
+    cuplikan_lintasan = None
+    if data.transfer_asal or data.transfer_tujuan:
+        from app.timbangan import lintasan_transfer as lintasan
+        if aturan.arah != logic.TRANSFER:
+            raise LayananError("Pilihan lintasan hanya untuk Transfer Internal.")
+        try:
+            cuplikan_lintasan = await lintasan.baca(db,data.transfer_asal,data.transfer_tujuan,
+                                                  tersimpan=trx.lintasan_transfer if trx else None)
+        except lintasan.LintasanTidakSah as e:
+            raise LayananError(str(e)) from e
+        if trx and trx.lintasan_transfer and cuplikan_lintasan != trx.lintasan_transfer:
+            raise LayananError("Lintasan berubah untuk kiriman yang sama. Gunakan Koreksi tiket.")
+        # Kolom kompatibilitas lama terbatas100karakter; nama utuh ada di JSON.
+        data.pihak_nama = lintasan.teks(cuplikan_lintasan)[:100]
+
     # Kiriman ulang nomor historis yang sama tetap dikenali, tanpa membuat
     # master tidak valid. Format baru berlaku untuk masukan baru/perubahan.
     nomor_lama_sama = trx is not None and normalisasi_nopol(data.nomor_polisi) == normalisasi_nopol(trx.nomor_polisi)
@@ -2012,6 +2031,8 @@ async def simpan_timbang_pertama(
     if data.cara_timbang == CARA_SEKALI:
         periksa_jumlah_karung(data.muatan, wajib=True)
 
+    if cuplikan_lintasan is not None:
+        trx.lintasan_transfer = cuplikan_lintasan
     trx.arah = data.arah
     trx.jenis_kode = data.jenis_kode
     trx.cara_timbang = data.cara_timbang
@@ -2117,7 +2138,8 @@ async def simpan_timbang_pertama(
         entitas="transaksi", entitas_id=trx.kode,
         ringkasan=f"{trx.arah} {trx.jenis_kode} {trx.nomor_polisi or ''} "
                   f"{trx.timbang1_kg:.0f} kg".strip(),
-        sesudah={"timbang1_kg": float(trx.timbang1_kg)},
+        sesudah={"timbang1_kg": float(trx.timbang1_kg),
+                 **({"lintasan_transfer": trx.lintasan_transfer} if trx.lintasan_transfer else {})},
         perangkat=trx.perangkat_kode, ip=ip,
     )
     await _sinkronkan_proses_bersama(db, trx)
@@ -2713,6 +2735,19 @@ async def koreksi_transaksi(
     if not boleh:
         raise LayananError(sebab)
 
+    if "lintasan_transfer" in perubahan:
+        from app.timbangan import lintasan_transfer as lintasan
+        if trx.arah != logic.TRANSFER:
+            raise LayananError("Lintasan hanya dapat diubah pada Transfer Internal.")
+        try:
+            a,t=lintasan.token(perubahan["lintasan_transfer"])
+            data=await lintasan.baca(db,a,t,tersimpan=trx.lintasan_transfer)
+        except (lintasan.LintasanTidakSah,KeyError,TypeError,AttributeError) as e:
+            raise LayananError("Pilihan lintasan transfer tidak sah.") from e
+        perubahan={**perubahan,"lintasan_transfer":data,"pihak_nama":lintasan.teks(data)[:100]}
+    elif trx.lintasan_transfer and "pihak_nama" in perubahan and perubahan['pihak_nama'] != trx.pihak_nama:
+        raise LayananError("Ubah asal–tujuan melalui pilihan lokasi yang terdaftar.")
+
     for kolom, label in (("timbang1_kg", "Timbang pertama"),
                          ("timbang2_kg", "Timbang kedua"),
                          ("tara_lain_kg", "Tara lain")):
@@ -2733,7 +2768,7 @@ async def koreksi_transaksi(
         "supplier_id", "pelanggan_id", "pihak_nama", "nomor_polisi",
         "nama_sopir",
         "timbang1_kg", "timbang2_kg", "timbang1_waktu", "timbang2_waktu",
-        "tara_lain_kg", "catatan",
+        "tara_lain_kg", "catatan", "lintasan_transfer",
     }
     # Diperiksa sebelum apa pun disentuh — koreksi tidak boleh menjadi jalan
     # memutar untuk mengosongkan hal yang wajib saat menimbang. Rute koreksi
@@ -2754,7 +2789,7 @@ async def koreksi_transaksi(
             raise LayananError(str(e)) from e
     identitas_berubah = any(
         k in perubahan and perubahan[k] != getattr(trx, k)
-        for k in ("pihak_nama", "supplier_id", "pelanggan_id")
+        for k in ("pihak_nama", "supplier_id", "pelanggan_id", "lintasan_transfer")
     )
     if identitas_berubah:
         _wajib_pihak(
@@ -3185,6 +3220,7 @@ async def hapus_transaksi(
         "kode": kode, "tanggal": str(trx.tanggal), "arah": trx.arah,
         "jenis_kode": trx.jenis_kode,
         "pihak": trx.pihak_nama, "supplier_id": trx.supplier_id,
+        "lintasan_transfer": trx.lintasan_transfer,
         "nomor_polisi": trx.nomor_polisi, "nama_sopir": trx.nama_sopir,
         "timbang1_kg": trx.timbang1_kg, "timbang2_kg": trx.timbang2_kg,
         "netto_timbangan_kg": trx.netto_timbangan_kg,
@@ -4076,6 +4112,9 @@ class BarisTransaksi:
     @property
     def pihak_tampil(self):
         from app.timbangan.pengiriman import ringkasan
+        if self.trx.arah == logic.TRANSFER and self.trx.lintasan_transfer:
+            from app.timbangan.lintasan_transfer import teks
+            return teks(self.trx.lintasan_transfer)
         return (ringkasan(self.trx.pengiriman_snapshot) or self.pengiriman_ringkasan
                 or self.supplier_nama or self.trx.pihak_nama or '—')
 
