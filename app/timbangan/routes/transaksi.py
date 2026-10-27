@@ -227,7 +227,8 @@ async def rincian(
 
     pemeriksaan = await service.pemeriksaan_transaksi(db, b.trx.id)
     keluar = await rincian_keluar.baca(db, b.trx, pemeriksaan, cetak) if b.trx.arah == logic.KELUAR and not b.trx.partai else None
-    retur = await rincian_retur.baca(db, b.trx, akun, pemeriksaan, cetak) if b.trx.arah == logic.RETUR_MASUK and not b.trx.partai else None
+    retur = await rincian_retur.baca(db, b.trx, akun, pemeriksaan, cetak,
+        lihat=request.cookies.get('produksi_lihat')) if b.trx.arah == logic.RETUR_MASUK and not b.trx.partai else None
     masuk = await rincian_masuk.baca(db, b.trx, akun, pemeriksaan, cetak,
         lihat=request.cookies.get('produksi_lihat')) if b.trx.arah == logic.MASUK and not b.trx.partai else None
     transfer = await rincian_transfer.baca(db, b.trx, pemeriksaan, cetak) if b.trx.arah == logic.TRANSFER and not b.trx.partai else None

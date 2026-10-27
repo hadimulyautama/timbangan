@@ -21,7 +21,7 @@ LABEL = {
 }
 
 
-async def baca(db, trx, akun, pemeriksaan, cetak):
+async def baca(db, trx, akun, pemeriksaan, cetak, *, lihat=None):
     ids = {trx.timbang1_petugas_id, trx.timbang2_petugas_id}
     ids.update(c.oleh_id for c in cetak)
     if pemeriksaan:
@@ -31,7 +31,7 @@ async def baca(db, trx, akun, pemeriksaan, cetak):
     data, pesan, status = None, None, 'dibatasi'
     if akun.akun_id:
         try:
-            data = await klien_produksi.detail_retur(trx.id, akun.akun_id)
+            data = await klien_produksi.detail_retur(trx.id, akun.akun_id, lihat=lihat)
             if (not isinstance(data, dict) or data.get('tiket_id') != trx.id
                     or data.get('kode_tiket') != trx.kode or data.get('pelanggan_id') != trx.pelanggan_id):
                 raise ValueError('Hubungan rincian berbeda dari tiket.')

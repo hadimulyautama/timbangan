@@ -20,7 +20,7 @@ async def test_tab_tampilan_akses_dan_gagal_simpan(klien,monkeypatch,alamat_ui,w
     await tautkan(siapa,role);await sumber(monkeypatch,tid)
     if role==P.OPERATOR:
         from app.timbangan import klien_produksi
-        async def ditolak(*a):raise klien_produksi.ProduksiDilarang('Uji izin')
+        async def ditolak(*a,**kw):raise klien_produksi.ProduksiDilarang('Uji izin')
         monkeypatch.setattr(klien_produksi,'detail_retur',ditolak)
     await login(klien,siapa)
     async with database.SessionLocal() as db:before=await db.scalar(select(func.count()).select_from(TimbanganAudit))
@@ -72,7 +72,7 @@ async def test_tab_tampilan_akses_dan_gagal_simpan(klien,monkeypatch,alamat_ui,w
 @pytest.mark.parametrize('role',['operator','admin','super'])
 async def test_tindakan_retur_gagal_dan_kirim_ganda_ditahan(klien,alamat_ui,monkeypatch,role):
     from app.timbangan import klien_produksi
-    async def putus(*args):raise klien_produksi.ProduksiTakTersedia('Muatan uji tidak tersedia')
+    async def putus(*args,**kw):raise klien_produksi.ProduksiTakTersedia('Muatan uji tidak tersedia')
     monkeypatch.setattr(klien_produksi,'muatan_pengiriman',putus)
     tid=await tiket(selesai=role!='operator')
     async with database.SessionLocal() as db:
@@ -123,7 +123,7 @@ async def test_banyak_barang_nama_panjang_320(klien,monkeypatch,alamat_ui):
     from app.timbangan import klien_produksi
     tid=await tiket();await tautkan();data=await sumber(monkeypatch,tid)
     data['muatan']=[dict(deepcopy(data['muatan'][i%2]),nama='Nama barang sangat panjang '+('Produk retur pelanggan '*6),outgoing_item_id=1000+i) for i in range(12)]
-    async def baca(*a):return data
+    async def baca(*a,**kw):return data
     monkeypatch.setattr(klien_produksi,'detail_retur',baca)
     await login(klien,'wahid')
     async with async_playwright() as pw:

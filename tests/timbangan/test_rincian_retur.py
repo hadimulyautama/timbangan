@@ -47,7 +47,7 @@ async def sumber(monkeypatch,tid,status='diterima_otomatis'):
         t=await db.get(TimbanganTransaksi,tid);data=payload(t)
     data['status']=status
     if not status.startswith('diterima'):data['penerimaan']=None
-    async def baca(tid,aid):return deepcopy(data)
+    async def baca(tid,aid,*,lihat=None):return deepcopy(data)
     monkeypatch.setattr(klien_produksi,'detail_retur',baca)
     return data
 
@@ -75,9 +75,9 @@ async def test_kondisi_akses_dan_kegagalan(klien,monkeypatch,keadaan):
     tid=await tiket(selesai=keadaan not in ('terbuka','ditutup'))
     if keadaan!='tanpa-akun':await tautkan()
     data=await sumber(monkeypatch,tid)
-    async def gagal(*a):raise klien_produksi.ProduksiTakTersedia('Uji jaringan')
-    async def dilarang(*a):raise klien_produksi.ProduksiDilarang('Uji izin')
-    async def salah(*a):return dict(data,tiket_id=tid+1)
+    async def gagal(*a,**kw):raise klien_produksi.ProduksiTakTersedia('Uji jaringan')
+    async def dilarang(*a,**kw):raise klien_produksi.ProduksiDilarang('Uji izin')
+    async def salah(*a,**kw):return dict(data,tiket_id=tid+1)
     if keadaan in ('gangguan','dilarang','salah-tiket'):monkeypatch.setattr(klien_produksi,'detail_retur',{'gangguan':gagal,'dilarang':dilarang,'salah-tiket':salah}[keadaan])
     async with database.SessionLocal() as db:
         t=await db.get(TimbanganTransaksi,tid)
@@ -151,7 +151,7 @@ async def test_pemeriksaan_normal_tetap_terbuka_dan_tidak_memicu_padi(klien,monk
     from sqlalchemy import text
     async with database.SessionLocal() as db:
         await db.execute(text('CREATE TABLE IF NOT EXISTS customer_returns (id INTEGER PRIMARY KEY,timbangan_transaksi_id INTEGER,kode TEXT)'));await db.commit()
-    async def dilarang(*a):raise AssertionError('Penutupan tidak boleh menerima retur')
+    async def dilarang(*a,**kw):raise AssertionError('Penutupan tidak boleh menerima retur')
     monkeypatch.setattr(klien_produksi,'muatan_retur',dilarang)
     async with database.SessionLocal() as db:
         t=await db.get(TimbanganTransaksi,tid);a=await db.scalar(select(TimbanganAkun).where(TimbanganAkun.username=='wahid'))

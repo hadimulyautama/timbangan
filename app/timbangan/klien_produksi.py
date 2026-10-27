@@ -113,10 +113,10 @@ async def muatan_retur(tiket_id: int) -> dict:
     return await _minta("GET", f"/internal/retur/tiket/{int(tiket_id)}/muatan")
 
 
-async def detail_retur(tiket_id: int, operator_akun_id: int) -> dict:
+async def detail_retur(tiket_id: int, operator_akun_id: int, *, lihat=None) -> dict:
     """Status/rincian baca saja, bukan pemicu pemeriksaan atau penerimaan."""
     return await _minta('GET', f'/internal/retur/tiket/{int(tiket_id)}/detail',
-                        operator_akun_id=operator_akun_id)
+                        operator_akun_id=operator_akun_id, lihat=lihat)
 
 
 async def detail_masuk(tiket_id: int, operator_akun_id: int, *, lihat=None) -> dict:
