@@ -60,3 +60,7 @@ body.padiflow-ui .bingkai.dk-bingkai {max-width:1320px;width:100%;min-width:0}
 /* Retur membedakan hasil jembatan dan pencocokan stok PadiFlow. */
 .dr-pendamping {display:grid;gap:16px;min-width:0}
 [data-detail-retur] [data-status-produksi^="diterima"] {border-left-color:var(--aman,#247944)!important}
+
+/* QC Barang Masuk dapat dibuka tanpa mengecilkan sasaran sentuh. */
+[data-detail-masuk] .dk-barang summary {min-height:44px;padding:12px 0;cursor:pointer}
+[data-detail-masuk] .dk-barang h4 {overflow-wrap:anywhere}

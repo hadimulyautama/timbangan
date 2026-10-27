@@ -39,7 +39,7 @@ def terkonfigurasi() -> bool:
     return bool(settings.produksi_api_url and settings.produksi_api_token)
 
 
-async def _minta(metode: str, path: str, *, operator_akun_id: int | None = None, body: dict | None = None) -> dict:
+async def _minta(metode: str, path: str, *, operator_akun_id: int | None = None, body: dict | None = None, lihat: str | None = None) -> dict:
     if not terkonfigurasi():
         raise ProduksiTakTersedia(
             "Sambungan ke sistem produksi belum diatur (PRODUKSI_API_URL/TOKEN)."
@@ -50,6 +50,8 @@ async def _minta(metode: str, path: str, *, operator_akun_id: int | None = None,
             headers = {"X-Internal-Token": settings.produksi_api_token}
             if operator_akun_id is not None:
                 headers["X-Operator-Akun"] = str(int(operator_akun_id))
+            if lihat:
+                headers["X-Produksi-Lihat"] = lihat
             r = await c.request(metode, url, headers=headers, **({'json':body} if body is not None else {}))
         r.raise_for_status()
         return r.json()
@@ -115,3 +117,9 @@ async def detail_retur(tiket_id: int, operator_akun_id: int) -> dict:
     """Status/rincian baca saja, bukan pemicu pemeriksaan atau penerimaan."""
     return await _minta('GET', f'/internal/retur/tiket/{int(tiket_id)}/detail',
                         operator_akun_id=operator_akun_id)
+
+
+async def detail_masuk(tiket_id: int, operator_akun_id: int, *, lihat=None) -> dict:
+    """Catatan penerimaan baca saja dengan cakupan akun PadiFlow."""
+    return await _minta('GET', f'/internal/masuk/tiket/{int(tiket_id)}/detail',
+                        operator_akun_id=operator_akun_id, lihat=lihat)
