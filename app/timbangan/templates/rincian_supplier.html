@@ -1,0 +1,43 @@
+<section class="kartu rs-rincian" aria-labelledby="rs-judul" data-retur-supplier>
+  <h2 id="rs-judul">Pengajuan Retur ke Supplier · PadiFlow</h2>
+  <p><span class="lencana">{{ retur_supplier.label }}</span></p>
+  <p class="bantu">Status pengajuan terpisah dari status timbang dan kontrol TeraFlow. Selesai timbang tidak menyatakan barang sudah keluar atau stok sudah dikurangi.</p>
+  {% if retur_supplier.pesan %}<p role="status">{{ retur_supplier.pesan }}</p>{% endif %}
+  {% set p = retur_supplier.pengajuan %}
+  {% if p %}
+    <dl class="rs-data">
+      {% for label,n in [('Pengajuan',p.kode),('Supplier',p.supplier),('Penerimaan asal',p.penerimaan),('Nota penerimaan',p.nota),('Alasan pengajuan',p.alasan),('Catatan pengajuan',p.catatan)] %}
+      <div><dt>{{ label }}</dt><dd>{{ n or 'Belum tercatat' }}</dd></div>
+      {% endfor %}
+    </dl>
+    {% if retur_supplier.status == 'selesai_gudang' %}
+    <p class="bantu">Status ini menyatakan penyelesaian di gudang PadiFlow, bukan konfirmasi penerimaan supplier.</p>
+    {% if p.penyelesaian %}<details class="rs-item"><summary>Catatan penyelesaian gudang</summary>
+      <dl class="rs-data">
+        <div><dt>Kode</dt><dd>{{ p.penyelesaian.kode }}</dd></div>
+        <div><dt>Waktu</dt><dd>{{ p.penyelesaian.waktu|tgl_jam }}</dd></div>
+        <div><dt>Bobot pengeluaran menurut PadiFlow</dt><dd>{{ p.penyelesaian.total_kg|kg(2) }}</dd></div>
+        <div><dt>Metode verifikasi PadiFlow</dt><dd>{{ p.penyelesaian.metode_verifikasi }}</dd></div>
+      </dl>
+    </details>{% endif %}
+    {% endif %}
+    <h3>Barang dalam pengajuan</h3>
+    <p class="bantu">Rincian dan bobot berasal dari catatan PadiFlow, bukan hasil timbang terpisah atau dokumen pembanding baru.</p>
+    {% for item in p['items'] %}
+    <details class="rs-item" open>
+      <summary>{{ item.nama }} · {{ item.kode }}</summary>
+      <dl class="rs-data">
+        {% for label,n in [('Identitas sumber',item.kunci_sumber),('Gudang',item.gudang),('Pemilik',item.pemilik)] %}<div><dt>{{ label }}</dt><dd>{{ n or 'Belum tercatat' }}</dd></div>{% endfor %}
+        <div><dt>Jumlah pengajuan</dt><dd>{{ item.jumlah|angka(2) }} {{ item.satuan }}</dd></div>
+        <div><dt>Bobot pengajuan</dt><dd>{{ item.bobot_kg|kg(2) }}</dd></div>
+      </dl>
+    </details>
+    {% endfor %}
+    <p><b>Total bobot pengajuan: {{ p.total_kg|kg(2) }}</b></p>
+    <p><a href="{{ produksi_url }}/retur-supplier/{{ p.id }}">Buka pengajuan di PadiFlow →</a></p>
+    <p><a href="{{ produksi_url }}/barang-masuk/{{ p.penerimaan_tiket_id }}">Buka penerimaan asal di PadiFlow →</a></p>
+    <p class="bantu">Tautan mengikuti sesi dan izin PadiFlow. Koreksi rincian pengajuan dilakukan melalui alur PadiFlow; membaca halaman ini tidak memindahkan stok.</p>
+  {% elif retur_supplier.status == 'belum_terhubung' %}
+    <p>Belum ada relasi pengajuan untuk tiket ini. Kode atau nama dalam catatan tidak dianggap sebagai tautan.</p>
+  {% endif %}
+</section>

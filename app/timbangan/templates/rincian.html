@@ -32,6 +32,8 @@
     {{ kartu_hasil(trx) }}
   {% endif %}
 
+  {% if retur_supplier %}{% include "rincian_supplier.html" %}{% endif %}
+
   {# ── Rincian angka: urutannya sama dengan urutan hitungan ── #}
   {% if trx.status_tiket == TIKET_SELESAI %}
     <div class="kartu">

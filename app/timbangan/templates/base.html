@@ -93,6 +93,7 @@
   {% if layar == 'laporan' %}<link rel="stylesheet" href="{{ PREFIX }}/static/laporan.css?v={{ VERSI }}">{% endif %}
   {% if layar == 'koreksi' %}<link rel="stylesheet" href="{{ PREFIX }}/static/koreksi.css?v={{ VERSI }}">{% endif %}
   {% if layar in ('timbang1','timbang2') %}<link rel="stylesheet" href="{{ PREFIX }}/static/formulir.css?v={{ VERSI }}">{% endif %}
+{% if retur_supplier %}<link rel="stylesheet" href="{{ PREFIX }}/static/rincian-supplier.css?v={{ VERSI }}">{% endif %}
 {% if keluar or retur or masuk or transfer %}<link rel="stylesheet" href="{{ PREFIX }}/static/rincian-keluar.css?v={{ VERSI }}">{% endif %}
 </head>
 {# `segar_otomatis` sengaja OPT-IN per halaman, bukan berlaku di mana-mana.

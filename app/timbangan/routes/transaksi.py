@@ -23,7 +23,7 @@ from app.timbangan.security import (
 )
 from app.timbangan.web import galat_db, PREFIX, redirect, render
 
-from app.timbangan import pengiriman, klien_produksi, rincian_keluar, rincian_retur, rincian_masuk, rincian_transfer, lintasan_transfer, format as fmt
+from app.timbangan import pengiriman, klien_produksi, rincian_keluar, rincian_retur, rincian_masuk, rincian_transfer, rincian_supplier, lintasan_transfer, format as fmt
 
 router = APIRouter(prefix=PREFIX)
 
@@ -231,9 +231,11 @@ async def rincian(
     masuk = await rincian_masuk.baca(db, b.trx, akun, pemeriksaan, cetak,
         lihat=request.cookies.get('produksi_lihat')) if b.trx.arah == logic.MASUK and not b.trx.partai else None
     transfer = await rincian_transfer.baca(db, b.trx, pemeriksaan, cetak) if b.trx.arah == logic.TRANSFER and not b.trx.partai else None
+    retur_supplier = await rincian_supplier.baca(b.trx, akun, lihat=request.cookies.get('produksi_lihat')) if (
+        b.trx.arah == logic.RETUR_KELUAR and b.trx.jenis_kode == 'RETUR_SUPPLIER') else None
     response = render(
         request, "rincian_transfer.html" if transfer else "rincian_masuk.html" if masuk else "rincian_retur.html" if retur else "rincian_keluar.html" if keluar else "rincian.html",
-        layar="rincian", keluar=keluar, retur=retur, masuk=masuk, transfer=transfer, produksi_url=settings.produksi_web_url,
+        layar="rincian", retur_supplier=retur_supplier, keluar=keluar, retur=retur, masuk=masuk, transfer=transfer, produksi_url=settings.produksi_web_url,
         b=b, aturan=aturan,
         pemeriksaan=pemeriksaan,
         cetak=cetak,
@@ -247,7 +249,7 @@ async def rincian(
         kategori_hasil=KATEGORI_HASIL,
         kembali=_kembali_riwayat(request) or f"{PREFIX}/",
     )
-    if retur or masuk:
+    if retur or masuk or retur_supplier:
         response.headers['Cache-Control'] = 'private, no-store'
     return response
 

@@ -41,7 +41,7 @@ from hmu_identitas.model import Akun
 from app.timbangan import format as fmt, logic, setelan
 from app.timbangan.config import tsettings
 from app.timbangan.db import berzona, sekarang
-from app.timbangan.tautan_produksi import pastikan_bebas_tautan
+from app.timbangan.tautan_produksi import pastikan_bebas_tautan, pastikan_retur_supplier
 from app.timbangan.models import (
     CARA_DUA_KALI,
     CARA_PARTAI,
@@ -2579,6 +2579,9 @@ async def ubah_jenis(
     # Komoditas menentukan TABEL batch di produksi. Menggantinya sesudah
     # tertaut meninggalkan batch gabah yang menunjuk tiket PK — dan tak ada
     # constraint di mana pun yang melarang keadaan itu bertahan.
+    await pastikan_retur_supplier(db, trx, tindakan="Mengubah jenis barang")
+    if trx.status_transaksi == TRX_VOID:
+        raise LayananError("Transaksi sudah dibatalkan.")
     await pastikan_bebas_tautan(db, trx, tindakan="Mengubah jenis barang")
 
     baru = (jenis_kode or "").strip().upper()
@@ -2817,6 +2820,10 @@ async def koreksi_transaksi(
     # Membetulkan nama sopir atau catatan tetap bebas. Pagar yang mengunci
     # segalanya akan dicari jalan memutarnya, dan jalan memutar itu tak
     # meninggalkan jejak.
+    if any(k in perubahan and getattr(trx, k) != perubahan[k]
+           for k in ("supplier_id", "pihak_nama")):
+        await pastikan_retur_supplier(db, trx, tindakan="Mengubah supplier tiket")
+
     IKUT_KE_BATCH = {"supplier_id", "pelanggan_id", "pihak_nama",
                      "nomor_polisi", "timbang1_waktu"}
     disentuh = {k for k in perubahan if k in IKUT_KE_BATCH
@@ -3212,6 +3219,7 @@ async def hapus_transaksi(
     # Diperiksa DI SINI, bukan dibiarkan foreign key produksi yang menolak.
     # Keduanya sama-sama menahan barisnya, tetapi yang satu berbunyi seperti
     # penjelasan dan yang lain berbunyi seperti aplikasi rusak.
+    await pastikan_retur_supplier(db, trx, tindakan="Menghapus tiket ini", termasuk_riwayat=True)
     await pastikan_bebas_tautan(db, trx, tindakan="Menghapus tiket ini")
 
     kode = trx.kode

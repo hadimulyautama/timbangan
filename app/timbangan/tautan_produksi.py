@@ -68,6 +68,34 @@ async def pengiriman_tertaut(db: AsyncSession, trx_id: int | None) -> list[str]:
     """), {"tid": trx_id})).scalars().all())
 
 
+async def pastikan_retur_supplier(db: AsyncSession, trx, *, tindakan: str,
+                                 termasuk_riwayat: bool = False) -> None:
+    """Lindungi pointer eksplisit tanpa menyamakan pengajuan dengan stok.
+
+    Tabel milik PadiFlow boleh belum dipasang. Galat membaca tabel yang ada
+    tidak ditelan sebagai tidak tertaut. PadiFlow mengunci baris tiket saat
+    menautkan; kunci yang sama menutup celah penghapusan/pergantian identitas
+    bersamaan dengan penautan. Koreksi bobot dan pembatalan tidak memanggil
+    penjaga khusus pengajuan ini karena tidak memutus pointer/identitasnya.
+    """
+    if not getattr(trx, 'id', None) or not await db.run_sync(
+        lambda sesi: inspect(sesi.connection()).has_table('retur_supplier')
+    ):
+        return
+    await db.refresh(trx, with_for_update=True)
+    tertaut = (await db.execute(text('''
+        SELECT 1 FROM retur_supplier WHERE timbangan_transaksi_id = :tid
+          AND (:riwayat OR status <> 'dibatalkan')
+    '''), {'tid': trx.id, 'riwayat': termasuk_riwayat})).scalars().all()
+    if tertaut:
+        from app.timbangan.service import LayananError
+        raise LayananError(
+            f'{tindakan} tidak bisa: tiket mempunyai hubungan pengajuan Retur ke Supplier '
+            'PadiFlow. Periksa pengajuan melalui PadiFlow; '
+            'hubungan tidak boleh diputus melalui koreksi atau penghapusan tiket.'
+        )
+
+
 async def pastikan_bebas_tautan(db: AsyncSession, trx, *, tindakan: str) -> None:
     """Tolak `tindakan` bila tiket ini sudah dicatat produksi.
 

@@ -123,3 +123,9 @@ async def detail_masuk(tiket_id: int, operator_akun_id: int, *, lihat=None) -> d
     """Catatan penerimaan baca saja dengan cakupan akun PadiFlow."""
     return await _minta('GET', f'/internal/masuk/tiket/{int(tiket_id)}/detail',
                         operator_akun_id=operator_akun_id, lihat=lihat)
+
+
+async def detail_retur_supplier(tiket_id: int, operator_akun_id: int, *, lihat=None) -> dict:
+    """Referensi pengajuan baca saja; tidak mengeluarkan barang atau stok."""
+    return await _minta('GET', f'/internal/retur-supplier/tiket/{int(tiket_id)}/detail',
+                        operator_akun_id=operator_akun_id, lihat=lihat)
