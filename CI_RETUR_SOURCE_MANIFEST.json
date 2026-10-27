@@ -52,7 +52,7 @@
     "app/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "app/timbangan/service.py": "facb509d3eaebef80e80f5839ec2a7d48696d15f08d94ba3add1bb493442d722",
     "app/timbangan/db.py": "a3ebeb5937d5266db3b6d95ea83febaca29232a7dc7165c586c033d17a1c8cbc",
-    "app/timbangan/web.py": "cdbbc1fdbf3f8a0a4aa2d3cfab8d04c809afb230ee43ad732f5181ef8539b615",
+    "app/timbangan/web.py": "596c4fca744ee08a074d051b3af7e69d454a97ce4905fa54c636daab4de3a819",
     "app/timbangan/klien_produksi.py": "d4db58469c991d56abec7785a795b8c213536f8209be21a8fccc5c2c6f4ac390",
     "app/timbangan/config.py": "da5200226d1e43e974f9466e7eb3c8f17e24ab1a846add3574b507dc90ed7e0a",
     "app/timbangan/pengiriman.py": "4fcecd8f9e5e5d039294e53f35d0512a969a995eac464444d6893af6fd227b7b",
@@ -185,5 +185,9 @@
     "scripts/identitas_tautkan.py": "a802198a387d9e9fb7ff3a13b39a9b1b42bbab86ff36956c2885561b641bba26",
     "app/timbangan/rincian_retur.py": "572e4c85dbbbc6fd6b381727d4ffd48a6dd9d04560d41f3f0f15f9cedf43084e",
     "app/timbangan/templates/rincian_retur.html": "6fa050f090478103dcbdaec1e432b858478b90d706220795627a0be3ef170693"
+  },
+  "release_version": "83",
+  "version_only_delta": {
+    "app/timbangan/web.py": "596c4fca744ee08a074d051b3af7e69d454a97ce4905fa54c636daab4de3a819"
   }
 }
