@@ -25,7 +25,7 @@ pytestmark = pytest.mark.usefixtures("jenis_tersemai")
 
 @pytest.fixture
 async def pelanggan(db):
-    p = Pelanggan(nama_pelanggan="Pak Budi")
+    p = Pelanggan(nama_pelanggan="Pak Budi", kledo_contact_id=601)
     db.add(p)
     await db.flush()
     return p
@@ -179,11 +179,11 @@ async def test_membuka_komoditas_lain_cukup_lewat_master(db, petugas, pelanggan)
 async def test_daftar_komoditas_jasa_dibaca_dari_master(db, jenis_tersemai):
     """Beranda menggambar kartunya dari master — bukan dari daftar di kode."""
     daftar = await service.daftar_jenis_jasa(db)
-    # Ketiganya, terurut mengikuti `urutan` di master — bukan urutan abjad.
-    assert [j.kode for j in daftar] == ["GABAH_BASAH", "GABAH_KERING", "BERAS_PK"]
+    # Migrasi 0043 juga membuka Beras masuk. Urutan tetap mengikuti master.
+    assert [j.kode for j in daftar] == ["GABAH_BASAH", "GABAH_KERING", "BERAS_PK", "BERAS_MASUK"]
 
     # Dicabut di master → kartunya hilang sendiri dari beranda.
-    for kode in ("GABAH_BASAH", "GABAH_KERING", "BERAS_PK"):
+    for kode in (j.kode for j in daftar):
         baris = (await db.execute(select(TimbanganJenis).where(
             TimbanganJenis.kode == kode))).scalars().one()
         baris.boleh_jasa = False
@@ -310,16 +310,13 @@ async def test_pemilik_tak_pernah_bocor_ke_kolom_pemasok(db, petugas, pelanggan)
 # bagian ini bertanya "TANDA JASA-nya sendiri selamat sampai basis data?" —
 # dan keduanya bisa benar salah satu tanpa yang lain.
 
-async def test_tanda_jasa_pemasok_ketik_bebas_tetap_false(db, petugas):
-    """Sisi SEBALIKNYA dari `test_pemilik_boleh_diketik_bebas`: pembelian
-    biasa yang pemasoknya diketik bebas tak boleh ikut tertandai jasa hanya
-    karena `pihak_nama` terisi — satu-satunya pembeda memang `data.jasa`,
-    bukan ada-tidaknya nama bebas."""
-    data = tiket_jasa(pelanggan_id=None, pihak_nama="CV Makmur (baru)")
+async def test_tanda_jasa_pemasok_terdaftar_tetap_false(db, petugas, supplier):
+    """Memilih pemasok Kledo tidak mengubah pembelian menjadi jasa."""
+    data = tiket_jasa(pelanggan_id=None)
     data.jasa = False
-    data.supplier_id = None
+    data.supplier_id = supplier.id
     trx = await service.simpan_timbang_pertama(db, akun=petugas, data=data)
-    assert trx.pihak_nama == "CV Makmur (baru)"
+    assert trx.supplier_id == supplier.id
     assert trx.jasa is False
 
 

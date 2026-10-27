@@ -52,9 +52,13 @@ async def _tiket_baru(mesin, akun_id: int) -> str:
     async with mesin() as db:
         akun = await db.get(TimbanganAkun, akun_id)
         jenis = next(j for j in await service.daftar_jenis(db) if j.arah == logic.MASUK)
+        from app.models import Supplier
+        pihak = Supplier(nama_supplier="Pemasok Sintetis Uji", kledo_contact_id=990001)
+        db.add(pihak)
+        await db.flush()
         trx = await service.simpan_timbang_pertama(db, akun=akun, data=service.InputTimbang(
             kunci=str(uuid4()), arah=jenis.arah, jenis_kode=jenis.kode, berat_kg=12_000,
-            pihak_nama="Pak Uji", nomor_polisi="B 1 UJ", nama_sopir="Sopir Uji",
+            supplier_id=pihak.id, nomor_polisi="B 1 UJ", nama_sopir="Sopir Uji",
         ))
         return trx.kode
 

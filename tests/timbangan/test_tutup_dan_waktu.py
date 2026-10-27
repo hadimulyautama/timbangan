@@ -64,7 +64,7 @@ async def test_pengiriman_kurang_membuka_lembar_pemeriksaan(db, petugas, supplie
         # layanan menaruhnya di `pelanggan_id`.
         berat_kg=4_000, supplier_id=p.id, nomor_polisi="AD 9 ZZ",
         nama_sopir="Budi", perangkat_kode="P1",
-        muatan=[InputMuatan(jenis_kode="BERAS", jumlah_karung=0,
+        muatan=[InputMuatan(jenis_kode="BERAS", jumlah_karung=200,
                             tara_per_karung_kg=0, berat_acuan_kg=10_000,
                             nomor_acuan="SJ-01")])
     await service.simpan_timbang_pertama(db, akun=petugas, data=keluar)

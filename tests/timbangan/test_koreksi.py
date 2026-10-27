@@ -33,6 +33,8 @@ from sqlalchemy import select
 from app.timbangan import service
 from app.timbangan.models import TimbanganPemeriksaan, TimbanganTransaksi
 
+pytestmark = pytest.mark.usefixtures("supplier", "pelanggan_kledo")
+
 GB = "GABAH_BASAH"
 
 
@@ -44,7 +46,7 @@ def _muatan(**kw):
 
 async def _masuk(db, petugas, kunci="k", **kw):
     d = dict(kunci=kunci, arah="MASUK", jenis_kode=GB, berat_kg=15000,
-             pihak_nama="Anton", nomor_polisi="AD 1 A", nama_sopir="Joko",
+             supplier_id=1, nomor_polisi="AD 1 A", nama_sopir="Joko",
              muatan=[_muatan()])
     d.update(kw)
     return await service.simpan_timbang_pertama(
@@ -59,8 +61,8 @@ async def test_koreksi_jasa_timbang_sekali_menghitung_ulang(db, jenis_tersemai, 
     trx = await service.simpan_timbang_pertama(
         db, akun=petugas, data=service.InputTimbang(
             kunci="sekali", arah="BEBAS", jenis_kode="BEBAS", berat_kg=12000,
-            cara_timbang="SEKALI", pihak_nama="Darto", nama_sopir="Darto",
-            muatan=[]))
+            cara_timbang="SEKALI", supplier_id=1, nama_sopir="Darto",
+            muatan=[service.InputMuatan(jenis_kode="BEBAS", jumlah_karung=1)]))
     await service.koreksi_transaksi(
         db, akun=petugas, trx=trx, perubahan={"timbang1_kg": 8000.0},
         alasan="salah ketik")
@@ -170,7 +172,7 @@ async def test_tambah_partai_tak_menggandakan_saat_dikirim_ulang(db, jenis_terse
     trx = await service.simpan_timbang_pertama(
         db, akun=petugas, data=service.InputTimbang(
             kunci="p1", arah="MASUK", jenis_kode=GB, berat_kg=110,
-            cara_timbang="PARTAI", pihak_nama="Tani", nama_sopir="Tani",
+            cara_timbang="PARTAI", supplier_id=1, nama_sopir="Tani",
             muatan=[_muatan()]))
     await service.tambah_penimbangan(db, akun=petugas, kode=trx.kode, berat=[70.0],
                                 kunci="baris-1")
@@ -193,7 +195,7 @@ async def test_kirim_ulang_formulir_awal_tak_menghapus_baris_susulan(
     trx = await service.simpan_timbang_pertama(
         db, akun=petugas, data=service.InputTimbang(
             kunci="p2", arah="MASUK", jenis_kode=GB, berat_kg=100,
-            cara_timbang="PARTAI", pihak_nama="Tani", nama_sopir="Tani",
+            cara_timbang="PARTAI", supplier_id=1, nama_sopir="Tani",
             muatan=[_muatan()]))
     await service.tambah_penimbangan(db, akun=petugas, kode=trx.kode,
                                 berat=[50.0, 30.0], kunci="b2")
@@ -204,7 +206,7 @@ async def test_kirim_ulang_formulir_awal_tak_menghapus_baris_susulan(
     await service.simpan_timbang_pertama(
         db, akun=petugas, data=service.InputTimbang(
             kunci="p2", arah="MASUK", jenis_kode=GB, berat_kg=100,
-            cara_timbang="PARTAI", pihak_nama="Tani", nama_sopir="Tani",
+            cara_timbang="PARTAI", supplier_id=1, nama_sopir="Tani",
             muatan=[_muatan()]))
     await db.refresh(trx, ["penimbangan"])
     assert len(trx.penimbangan) == 3, "baris susulan terhapus"

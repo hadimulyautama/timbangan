@@ -73,7 +73,7 @@ async def super_admin(db):
 
 @pytest_asyncio.fixture
 async def supplier(db):
-    s = Supplier(nama_supplier="H. Anton")
+    s = Supplier(nama_supplier="H. Anton", kledo_contact_id=501)
     db.add(s)
     await db.flush()
     return s
@@ -85,3 +85,12 @@ async def jenis_tersemai(db):
     jumlah = await service.pastikan_jenis(db)
     assert jumlah == len(logic.JENIS_AWAL)
     return jumlah
+
+
+@pytest_asyncio.fixture
+async def pelanggan_kledo(db):
+    from app.models import Pelanggan
+    p = Pelanggan(nama_pelanggan="CV Sumber Rejeki", kledo_contact_id=601)
+    db.add(p)
+    await db.flush()
+    return p

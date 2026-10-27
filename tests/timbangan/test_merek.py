@@ -12,6 +12,10 @@ def test_tidak_ada_merek_lama_di_tampilan_dan_metadata():
     for path in files:
         # Kelas internal komponen bersama bukan teks atau identitas produk.
         text = path.read_text().replace('class="padiflow-ui ', 'class="')
+        # PadiFlow kini disebut sebagai sumber muatan, sesuai integrasi yang
+        # diminta pemilik; identitas/header aplikasi tetap TeraFlow.
+        if path.name in {'pengiriman_muatan.html','koreksi.html','rincian_keluar.html','rincian_retur.html'}:
+            text = text.replace('PadiFlow', 'Sistem Produksi')
         assert not re.search(r'padi\s*flow', text, re.I), path.name
 
 

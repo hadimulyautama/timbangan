@@ -44,6 +44,10 @@ MIGRASI = (
     AKAR / "migrations" / "versions" / "0039_jasa_masuk.py",
     AKAR / "migrations" / "versions" / "0041_tanda_jasa.py",
     AKAR / "migrations" / "versions" / "0042_muatan_produk_bersama.py",
+    AKAR / "migrations" / "versions" / "0044_kiriman_luring.py",
+    AKAR / "migrations" / "versions" / "0045_sopir_unik.py",
+    AKAR / "migrations" / "versions" / "0046_sopir_alias.py",
+    AKAR / "migrations" / "versions" / "0047_pengiriman_snapshot.py",
 )
 
 # Daftar di atas DITULIS TANGAN, dan karena itu ia basi tiap kali ada migrasi
@@ -58,6 +62,7 @@ TANPA_KOLOM_BARU = {
     "0031_semai_penghitung_nomor.py": "hanya mengisi data, tak menambah kolom",
     "0038_kunci_baris_64.py": "hanya melebarkan String(36) → String(64) (R-T-01)",
     "0040_jasa_tiga_komoditas.py": "hanya mengisi data (membuka boleh_jasa)",
+    "0043_jasa_beras_masuk.py": "hanya mengisi data (membuka boleh_jasa Beras masuk)",
 }
 # Migrasi 0042 menambah kolom serta FK ke master milik aplikasi lain. Uji ini
 # membangun skema SQLite sementara untuk mencocokkan kolom; FK lintas aplikasi
@@ -136,8 +141,8 @@ def test_migrasi_membuat_semua_tabel_model(kolom_migrasi):
         f"migrasi belum didaftarkan di MIGRASI: {', '.join(belum)} — "
         "tambahkan, kalau tidak uji ini menjaga skema yang sudah usang")
     assert sorted(kolom_migrasi) == tabel_model()
-    # 15 sejak `timbangan_nomor` (penghitung nomor atomik, migrasi 0030).
-    assert len(kolom_migrasi) == 15
+    # 18 sejak alias sopir terkonfirmasi (migrasi 0046).
+    assert len(kolom_migrasi) == 18
 
 
 @pytest.mark.parametrize("nama", tabel_model())

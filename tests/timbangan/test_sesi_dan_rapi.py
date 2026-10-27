@@ -31,7 +31,7 @@ import pytest
 from app.timbangan import logic, security as sec, service
 from app.timbangan.service import InputMuatan, InputTimbang
 
-pytestmark = pytest.mark.usefixtures("jenis_tersemai")
+pytestmark = pytest.mark.usefixtures("jenis_tersemai", "pelanggan_kledo")
 
 
 def _masuk(kode, supplier_id, berat=13_600):
@@ -243,7 +243,8 @@ async def test_total_barang_dipisah_per_arah(db, petugas, supplier):
                                        berat_kg=3_570)
     jasa = InputTimbang(kode="TRX-R-002", arah=logic.BEBAS, jenis_kode="BEBAS",
                         berat_kg=12_850, cara_timbang="SEKALI",
-                        pihak_nama="CV Sumber Rejeki", nama_sopir="Slamet",
+                        supplier_id=1, nama_sopir="Slamet",
+                        muatan=[InputMuatan(jenis_kode="BEBAS", jumlah_karung=1)],
                         perangkat_kode="P1")
     await service.simpan_timbang_pertama(db, akun=petugas, data=jasa)
 

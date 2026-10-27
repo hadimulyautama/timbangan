@@ -22,6 +22,8 @@ import pathlib
 AKAR = pathlib.Path(__file__).resolve().parents[2]
 JS = (AKAR / "app/timbangan/static/app.js").read_text()
 TPL = AKAR / "app/timbangan/templates"
+# Pilih fungsi penyegaran, bukan validator field bernama sama.
+SEBAR = JS[JS.index("function bolehSegar"): ]
 
 #: Layar BACA — boleh menyegarkan diri.
 BACA = ("beranda", "daftar", "monitoring", "laporan")
@@ -67,7 +69,7 @@ def test_antrean_luring_menahan_penyegaran():
 
 def test_diperiksa_dua_kali():
     """Orangnya bisa mulai mengetik tepat selagi permintaannya di jalan."""
-    blok = JS[JS.index("function periksa() {"):JS.index("function mulaiDenyut")]
+    blok = SEBAR[SEBAR.index("function periksa() {"):SEBAR.index("function mulaiDenyut")]
     assert blok.count("bolehSegar()") >= 2
 
 
@@ -75,7 +77,7 @@ def test_tak_memuat_ulang_bila_tak_ada_yang_berubah():
     """Reload yang tak mengubah apa pun tetap terlihat: layar berkedip,
     gulungan kembali ke atas. Berkedip tiap menit tanpa alasan mengajari orang
     bahwa aplikasinya rewel."""
-    blok = JS[JS.index("function periksa() {"):JS.index("function mulaiDenyut")]
+    blok = SEBAR[SEBAR.index("function periksa() {"):SEBAR.index("function mulaiDenyut")]
     assert "innerHTML === lama" in blok
     assert blok.index("innerHTML === lama") < blok.index("location.reload()")
 
@@ -113,7 +115,7 @@ def test_bertanya_dulu_sebelum_mengunduh_halaman():
     yang berubah" membakar kuota petugas — dan petugas memakai kuotanya
     sendiri. Yang ditanya lebih dulu satu penanda pendek."""
     assert "tanyaPenanda" in JS
-    blok = JS[JS.index("function periksa() {"):JS.index("function periksaIsi")]
+    blok = SEBAR[SEBAR.index("function periksa() {"):SEBAR.index("function periksaIsi")]
     assert "tanyaPenanda()" in blok
     assert "periksaIsi()" in blok
     # Halamannya TIDAK diambil di fungsi yang menanyakan penanda.
@@ -125,7 +127,7 @@ def test_belum_tahu_diperlakukan_sebagai_mungkin_berubah():
     yang paling mungkin basi, karena telepon bisa saja sejam di kantong.
     Menganggapnya "tak berubah" berarti mengulang keluhan yang sedang
     diperbaiki."""
-    blok = JS[JS.index("function periksa() {"):JS.index("function periksaIsi")]
+    blok = SEBAR[SEBAR.index("function periksa() {"):SEBAR.index("function periksaIsi")]
     assert "p !== null && penanda !== null" in blok, (
         "penanda yang belum diketahui harus melanjutkan, bukan berhenti")
 
@@ -133,7 +135,7 @@ def test_belum_tahu_diperlakukan_sebagai_mungkin_berubah():
 def test_gagal_bertanya_tak_memicu_muat_ulang():
     """Sesi habis menjawab halaman masuk, bukan JSON. Kalau itu ditafsirkan
     sebagai "ada perubahan", layarnya memuat ulang tanpa henti."""
-    blok = JS[JS.index("function tanyaPenanda"):JS.index("function periksa() {")]
+    blok = SEBAR[SEBAR.index("function tanyaPenanda"):SEBAR.index("function periksa() {")]
     assert "r.ok ? r.json() : null" in blok
     assert ".catch(" in blok and "return null" in blok
 

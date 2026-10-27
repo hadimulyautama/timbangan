@@ -32,7 +32,7 @@ async def _petugas(mesin):
     from hmu_identitas import sandi as S
 
     async with mesin() as db:
-        a = TimbanganAkun(username="elfira", nama="Elfira", role="petugas",
+        a = TimbanganAkun(username="elfira", nama="Elfira", role="PETUGAS",
                           password_hash=S.hash_sandi("rahasia123"), perangkat_kode="P1")
         db.add(a)
         await db.commit()
@@ -47,11 +47,15 @@ async def _tiket_partai(mesin, akun) -> tuple[int, str]:
     from app.timbangan.service import InputTimbang
 
     async with mesin() as db:
+        from app.models import Supplier
+        pihak = Supplier(nama_supplier="Pemasok Sintetis Partai", kledo_contact_id=990001)
+        db.add(pihak)
+        await db.flush()
         trx = await service.simpan_timbang_pertama(
             db, akun=akun,
             data=InputTimbang(kode="TRX-RT01-001", arah=logic.MASUK, jenis_kode="GABAH_BASAH",
                               berat_kg=12.5, cara_timbang=CARA_PARTAI,
-                              pihak_nama="Pak Uji", perangkat_kode="P1"),
+                              supplier_id=pihak.id, perangkat_kode="P1"),
         )
         return trx.id, trx.kode
 

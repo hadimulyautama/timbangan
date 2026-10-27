@@ -26,6 +26,8 @@ from sqlalchemy import select
 from app.timbangan import service
 from app.timbangan.models import ROLE_PETUGAS, TimbanganAkun, TimbanganTransaksi
 
+pytestmark = pytest.mark.usefixtures("supplier", "pelanggan_kledo")
+
 GB = "GABAH_BASAH"
 
 
@@ -36,8 +38,8 @@ def _muatan(**kw):
 
 
 async def _timbang1(db, akun, **kw):
-    d = dict(arah="MASUK", jenis_kode=GB, berat_kg=15000, supplier_id=None,
-             pihak_nama="Anton", nomor_polisi="AD 1 A", nama_sopir="Joko",
+    d = dict(arah="MASUK", jenis_kode=GB, berat_kg=15000, supplier_id=1,
+             pihak_nama=None, nomor_polisi="AD 1 A", nama_sopir="Joko",
              muatan=[_muatan()])
     d.update(kw)
     return await service.simpan_timbang_pertama(
@@ -180,14 +182,16 @@ async def test_timbang1_pada_tiket_selesai_dengan_isi_berbeda_ditolak(
     """Aturan yang sama berlaku untuk timbang pertama."""
     trx = await _timbang1(db, petugas, berat_kg=12000, cara_timbang="SEKALI",
                           nomor_polisi=None, nama_sopir="Darto",
-                          jenis_kode="BEBAS", arah="BEBAS", muatan=[],
+                          jenis_kode="BEBAS", arah="BEBAS",
+                          muatan=[_muatan(jenis_kode="BEBAS", jumlah_karung=1)],
                           kunci="k-sekali")
     assert trx.selesai, "prasyarat: tiket SEKALI langsung selesai"
 
     with pytest.raises(service.LayananError):
         await _timbang1(db, petugas, berat_kg=8000, cara_timbang="SEKALI",
                         nomor_polisi=None, nama_sopir="Darto",
-                        jenis_kode="BEBAS", arah="BEBAS", muatan=[],
+                        jenis_kode="BEBAS", arah="BEBAS",
+                        muatan=[_muatan(jenis_kode="BEBAS", jumlah_karung=1)],
                         kunci="k-sekali")
 
 

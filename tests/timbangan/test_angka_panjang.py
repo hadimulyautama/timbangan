@@ -28,6 +28,8 @@ import pytest
 from app.timbangan import logic, service
 from app.timbangan.routes import pos as rute
 
+pytestmark = pytest.mark.usefixtures("supplier")
+
 GB = "GABAH_BASAH"
 
 
@@ -67,7 +69,7 @@ async def test_nomor_acuan_kepanjangan_ditolak_dengan_kalimat(db, jenis_tersemai
     with pytest.raises(service.LayananError):
         await service.simpan_timbang_pertama(db, akun=petugas, data=service.InputTimbang(
             kunci="k1", arah="MASUK", jenis_kode=GB, berat_kg=15000,
-            pihak_nama="Anton", nomor_polisi="AD 1 A", nama_sopir="Joko",
+            supplier_id=1, nomor_polisi="AD 1 A", nama_sopir="Joko",
             muatan=[_muatan(nomor_acuan="N" * 51)]))
 
 
@@ -76,7 +78,7 @@ async def test_plat_kepanjangan_ditolak(db, jenis_tersemai, petugas):
     with pytest.raises(service.LayananError):
         await service.simpan_timbang_pertama(db, akun=petugas, data=service.InputTimbang(
             kunci="k2", arah="MASUK", jenis_kode=GB, berat_kg=15000,
-            pihak_nama="Anton", nomor_polisi="A" * 24, nama_sopir="Joko",
+            supplier_id=1, nomor_polisi="A" * 24, nama_sopir="Joko",
             muatan=[_muatan()]))
 
 
@@ -87,7 +89,7 @@ async def test_jumlah_karung_di_luar_akal_ditolak(db, jenis_tersemai, petugas):
     with pytest.raises(service.LayananError):
         await service.simpan_timbang_pertama(db, akun=petugas, data=service.InputTimbang(
             kunci="k3", arah="MASUK", jenis_kode=GB, berat_kg=15000,
-            pihak_nama="Anton", nomor_polisi="AD 1 A", nama_sopir="Joko",
+            supplier_id=1, nomor_polisi="AD 1 A", nama_sopir="Joko",
             muatan=[_muatan(jumlah_karung=3_000_000_000)]))
 
 
@@ -98,7 +100,7 @@ async def test_selisih_persen_ekstrem_tak_melampaui_kolomnya(db, jenis_tersemai,
     gagal — padahal yang salah cuma satu angka yang bisa dikoreksi."""
     await service.simpan_timbang_pertama(db, akun=petugas, data=service.InputTimbang(
         kunci="k4", arah="MASUK", jenis_kode=GB, berat_kg=15000,
-        pihak_nama="Anton", nomor_polisi="AD 1 A", nama_sopir="Joko",
+        supplier_id=1, nomor_polisi="AD 1 A", nama_sopir="Joko",
         muatan=[_muatan()]))
     from sqlalchemy import select
     from app.timbangan.models import TimbanganTransaksi
@@ -151,7 +153,7 @@ async def test_formulir_basi_ditolak_dengan_menyebut_siapa(db, jenis_tersemai,
 
     await service.simpan_timbang_pertama(db, akun=petugas, data=service.InputTimbang(
         kunci="v1", arah="MASUK", jenis_kode=GB, berat_kg=15000,
-        pihak_nama="Anton", nomor_polisi="AD 1 A", nama_sopir="Joko",
+        supplier_id=1, nomor_polisi="AD 1 A", nama_sopir="Joko",
         muatan=[_muatan()]))
     kode = (await db.execute(select(TimbanganTransaksi.kode))).scalars().first()
     trx = await service.ambil_kode(db, kode)

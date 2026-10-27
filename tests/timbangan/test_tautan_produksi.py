@@ -97,7 +97,7 @@ async def test_koreksi_pemasok_ditolak_bila_sudah_ditaut_produksi(
 
     trx = await service.simpan_timbang_pertama(db, akun=petugas,
                                                data=_masuk("TRX-A-004", supplier.id))
-    lain = Supplier(nama_supplier="H. Lain")
+    lain = Supplier(nama_supplier="H. Lain", kledo_contact_id=502)
     db.add(lain)
     await db.flush()
     await _taut(db, trx)

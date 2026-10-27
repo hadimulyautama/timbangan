@@ -55,10 +55,10 @@ async def app_uji(monkeypatch):
                           password_hash=hash_sandi(SANDI), perangkat_kode="P9"),
             TimbanganAkun(username="wahid", nama="Wahid", role=ROLE_ADMIN,
                           password_hash=hash_sandi(SANDI), perangkat_kode="P0"),
-            Supplier(nama_supplier="H. Anton"),
+            Supplier(nama_supplier="H. Anton", kledo_contact_id=501),
             # Pelanggan tak lagi bisa diketik bebas sejak 4 Oktober 2026 —
             # uji arah KELUAR/jasa butuh satu baris nyata untuk dipilih.
-            Pelanggan(nama_pelanggan="Toko Uji"),
+            Pelanggan(nama_pelanggan="Toko Uji", kledo_contact_id=601),
         ])
         await db.commit()
 
@@ -255,9 +255,9 @@ async def test_jasa_timbang_sekali_langsung_ada_hasil(klien):
     form = (await klien.get(f"{PREFIX}/timbang/BEBAS")).text
     r = await klien.post(f"{PREFIX}/timbang/BEBAS", data={
         "kunci": kode_dari(form), "berat_kg": "12850",
-        "cara_timbang": "SEKALI", "pihak_nama": "CV Sumber Rejeki",
-        "nomor_polisi": "AD 9 ZZ", "tara_lain_kg": "0", "supplier_id": "",
-        "jumlah_karung": "0", "tara_per_karung_kg": "0", "berat_acuan_kg": "0",
+        "cara_timbang": "SEKALI", "pihak_nama": "",
+        "nomor_polisi": "AD 9 ZZ", "tara_lain_kg": "0", "supplier_id": "1",
+        "jumlah_karung": "100", "tara_per_karung_kg": "0", "berat_acuan_kg": "0",
         "waktu": "", "catatan": "", "nomor_acuan": "", "nama_sopir": "Slamet",
     })
     assert r.status_code == 200
@@ -784,7 +784,7 @@ async def test_supplier_sering_datang_didahulukan(klien, app_uji):
     from app.models import Supplier
 
     async with database.SessionLocal() as db:
-        db.add_all([Supplier(nama_supplier=f"Vendor Karung {i}") for i in range(5)])
+        db.add_all([Supplier(nama_supplier=f"Vendor Karung {i}", kledo_contact_id=700+i) for i in range(5)])
         await db.commit()
 
     await login(klien)
@@ -804,7 +804,7 @@ async def test_supplier_belum_pernah_dipakai_tetap_bisa_dipilih(klien, app_uji):
     from app.models import Supplier
 
     async with database.SessionLocal() as db:
-        db.add(Supplier(nama_supplier="Pemasok Musiman"))
+        db.add(Supplier(nama_supplier="Pemasok Musiman", kledo_contact_id=502))
         await db.commit()
 
     await login(klien)
@@ -929,7 +929,7 @@ async def test_supplier_ditandai_agar_bisa_dicari(klien, app_uji):
     from app.models import Supplier
 
     async with database.SessionLocal() as db:
-        db.add_all([Supplier(nama_supplier=f"Vendor Karung {i:03d}")
+        db.add_all([Supplier(nama_supplier=f"Vendor Karung {i:03d}", kledo_contact_id=700+i)
                     for i in range(20)])
         await db.commit()
 
@@ -1015,7 +1015,16 @@ def test_penyaring_memakai_grid_yang_menyusut(berkas):
 
     html = (pathlib.Path(__file__).resolve().parents[2]
             / "app/timbangan/templates" / berkas).read_text()
-    assert "saring" in html, f"{berkas} tidak memakai kelas .saring"
+    if berkas == "daftar.html":
+        css = (pathlib.Path(__file__).resolve().parents[2]
+               / "app/timbangan/static/riwayat.css").read_text()
+        assert 'class="rh-form"' in html
+        assert "grid-template-columns:repeat(2,minmax(0,1fr))" in css
+    else:
+        css = (pathlib.Path(__file__).resolve().parents[2]
+               / "app/timbangan/static/laporan.css").read_text()
+        assert 'class="lp-dates"' in html
+        assert "grid-template-columns:repeat(2,minmax(0,1fr))" in css
     assert "grid-template-columns:1fr 1fr" not in html, (
         f"{berkas} kembali memakai kolom yang tidak bisa menyusut"
     )
@@ -1634,9 +1643,9 @@ async def _tiket_terbuka(klien, jenis: str, **beda) -> int:
         "nama_sopir": "Slamet", "pihak_nama": "",
     }
     data.update(beda)
-    await klien.post(f"{PREFIX}/timbang/{jenis}", data=data)
-    tiket = await klien.get(f"{PREFIX}/tiket")
-    return int(re.search(r"/tiket/(\d+)", tiket.text).group(1))
+    hasil = await klien.post(f"{PREFIX}/timbang/{jenis}", data=data)
+    # Identitas berasal dari hasil simpan, bukan urutan daftar antrean.
+    return int(re.search(r"/transaksi/(\d+)", str(hasil.url)).group(1))
 
 
 async def trx_oleh_id(trx_id: int):
@@ -1739,8 +1748,8 @@ async def test_simpan_sementara_tercatat_di_audit(klien):
 
 
 @pytest.mark.usefixtures("muatan_pengiriman_uji")
-async def test_pengiriman_tetap_bisa_selesai_tanpa_jumlah_karung(klien):
-    """Pagarnya khusus barang masuk — alur pengiriman tidak ikut berubah."""
+async def test_pengiriman_memakai_jumlah_karung_dari_produksi(klien):
+    """Pos tidak mengetik ulang jumlah karung yang telah dicatat Produksi."""
     await login(klien)
     trx_id = await _tiket_terbuka(klien, "BERAS", berat_kg="4200")
     r = await klien.post(f"{PREFIX}/tiket/{trx_id}", data={
@@ -2155,7 +2164,7 @@ async def test_transfer_internal_timbang_bermuatan_lalu_kosong(klien):
         "kunci": kode_dari(form), "berat_kg": "13600",
         "cara_timbang": "DUA_KALI", "supplier_id": "",
         "pihak_nama": "Gudang 1 → Gudang 2", "nomor_polisi": "AD 7 CC",
-        "nama_sopir": "Slamet", "jumlah_karung": "", "tara_per_karung_kg": "",
+        "nama_sopir": "Slamet", "jumlah_karung": "100", "tara_per_karung_kg": "",
         "berat_acuan_kg": "", "nomor_acuan": "", "tara_lain_kg": "0",
         "waktu": "", "catatan": "",
     })
@@ -2166,7 +2175,7 @@ async def test_transfer_internal_timbang_bermuatan_lalu_kosong(klien):
     assert "Berat truk kosong" in form2
 
     r = await klien.post(f"{PREFIX}/tiket/{trx_id}", data={
-        "berat_kg": "3600", "jumlah_karung": "", "tara_per_karung_kg": "",
+        "berat_kg": "3600", "jumlah_karung": "100", "tara_per_karung_kg": "",
         "berat_acuan_kg": "", "nomor_acuan": "", "waktu": "", "catatan": "",
         "aksi": "selesai",
     })
@@ -2206,8 +2215,8 @@ async def test_transfer_internal_tanpa_dokumen_pembanding(klien):
     assert "Berat menurut dokumen" not in form2
 
 
-async def test_transfer_internal_tidak_terkena_pagar_jumlah_karung(klien):
-    """Pagar itu khusus barang masuk, yang taranya memang per karung."""
+async def test_transfer_internal_juga_wajib_jumlah_karung(klien):
+    """Jumlah boleh kosong saat pertama, tetapi wajib saat diselesaikan."""
     await login(klien)
     form = (await klien.get(f"{PREFIX}/timbang/TRANSFER")).text
     await klien.post(f"{PREFIX}/timbang/TRANSFER", data={
@@ -2225,7 +2234,10 @@ async def test_transfer_internal_tidak_terkena_pagar_jumlah_karung(klien):
         "berat_acuan_kg": "", "nomor_acuan": "", "waktu": "", "catatan": "",
         "aksi": "selesai",
     })
-    assert "Jumlah karung belum diisi" not in r.text
+    assert "Jumlah karung belum diisi" in r.text
+    assert (await trx_oleh_id(trx_id)).status_tiket == TIKET_TERBUKA
+    r = await klien.post(f"{PREFIX}/tiket/{trx_id}", data={
+        "berat_kg": "3600", "jumlah_karung": "100", "aksi": "selesai"})
     assert (await trx_oleh_id(trx_id)).status_tiket == TIKET_SELESAI
     assert "Simpan sementara" not in (
         await klien.get(f"{PREFIX}/timbang/TRANSFER")).text
@@ -2302,7 +2314,7 @@ async def test_jasa_timbang_dan_transfer_tetap_boleh_tanpa_nomor_polisi(
     r = await klien.post(f"{PREFIX}/timbang/{jenis}", data={
         "kunci": kode_dari(form), "berat_kg": "12850",
         "cara_timbang": "SEKALI" if jenis == "BEBAS" else "DUA_KALI",
-        "supplier_id": "", "pihak_nama": "CV Sumber Rejeki",
+        "supplier_id": "1" if jenis == "BEBAS" else "", "pihak_nama": "" if jenis == "BEBAS" else "CV Sumber Rejeki",
         "nomor_polisi": "", "nama_sopir": "Slamet", "jumlah_karung": "",
         "tara_per_karung_kg": "", "berat_acuan_kg": "", "nomor_acuan": "",
         "tara_lain_kg": "0", "waktu": "", "catatan": "",
@@ -2480,7 +2492,8 @@ async def test_admin_diantar_ke_pengaturan_setelah_mengangkat_super_pertama(
 
 def _menu_aktif(teks: str) -> list[str]:
     """Nama menu yang menyala pada satu halaman."""
-    blok = teks[teks.index('class="bawah__isi"'):teks.index("</nav>")]
+    awal = teks.index('class="bawah__isi"')
+    blok = teks[awal:teks.index("</nav>", awal)]
     return [
         # Buang ikon SVG-nya; yang dibandingkan namanya, bukan gambarnya.
         re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", potongan)).strip()
@@ -2492,10 +2505,10 @@ def _menu_aktif(teks: str) -> list[str]:
 
 @pytest.mark.parametrize("jalur,menu", [
     ("/", "Beranda"),
-    ("/tiket", "Tiket"),
-    ("/transaksi", "Catatan"),
-    ("/laporan", "Ringkasan"),
-    ("/monitoring", "Ringkasan"),
+    ("/tiket", "Tiket Aktif"),
+    ("/transaksi", "Riwayat Timbang"),
+    ("/laporan", "Laporan &amp; Pemeriksaan"),
+    ("/monitoring", "Laporan &amp; Pemeriksaan"),
     ("/pengaturan", "Pengaturan"),
     ("/aturan", "Pengaturan"),
     ("/tara", "Pengaturan"),
@@ -2522,7 +2535,7 @@ async def test_menu_catatan_tetap_menyala_di_halaman_kedua(klien, app_uji):
     await _jadi_super(app_uji)
     await login(klien, "wahid")
     r = await klien.get(f"{PREFIX}/transaksi?hal=2")
-    assert _menu_aktif(r.text) == ["Catatan"]
+    assert _menu_aktif(r.text) == ["Riwayat Timbang"]
 
 
 async def test_menu_catatan_menyala_di_rincian_dan_koreksi(klien, app_uji):
@@ -2533,7 +2546,7 @@ async def test_menu_catatan_menyala_di_rincian_dan_koreksi(klien, app_uji):
     await _jadi_super(app_uji)
     await login(klien, "wahid")
     for jalur in (f"/transaksi/{trx_id}", f"/transaksi/{trx_id}/koreksi"):
-        assert _menu_aktif((await klien.get(PREFIX + jalur)).text) == ["Catatan"], jalur
+        assert _menu_aktif((await klien.get(PREFIX + jalur)).text) == ["Riwayat Timbang"], jalur
 
 
 # ─────────────── Waktu yang diketik operator ───────────────
@@ -2614,8 +2627,8 @@ async def test_pihak_tercetak_sebesar_nomor_polisi(klien, jalur):
         "nomor_acuan": "N-1", "nama_sopir": "Slamet", "pihak_nama": "",
     })
     teks = (await klien.get(PREFIX + jalur)).text
-    baris = teks[teks.index('class="pilihan__nama"'):]
-    baris = baris[:baris.index("</div>", baris.index("pilihan__pihak"))]
+    baris = teks[teks.index('class="tf-ticket-identity"'):]
+    baris = baris[:baris.index("</div>", baris.index('class="tf-party"'))]
     assert "AD 5 BB" in baris
     assert "H. Anton" in baris          # di baris besar yang sama
 
@@ -3007,7 +3020,7 @@ async def _tambah_pelanggan(nama: str) -> int:
     from app.models import Pelanggan
 
     async with database.SessionLocal() as db:
-        p = Pelanggan(nama_pelanggan=nama)
+        p = Pelanggan(nama_pelanggan=nama, kledo_contact_id=601)
         db.add(p)
         await db.commit()
         return p.id
@@ -3125,7 +3138,8 @@ async def test_ringkasan_menautkan_lembar_pemeriksaan_yang_terbuka(
 
     laporan = (await klien.get(f"{PREFIX}/laporan")).text
     assert "lembar pemeriksaan masih terbuka" in laporan
-    assert f"/transaksi/{trx_id}" in laporan       # bisa dijangkau
+    tugas = (await klien.get(f"{PREFIX}/laporan?tab=pemeriksaan")).text
+    assert f"/transaksi/{trx_id}" in tugas         # tab semua tanggal tetap terjangkau
     assert "tidak menutup lembarnya" in laporan    # dan dijelaskan
 
 
@@ -3185,7 +3199,7 @@ async def test_pihak_kosong_ditolak_dengan_sebutan_arahnya(klien, jenis, sebutan
         "berat_acuan_kg": "9000", "nomor_acuan": "N", "tara_lain_kg": "0",
         "waktu": "", "catatan": "",
     })
-    if sebutan == "Pelanggan":
+    if sebutan in ("Pelanggan", "Supplier", "Pemilik barang"):
         # Sejak 4 Oktober 2026 pelanggan tak lagi punya pintu ketik-bebas —
         # kalimatnya pun bukan lagi "wajib diisi" (yang menyiratkan dua
         # jalan), melainkan "wajib dipilih dari daftar Kledo".
@@ -3194,8 +3208,8 @@ async def test_pihak_kosong_ditolak_dengan_sebutan_arahnya(klien, jenis, sebutan
         assert f"{sebutan} wajib diisi" in r.text
 
 
-async def test_pihak_boleh_dari_daftar_atau_diketik(klien):
-    """Dua jalan yang sah — yang dilarang hanya kosong."""
+async def test_pihak_harus_dari_daftar_kledo(klien):
+    """Formulir lama yang masih mengirim nama bebas ditolak server."""
     await login(klien)
     for pilih, tulis in ((("supplier_id", "1"), ("pihak_nama", "")),
                          (("supplier_id", ""), ("pihak_nama", "H. Baru"))):
@@ -3208,25 +3222,16 @@ async def test_pihak_boleh_dari_daftar_atau_diketik(klien):
             "berat_acuan_kg": "10000", "nomor_acuan": "N-1",
             "tara_lain_kg": "0", "waktu": "", "catatan": "",
         })
-        assert "wajib diisi" not in r.text
+        assert ("wajib dipilih dari daftar Kledo" in r.text) == (not pilih[1])
 
 
-async def test_borang_pelanggan_tak_lagi_menawarkan_ketik_bebas(klien):
-    """Layar itu sendiri tidak boleh menjanjikan pintu yang sudah ditutup di
-    layanan — `data-gabung` (yang melebur pencarian dengan kolom bebas,
-    lihat `pasangPencarian` di app.js) harus hilang dari borang pelanggan,
-    dan kolom "(bila belum terdaftar)"-nya ikut hilang. Pemasok TIDAK
-    berubah — permintaan pemilik 4 Oktober 2026 hanya menyebut pelanggan."""
+async def test_borang_kontak_tidak_menawarkan_nama_bebas(klien):
     await login(klien)
-
-    keluar = (await klien.get(f"{PREFIX}/timbang/PENGIRIMAN")).text
-    assert 'data-gabung' not in keluar, "pelanggan masih menawarkan ketik bebas"
-    assert '(bila belum terdaftar)' not in keluar
-
-    masuk = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
-    assert 'data-gabung="f-pihak_nama"' in masuk, \
-        "pemasok kehilangan pintu ketik-bebasnya — bukan bagian permintaan ini"
-    assert '(bila belum terdaftar)' in masuk
+    for jalur in ("/timbang/GABAH_BASAH", "/timbang/BEBAS", "/partai/GABAH_KERING/baru", "/jasa/GABAH_KERING"):
+        html = (await klien.get(PREFIX + jalur)).text
+        assert 'data-gabung=' not in html
+        assert 'name="pihak_nama"' not in html
+        assert 'Perbarui Kontak' in html
 
 
 async def test_nama_sopir_wajib(klien):
@@ -3433,9 +3438,9 @@ async def test_kalimat_karung_di_timbang_pertama_mengikuti_arah(klien):
 
 
 @pytest.mark.parametrize("jenis,kalimat", [
-    ("GABAH_BASAH", "Dihitung saat bongkar, bukan disalin dari nota."),
+    ("GABAH_BASAH", "Wajib lebih dari 0 sebelum selesai."),
     ("PENGIRIMAN", "Muatan berasal dari catatan barang yang benar-benar dimuat di Produksi."),
-    ("TRANSFER", "Kosongkan bila muatannya curah"),
+    ("TRANSFER", "Wajib lebih dari 0 sebelum selesai."),
 ])
 @pytest.mark.usefixtures("muatan_pengiriman_uji")
 async def test_kalimat_karung_di_timbang_kedua_mengikuti_arah(
@@ -3445,7 +3450,7 @@ async def test_kalimat_karung_di_timbang_kedua_mengikuti_arah(
     form = (await klien.get(f"{PREFIX}/timbang/{jenis}")).text
     await klien.post(f"{PREFIX}/timbang/{jenis}", data={
         "kunci": kode_dari(form), "berat_kg": "3680", "cara_timbang": "DUA_KALI",
-        "supplier_id": "1", "pihak_nama": "Gudang 1 → Gudang 2",
+        "supplier_id": "1", "pihak_nama": "Gudang 1 → Gudang 2" if jenis == "TRANSFER" else "",
         "nomor_polisi": "AD 5 BB", "nama_sopir": "Slamet",
         "jumlah_karung": "", "tara_per_karung_kg": "",
         "berat_acuan_kg": "9000", "nomor_acuan": "N", "tara_lain_kg": "0",
@@ -3469,8 +3474,8 @@ async def test_struk_jasa_timbang_tidak_mencetak_dokumen_nol(klien):
     form = (await klien.get(f"{PREFIX}/timbang/BEBAS")).text
     await klien.post(f"{PREFIX}/timbang/BEBAS", data={
         "kunci": kode_dari(form), "berat_kg": "14248", "cara_timbang": "SEKALI",
-        "supplier_id": "", "pihak_nama": "Pak Arif", "nomor_polisi": "AD 9262 BE",
-        "nama_sopir": "Pak Arif", "jumlah_karung": "0",
+        "supplier_id": "1", "pihak_nama": "", "nomor_polisi": "AD 9262 BE",
+        "nama_sopir": "Pak Arif", "jumlah_karung": "100",
         "tara_per_karung_kg": "0", "berat_acuan_kg": "0", "nomor_acuan": "",
         "tara_lain_kg": "0", "waktu": "", "catatan": "",
     })
@@ -3663,7 +3668,7 @@ async def test_alur_retur_pelanggan_sampai_hasil(klien, muatan_retur_uji):
         "kunci": kunci, "berat_kg": "9000", "cara_timbang": "DUA_KALI",
         "supplier_id": str(pid), "pihak_nama": "", "nomor_polisi": "AD 9 ZZ",
         "nama_sopir": "Slamet", "nomor_acuan": "SJ-RETUR-1",
-        "jumlah_karung": "0", "tara_per_karung_kg": "0",
+        "jumlah_karung": "100", "tara_per_karung_kg": "0",
         "berat_acuan_kg": "3000", "tara_lain_kg": "0", "waktu": "",
         "catatan": "Beras kemasan 25 kg, karung sobek",
     })
@@ -3676,7 +3681,7 @@ async def test_alur_retur_pelanggan_sampai_hasil(klien, muatan_retur_uji):
         "berat_acuan_kg": "", "nomor_acuan": "", "waktu": "", "catatan": "",
     })
     assert r.status_code == 200
-    assert "3.000 kg" in r.text        # berat barang
+    assert "3.000,00 kg" in r.text        # berat barang
     assert "retur dari pelanggan" in r.text.lower()
 
 
@@ -3690,7 +3695,7 @@ async def test_alur_retur_supplier_berangkat_bermuatan(klien):
         "kunci": kunci, "berat_kg": "6000", "cara_timbang": "DUA_KALI",
         "supplier_id": "1", "pihak_nama": "", "nomor_polisi": "AD 9 ZZ",
         "nama_sopir": "Slamet", "nomor_acuan": "SJ-RETUR-2",
-        "jumlah_karung": "0", "tara_per_karung_kg": "0",
+        "jumlah_karung": "100", "tara_per_karung_kg": "0",
         "berat_acuan_kg": "3000", "tara_lain_kg": "0", "waktu": "",
         "catatan": "Gabah basah ditolak QC",
     })
@@ -3935,19 +3940,28 @@ async def test_sopir_terisi_dari_plat_tetapi_asalnya_disebut(klien):
     assert 'value=""' in penggal
 
 
-async def test_kolom_pihak_ditandai_untuk_dilebur_jadi_satu(klien):
-    """Dulu ada DUA kolom untuk satu pertanyaan: daftar pihak terdaftar, dan
-    kolom "bila belum terdaftar" — plus satu paragraf yang harus dibaca sambil
-    truk menunggu. Peleburannya dikerjakan di peramban; yang diuji di sini
-    penandanya, dan bahwa keduanya tetap ada sehingga halaman tanpa JavaScript
-    masih bisa dipakai.
-    """
+async def test_kolom_pihak_hanya_memilih_kontak_kledo(klien):
     await login(klien)
     form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
-    assert 'data-gabung="f-pihak_nama"' in form
+    assert 'data-gabung=' not in form
     assert 'name="supplier_id"' in form
-    assert 'name="pihak_nama"' in form
-    assert "kolom di bawah" not in form
+    assert 'name="pihak_nama"' not in form
+
+
+@pytest.mark.parametrize("nama", ["LAIN-LAIN", "LAIN LAIN", "-"])
+async def test_nama_pengganti_sopir_ditolak_lewat_formulir(klien, nama):
+    await login(klien)
+    form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
+    r = await klien.post(f"{PREFIX}/timbang/GABAH_BASAH", data={
+        "kunci": kode_dari(form), "berat_kg": "15000",
+        "supplier_id": "1", "nama_sopir": nama, "nomor_polisi": "AD 1234 UJ",
+        "cara_timbang": "DUA_KALI", "jumlah_karung": "100",
+    })
+    assert "Isi nama sopir sebenarnya" in r.text
+    from sqlalchemy import select, func
+    from app.timbangan.models import TimbanganTransaksi
+    async with database.SessionLocal() as db:
+        assert await db.scalar(select(func.count()).select_from(TimbanganTransaksi)) == 0
 
 
 async def test_koreksi_tidak_ikut_dilebur(klien):
@@ -3984,7 +3998,7 @@ async def test_petugas_boleh_membuka_catatan_dan_mencetak(klien, app_uji):
 
     # Dan pintunya TERLIHAT — halaman yang bisa dibuka tetapi tak pernah
     # ditawarkan tak akan pernah dibuka siapa pun.
-    assert f"{PREFIX}/transaksi" in daftar.text and "Catatan" in daftar.text
+    assert f"{PREFIX}/transaksi" in daftar.text and "Riwayat Timbang" in daftar.text
 
     cetak = await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak")
     assert cetak.status_code == 200, cetak.status_code
@@ -4197,7 +4211,7 @@ async def _pelanggan_uji(nama: str = "Pak Budi") -> int:
     from app.models import Pelanggan
 
     async with SessionLocal() as db:
-        p = Pelanggan(nama_pelanggan=nama)
+        p = Pelanggan(nama_pelanggan=nama, kledo_contact_id=601)
         db.add(p)
         await db.commit()
         return p.id
@@ -4209,7 +4223,7 @@ async def test_beranda_menawarkan_barang_masuk_jasa(klien):
     r = await klien.get(f"{PREFIX}/")
     assert r.status_code == 200
     assert "Barang masuk jasa" in r.text
-    assert "Titipan pelanggan" in r.text
+    assert "Titipan jasa giling" in r.text
     # Tautannya ke rute jasa, bukan ke rute barang masuk biasa — satu huruf
     # salah di sini membuat barang titipan tercatat sebagai pembelian.
     # KETIGA komoditasnya ditawarkan — keputusan pemilik nomor 1. Karena lebih
@@ -4397,7 +4411,7 @@ async def test_retur_petunjuk_berat_dan_dokumen_timbang_kedua(
         'aksi': 'selesai',
     })
     assert 'Timbangan selesai dan tersimpan.' in r.text
-    assert '3.000 kg' in r.text
+    assert ('3.000,00 kg' if jenis == 'RETUR_PELANGGAN' else '3.000 kg') in r.text
     assert 'SJ-RETUR-SUSULAN' in r.text
 
 
@@ -4421,7 +4435,7 @@ async def test_retur_tanpa_tara_meski_ada_kiriman_lama(klien, monkeypatch):
     monkeypatch.setattr(klien_produksi, 'muatan_retur', baca)
     await login(klien)
     form = (await klien.get(f'{PREFIX}/timbang/RETUR_PELANGGAN')).text
-    assert 'name="jumlah_karung"' not in form
+    assert 'name="jumlah_karung"' in form
     assert 'name="tara_per_karung_kg"' not in form
     r = await klien.post(f'{PREFIX}/timbang/RETUR_PELANGGAN', data={
         'kunci': kode_dari(form), 'berat_kg': '9000', 'supplier_id': '1',
@@ -4432,7 +4446,7 @@ async def test_retur_tanpa_tara_meski_ada_kiriman_lama(klien, monkeypatch):
     tid = int(re.search(r'/tiket/(\d+)', tiket.text).group(1))
     form2 = (await klien.get(f'{PREFIX}/tiket/{tid}')).text
     assert 'Retur tanpa potongan tara' in form2
-    assert 'name="jumlah_karung"' not in form2
+    assert 'name="jumlah_karung"' in form2
     assert 'name="tara_per_karung_kg"' not in form2
     r = await klien.post(f'{PREFIX}/tiket/{tid}', data={
         'berat_kg':'6000', 'jumlah_karung':'999', 'tara_per_karung_kg':'999',
@@ -4456,7 +4470,7 @@ async def test_retur_bisa_selesai_tanpa_menunggu_rincian_produksi(klien,monkeypa
     })
     tiket=await klien.get(f'{PREFIX}/tiket')
     tid=int(re.search(r'/tiket/(\d+)',tiket.text).group(1))
-    r=await klien.post(f'{PREFIX}/tiket/{tid}',data={'berat_kg':'6000'})
+    r=await klien.post(f'{PREFIX}/tiket/{tid}',data={'berat_kg':'6000','jumlah_karung':'60'})
     assert 'Timbangan selesai dan tersimpan.' in r.text
     assert (await trx_oleh_id(tid)).status_tiket == TIKET_SELESAI
 
@@ -4549,7 +4563,7 @@ async def test_pengiriman_tara_dari_jenis_ukuran_kemasan_produksi(klien,monkeypa
     tiket=await klien.get(f'{PREFIX}/tiket')
     tid=int(re.search(r'/tiket/(\d+)',tiket.text).group(1))
     form2=(await klien.get(f'{PREFIX}/tiket/{tid}')).text
-    assert '0.08 kg tara/karung' in form2 and '0.07 kg tara/karung' in form2
+    assert '0,0800 kg tara per karung' in form2 and '0,0700 kg tara per karung' in form2
     await klien.post(f'{PREFIX}/tiket/{tid}',data={'berat_kg':'10510.8',
         'jumlah_karung':'999','tara_per_karung_kg':'999'})
     trx=await trx_oleh_id(tid)
@@ -4665,7 +4679,7 @@ def muatan_pengiriman_uji(monkeypatch):
         trx = await trx_oleh_id(tid)
         return {'kode_perintah': 'OUT-UJI', 'pelanggan': 'Toko Uji',
                 'nomor_polisi': trx.nomor_polisi, 'muatan': [{
-                    'jenis_kode': 'BERAS', 'nama': 'Beras curah',
+                    'jenis_kode': 'BERAS', 'nama': 'Beras uji',
                     'berat_kg': sum(float(m.berat_acuan_kg or 0) for m in trx.muatan),
-                    'jumlah_karung': 0, 'tara_per_karung_kg': 0}]}
+                    'jumlah_karung': 100, 'tara_per_karung_kg': 0}]}
     monkeypatch.setattr(klien_produksi, 'muatan_pengiriman', muatan)

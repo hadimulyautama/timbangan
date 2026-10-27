@@ -36,7 +36,7 @@ from app.timbangan.models import (
 )
 from app.timbangan.service import InputMuatan, InputTimbang
 
-pytestmark = pytest.mark.usefixtures("jenis_tersemai")
+pytestmark = pytest.mark.usefixtures("jenis_tersemai", "supplier", "pelanggan_kledo")
 
 
 def masuk_gabah(kode: str, supplier_id: int | None, berat: float) -> InputTimbang:
@@ -227,7 +227,8 @@ async def test_jasa_timbang_sekali_langsung_selesai(db, petugas):
     trx = await service.simpan_timbang_pertama(db, akun=petugas, data=InputTimbang(
         kode="TRX-20260830-P1-006", arah=logic.BEBAS, jenis_kode="BEBAS",
         berat_kg=12_850, cara_timbang=CARA_SEKALI,
-        pihak_nama="CV Sumber Rejeki",
+        muatan=[InputMuatan(jenis_kode="BEBAS", jumlah_karung=1)],
+        supplier_id=1,
             nama_sopir="Slamet",
     ))
     assert trx.status_tiket == TIKET_SELESAI
@@ -643,7 +644,7 @@ def partai(kode: str, berat: float, pihak: str = "Pak Warno") -> InputTimbang:
     return InputTimbang(
         kode=kode, arah=logic.MASUK, jenis_kode="GABAH_BASAH",
         berat_kg=berat, cara_timbang=CARA_PARTAI,
-        pihak_nama=pihak, perangkat_kode="P1",
+        supplier_id=1, perangkat_kode="P1",
     )
 
 
@@ -719,7 +720,7 @@ async def test_partai_selesai_menjadikan_jumlah_sebagai_netto(db, petugas):
             db, akun=petugas, kode="TRX-20260902-P1-006", berat_kg=w
         )
     trx = await service.selesaikan_partai(
-        db, akun=petugas, kode="TRX-20260902-P1-006"
+        db, akun=petugas, kode="TRX-20260902-P1-006", jumlah_karung=3
     )
     assert trx.status_tiket == TIKET_SELESAI
     assert trx.timbang2_kg is None, "tak ada timbang kosong pada partai kecil"
@@ -732,7 +733,7 @@ async def test_partai_yang_sudah_ditutup_tak_bisa_ditambah(db, petugas):
     await service.simpan_timbang_pertama(
         db, akun=petugas, data=partai("TRX-20260902-P1-007", 18)
     )
-    await service.selesaikan_partai(db, akun=petugas, kode="TRX-20260902-P1-007")
+    await service.selesaikan_partai(db, akun=petugas, kode="TRX-20260902-P1-007", jumlah_karung=1)
     with pytest.raises(service.LayananError, match="sudah ditutup"):
         await service.tambah_penimbangan(
             db, akun=petugas, kode="TRX-20260902-P1-007", berat_kg=5
@@ -791,7 +792,7 @@ async def test_partai_menolak_kiriman_tanpa_satu_pun_berat(db, petugas):
 async def _pelanggan(db, nama: str = "Toko Beras Handoko"):
     from app.models import Pelanggan
 
-    p = Pelanggan(nama_pelanggan=nama)
+    p = Pelanggan(nama_pelanggan=nama, kledo_contact_id=601)
     db.add(p)
     await db.flush()
     return p
@@ -848,7 +849,8 @@ async def test_retur_dari_pelanggan_datang_bermuatan(db, petugas):
                     jenis="RETUR_PELANGGAN", pihak_id=p.id, berat=9_000),
     )
     trx = await service.simpan_timbang_kedua(
-        db, akun=petugas, kode="RTP-20260904-P1-002", berat_kg=6_000
+        db, akun=petugas, kode="RTP-20260904-P1-002", berat_kg=6_000,
+        muatan=[InputMuatan(jenis_kode="RETUR_PELANGGAN", jumlah_karung=60)]
     )
     assert float(trx.berat_bermuatan_kg) == 9_000
     assert float(trx.berat_kosong_kg) == 6_000
@@ -867,7 +869,8 @@ async def test_retur_ke_supplier_berangkat_bermuatan(db, petugas, supplier):
                     jenis="RETUR_SUPPLIER", pihak_id=supplier.id, berat=6_000),
     )
     trx = await service.simpan_timbang_kedua(
-        db, akun=petugas, kode="RTS-20260904-P1-002", berat_kg=9_000
+        db, akun=petugas, kode="RTS-20260904-P1-002", berat_kg=9_000,
+        muatan=[InputMuatan(jenis_kode="RETUR_SUPPLIER", jumlah_karung=60)]
     )
     assert float(trx.berat_bermuatan_kg) == 9_000
     assert float(trx.berat_kosong_kg) == 6_000
