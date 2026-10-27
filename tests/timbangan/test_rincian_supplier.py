@@ -101,8 +101,8 @@ async def test_tidak_bocor_dan_tidak_sukses_palsu(klien,monkeypatch,keadaan):
 
 
 async def tautan(db,tid,status='diajukan'):
-    await db.execute(text('CREATE TABLE retur_supplier (id INTEGER PRIMARY KEY,kode TEXT,timbangan_transaksi_id INTEGER UNIQUE,status TEXT)'))
-    await db.execute(text('INSERT INTO retur_supplier VALUES (99,:kode,:tid,:status)'),{'kode':'RS-UJI-99','tid':tid,'status':status})
+    await db.execute(text('CREATE TABLE retur_supplier (id INTEGER PRIMARY KEY,kode TEXT,timbangan_transaksi_id INTEGER UNIQUE,status TEXT,penerimaan_tiket_id INTEGER)'))
+    await db.execute(text('INSERT INTO retur_supplier (id,kode,timbangan_transaksi_id,status) VALUES (99,:kode,:tid,:status)'),{'kode':'RS-UJI-99','tid':tid,'status':status})
     await db.commit()
 
 
@@ -169,3 +169,39 @@ async def test_penyelesaian_opsional_tidak_dianggap_penerimaan_supplier(klien,mo
     assert r.status_code==200 and 'Selesai di gudang' in r.text
     assert 'bukan konfirmasi penerimaan supplier' in r.text
     assert ('KRS-UJI' in r.text)==ada and 'JANGAN-TAMPIL' not in r.text
+
+
+@pytest.mark.parametrize('status',['diajukan','dibatalkan','selesai_gudang'])
+async def test_hapus_asal_tetap_ditolak_tanpa_batch_generik(klien,status):
+    async with database.SessionLocal() as db:
+        a=await db.scalar(select(TimbanganAkun).where(TimbanganAkun.username=='budi'))
+        sid=await db.scalar(select(Supplier.id))
+        t=await service.simpan_timbang_pertama(db,akun=a,data=service.InputTimbang(
+            kunci=str(uuid4()),arah='MASUK',jenis_kode='BERAS_MASUK',berat_kg=6570,
+            supplier_id=sid,nomor_polisi='B 1234 UJ',nama_sopir='Sopir Asal Uji'))
+        tid,kode=t.id,t.kode
+        await tautan(db,tid,status)
+        await db.execute(text('UPDATE retur_supplier SET timbangan_transaksi_id=NULL,penerimaan_tiket_id=:tid'),{'tid':tid});await db.commit()
+    await tautkan('wahid',P.SUPERADMIN);await login(klien,'wahid')
+    r=await klien.post(f'/timbangan/transaksi/{tid}/hapus',data={'alasan':'Uji hapus asal','ketik_kode':kode})
+    assert 'hubungan pengajuan Retur ke Supplier' in r.text
+    async with database.SessionLocal() as db:
+        assert await db.get(TimbanganTransaksi,tid)
+        assert await db.scalar(text('SELECT penerimaan_tiket_id FROM retur_supplier'))==tid
+
+
+async def test_pointer_asal_tidak_menambah_blokir_koreksi_batal(klien):
+    async with database.SessionLocal() as db:
+        a=await db.scalar(select(TimbanganAkun).where(TimbanganAkun.username=='wahid'))
+        sid=await db.scalar(select(Supplier.id))
+        t=await service.simpan_timbang_pertama(db,akun=a,data=service.InputTimbang(
+            kunci=str(uuid4()),arah='MASUK',jenis_kode='BERAS_MASUK',berat_kg=6570,
+            supplier_id=sid,nomor_polisi='B 1234 UJ',nama_sopir='Sopir Uji'))
+        tid=t.id;await tautan(db,tid,'dibatalkan')
+        await db.execute(text('UPDATE retur_supplier SET timbangan_transaksi_id=NULL,penerimaan_tiket_id=:tid'),{'tid':tid});await db.commit()
+        s=Supplier(nama_supplier='Pemasok koreksi uji',kledo_contact_id=998);db.add(s);await db.commit()
+        await service.koreksi_transaksi(db,akun=a,trx=t,alasan='Koreksi aman',perubahan={'supplier_id':s.id,'timbang1_kg':6571})
+        assert t.timbang1_kg==6571 and t.supplier_id==s.id
+        await service.void_transaksi(db,akun=a,trx=t,alasan='Batal aman')
+        assert t.status_transaksi=='VOID'
+        assert await db.scalar(text('SELECT penerimaan_tiket_id FROM retur_supplier'))==tid

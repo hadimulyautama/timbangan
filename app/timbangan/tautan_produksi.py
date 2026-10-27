@@ -77,6 +77,8 @@ async def pastikan_retur_supplier(db: AsyncSession, trx, *, tindakan: str,
     menautkan; kunci yang sama menutup celah penghapusan/pergantian identitas
     bersamaan dengan penautan. Koreksi bobot dan pembatalan tidak memanggil
     penjaga khusus pengajuan ini karena tidak memutus pointer/identitasnya.
+    Hapus juga menjaga tiket penerimaan asal, termasuk pengajuan dibatalkan;
+    sumber beras/hasil samping tidak selalu terjaring pembaca batch generik.
     """
     if not getattr(trx, 'id', None) or not await db.run_sync(
         lambda sesi: inspect(sesi.connection()).has_table('retur_supplier')
@@ -84,8 +86,9 @@ async def pastikan_retur_supplier(db: AsyncSession, trx, *, tindakan: str,
         return
     await db.refresh(trx, with_for_update=True)
     tertaut = (await db.execute(text('''
-        SELECT 1 FROM retur_supplier WHERE timbangan_transaksi_id = :tid
-          AND (:riwayat OR status <> 'dibatalkan')
+        SELECT 1 FROM retur_supplier
+        WHERE (timbangan_transaksi_id = :tid AND (:riwayat OR status <> 'dibatalkan'))
+           OR (:riwayat AND penerimaan_tiket_id = :tid)
     '''), {'tid': trx.id, 'riwayat': termasuk_riwayat})).scalars().all()
     if tertaut:
         from app.timbangan.service import LayananError
