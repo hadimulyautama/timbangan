@@ -215,7 +215,10 @@ async def rincian(
         return redirect("/transaksi" if akun.is_admin else "/", err=str(e))
 
     aturan = await service.aturan_untuk(db, b.trx.jenis_kode)
-    boleh_ubah, sebab = service.boleh_mengubah(b.trx, akun)
+    # Tombol harus memakai jendela yang sama dengan GET/POST koreksi.
+    # Nilai dari database mengalahkan bawaan environment.
+    nilai = await service.setelan.semua(db)
+    boleh_ubah, sebab = service.boleh_mengubah(b.trx, akun, nilai["jam_kunci_otomatis"])
     cetak = list((await db.execute(
         select(TimbanganCetak)
         .where(TimbanganCetak.transaksi_id == b.trx.id)
