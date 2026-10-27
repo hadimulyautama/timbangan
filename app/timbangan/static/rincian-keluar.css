@@ -56,3 +56,7 @@ body.padiflow-ui .bingkai.dk-bingkai {max-width:1320px;width:100%;min-width:0}
 @media print {.dk [data-dk-panel][hidden] {display:grid!important}.dk-tabs {display:none}.dk-kolom {display:block}}
 
 @media(max-width:359px) {.dk-aksi {display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.dk-aksi>a:first-child {grid-column:1/-1}}
+
+/* Retur membedakan hasil jembatan dan pencocokan stok PadiFlow. */
+.dr-pendamping {display:grid;gap:16px;min-width:0}
+[data-detail-retur] [data-status-produksi^="diterima"] {border-left-color:var(--aman,#247944)!important}

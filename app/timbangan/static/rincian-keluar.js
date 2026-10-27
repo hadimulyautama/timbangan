@@ -1,7 +1,7 @@
 /* Tab hanya mengatur visibilitas; tidak mengambil atau mengirim transaksi. */
 (() => {
   'use strict';
-  const akar = document.querySelector('[data-detail-keluar]');
+  const akar = document.querySelector('[data-detail-keluar], [data-detail-retur]');
   if (!akar || akar.dataset.siap) return;
   akar.dataset.siap = '1';
   const tabs = [...akar.querySelectorAll('[data-dk-tab]')];
@@ -10,7 +10,7 @@
   tabs.forEach(t => {t.setAttribute('role','tab');t.setAttribute('aria-controls','dk-'+t.dataset.dkTab);});
   panels.forEach(p => p.setAttribute('role','tabpanel'));
   function tampil(nama, simpan=false) {
-    if (!tabs.some(t => t.dataset.dkTab === nama)) nama = 'muatan';
+    if (!tabs.some(t => t.dataset.dkTab === nama)) nama = tabs[0].dataset.dkTab;
     tabs.forEach(t => {const aktif=t.dataset.dkTab===nama;t.setAttribute('aria-selected',String(aktif));t.tabIndex=aktif?0:-1;});
     panels.forEach(p => {p.hidden=p.dataset.dkPanel!==nama;});
     if (simpan) {

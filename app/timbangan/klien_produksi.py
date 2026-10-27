@@ -31,6 +31,10 @@ class ProduksiTakTersedia(Exception):
     """Service produksi belum dikonfigurasi / tak bisa dihubungi."""
 
 
+class ProduksiDilarang(ProduksiTakTersedia):
+    """Izin layanan/akun ditolak; tidak ditampilkan sebagai rincian kosong."""
+
+
 def terkonfigurasi() -> bool:
     return bool(settings.produksi_api_url and settings.produksi_api_token)
 
@@ -58,7 +62,9 @@ async def _minta(metode: str, path: str, *, operator_akun_id: int | None = None,
             except (ValueError, AttributeError):
                 detail = None
             raise ProduksiTakTersedia(str(detail or "Data pengiriman belum cocok.")) from e
-        if kode in (403, 404):
+        if kode == 403:
+            raise ProduksiDilarang('Akses rincian PadiFlow ditolak. Periksa izin akun tertaut dan sambungan layanan.') from e
+        if kode == 404:
             raise ProduksiTakTersedia(
                 "Sistem produksi menolak permintaan (token/API internal belum aktif)."
             ) from e
@@ -103,3 +109,9 @@ async def selesaikan_pengiriman(tiket_id: int, operator_akun_id: int, *, sidik_s
 async def muatan_retur(tiket_id: int) -> dict:
     """Jumlah karung dan tara per kemasan yang dicatat saat bongkar di Produksi."""
     return await _minta("GET", f"/internal/retur/tiket/{int(tiket_id)}/muatan")
+
+
+async def detail_retur(tiket_id: int, operator_akun_id: int) -> dict:
+    """Status/rincian baca saja, bukan pemicu pemeriksaan atau penerimaan."""
+    return await _minta('GET', f'/internal/retur/tiket/{int(tiket_id)}/detail',
+                        operator_akun_id=operator_akun_id)
