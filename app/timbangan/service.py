@@ -793,13 +793,14 @@ async def tara_berlaku(
 async def tara_disarankan(
     db: AsyncSession, *, supplier_id: int | None, aturan: logic.AturanJenis
 ) -> tuple[float, TimbanganTaraStandar | None]:
-    """Tara per karung yang diusulkan ke layar, beserta asalnya."""
-    if aturan.sumber_tara == logic.TARA_SAMPLING:
-        baris = await tara_berlaku(
-            db, supplier_id=supplier_id, jenis_kode=aturan.kode
-        )
-        if baris is not None:
-            return float(baris.tara_per_karung_kg), baris
+    """Tara umum dari aturan komoditas, tidak bergantung pihak/sampling.
+
+    Parameter pihak dan pasangan hasil dipertahankan untuk pemanggil lama.
+    Nilai di transaksi berjalan/historis tidak dipilih ulang oleh helper ini;
+    pembacanya menggunakan muatan dan snapshot yang sudah tersimpan.
+    Kode sumber SAMPLING lama tetap dibaca oleh tara_default sebagai nilai
+    bawaan komoditas. Tidak ada master atau baris historis yang dimigrasikan.
+    """
     return aturan.tara_default(), None
 
 
@@ -814,44 +815,11 @@ async def simpan_tara_standar(
     jenis_karung: str | None = None,
     alasan: str | None = None,
 ) -> TimbanganTaraStandar:
-    """Catat sampling baru. Yang lama DIGANTI, tidak pernah ditimpa."""
-    if jumlah_sampel <= 0:
-        raise LayananError("Jumlah karung sampel harus lebih dari 0.")
-    if total_berat_kg <= 0:
-        raise LayananError("Total berat sampel harus lebih dari 0.")
-
-    aturan = await aturan_untuk(db, jenis_kode)
-    hari = sekarang().date()
-
-    lama = await tara_berlaku(db, supplier_id=supplier_id, jenis_kode=jenis_kode)
-    if lama is not None and lama.supplier_id == supplier_id:
-        lama.status = "DIGANTI"
-        lama.berlaku_sampai = hari
-
-    baris = TimbanganTaraStandar(
-        supplier_id=supplier_id,
-        jenis_kode=jenis_kode,
-        jumlah_sampel=jumlah_sampel,
-        total_berat_kg=total_berat_kg,
-        tara_per_karung_kg=round(total_berat_kg / jumlah_sampel, 4),
-        jenis_karung=jenis_karung,
-        berlaku_mulai=hari,
-        berlaku_sampai=hari + timedelta(days=aturan.masa_berlaku_tara_hari),
-        alasan=alasan,
-        dibuat_oleh_id=akun.id,
+    """Kontrak lama ditutup tanpa menyentuh data sampling historis."""
+    raise LayananError(
+        "Pencatatan sampling dihentikan. Transaksi baru memakai tara umum "
+        "dari aturan komoditas atau master kemasan. Data historis tetap tersimpan."
     )
-    db.add(baris)
-    await db.flush()
-    await catat_audit(
-        db, akun=akun, aksi="TARA_STANDAR", entitas="tara_standar",
-        entitas_id=baris.id,
-        ringkasan=(
-            f"{jenis_kode}: {jumlah_sampel} karung / {total_berat_kg} kg "
-            f"= {baris.tara_per_karung_kg} kg per karung"
-        ),
-        sesudah={"tara_per_karung_kg": float(baris.tara_per_karung_kg)},
-    )
-    return baris
 
 
 async def tara_jatuh_tempo(db: AsyncSession, *, dalam_hari: int = 14) -> list:
@@ -1100,8 +1068,18 @@ async def _pasang_muatan(
     # Koleksi dimuat lebih dulu: di SQLAlchemy async, menyentuh relasi yang
     # belum termuat memicu I/O di tempat yang tidak mengizinkannya.
     await db.refresh(trx, ["muatan"])
+    referensi_lama = {m.tara_standar_id for m in trx.muatan if m.tara_standar_id}
+    if any(m.tara_standar_id and m.tara_standar_id not in referensi_lama for m in muatan):
+        raise LayananError("Transaksi baru memakai tara umum; referensi sampling baru tidak dapat ditambahkan.")
     baris_baru = []
     for urut, m in enumerate(muatan, start=1):
+        asal = m.tara_standar_id
+        lama = trx.muatan[urut - 1] if urut <= len(trx.muatan) else None
+        # Pemanggil lama/PWA tidak selalu membawa FK. Jangan menghilangkan
+        # sumber historis bila jenis dan nilai tara baris yang sama tidak berubah.
+        if (asal is None and lama is not None and lama.jenis_kode == m.jenis_kode
+                and abs(float(lama.tara_per_karung_kg) - float(m.tara_per_karung_kg)) < 1e-9):
+            asal = lama.tara_standar_id
         baris_baru.append(TimbanganMuatan(
             urutan=urut,
             jenis_kode=m.jenis_kode,
@@ -1110,7 +1088,7 @@ async def _pasang_muatan(
             tara_per_karung_kg=(0 if trx.arah in (logic.RETUR_MASUK, logic.RETUR_KELUAR)
                                else float(m.tara_per_karung_kg or 0)),
             berat_acuan_kg=float(m.berat_acuan_kg or 0),
-            tara_standar_id=m.tara_standar_id,
+            tara_standar_id=asal,
             catatan=m.catatan,
             kualitas_id=m.kualitas_id,
             merek_produk_id=m.merek_produk_id,
@@ -2036,9 +2014,11 @@ async def simpan_timbang_pertama(
     trx.arah = data.arah
     trx.jenis_kode = data.jenis_kode
     trx.cara_timbang = data.cara_timbang
-    trx.aturan_snapshot = json.dumps(
-        aturan.__dict__, ensure_ascii=False, default=str
-    )
+    # Replay tiket terbuka tidak mengganti aturan tersimpan dengan master baru.
+    if baru or not trx.aturan_snapshot:
+        trx.aturan_snapshot = json.dumps(
+            aturan.__dict__, ensure_ascii=False, default=str
+        )
     # Barang masuk mengisi supplier_id, pengiriman mengisi pelanggan_id, dan
     # tidak pernah keduanya. `data.supplier_id` membawa id dari daftar yang
     # ditawarkan layar, dan layar hanya menawarkan satu daftar per arah.
@@ -2286,6 +2266,16 @@ async def hapus_penimbangan(
     return trx
 
 
+def muatan_partai_dengan_karung(trx: TimbanganTransaksi, jumlah_karung: float) -> list[InputMuatan]:
+    """Ubah jumlah saja: tara dan metadata historis tidak berasal dari input ini."""
+    muatan = [InputMuatan(**{f.name: getattr(m, f.name)
+                            for f in dataclasses.fields(InputMuatan)}) for m in trx.muatan]
+    if not muatan:
+        muatan = [InputMuatan(jenis_kode=trx.jenis_kode)]
+    muatan[0].jumlah_karung = jumlah_karung
+    return muatan
+
+
 async def selesaikan_partai(
     db: AsyncSession, *, akun: TimbanganAkun, kode: str, ip: str | None = None, waktu_operator: datetime | None = None, komit: bool = True,
     jumlah_karung: float | None = None,
@@ -2297,7 +2287,7 @@ async def selesaikan_partai(
     if not trx.penimbangan:
         raise LayananError("Belum ada satu pun penimbangan.")
 
-    muatan = ([InputMuatan(jenis_kode=trx.jenis_kode, jumlah_karung=jumlah_karung)]
+    muatan = (muatan_partai_dengan_karung(trx, jumlah_karung)
               if jumlah_karung is not None else trx.muatan)
     periksa_jumlah_karung(muatan, wajib=True)
     if jumlah_karung is not None:

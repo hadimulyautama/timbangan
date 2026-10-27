@@ -462,42 +462,27 @@ async def test_timbang_kedua_ditolak_setelah_tutup_paksa(db, petugas, supplier):
 
 # ─────────────────── Tara standar ───────────────────
 
-async def test_sampling_baru_mengganti_bukan_menimpa(db, admin2, supplier):
-    pertama = await service.simpan_tara_standar(
-        db, akun=admin2, supplier_id=supplier.id, jenis_kode="BERAS_PK",
-        jumlah_sampel=20, total_berat_kg=1.8,
-    )
-    assert pertama.tara_per_karung_kg == pytest.approx(0.09)
-
-    kedua = await service.simpan_tara_standar(
-        db, akun=admin2, supplier_id=supplier.id, jenis_kode="BERAS_PK",
-        jumlah_sampel=20, total_berat_kg=2.0, alasan="Ganti jenis karung",
-    )
+async def test_sampling_baru_ditolak_tanpa_menimpa_histori(db, admin2, supplier):
+    from test_tara_umum import histori
+    pertama = await histori(db, admin2, supplier.id)
+    with pytest.raises(service.LayananError, match="tara umum"):
+        await service.simpan_tara_standar(
+            db, akun=admin2, supplier_id=supplier.id, jenis_kode="BERAS_PK",
+            jumlah_sampel=20, total_berat_kg=2.0)
     await db.refresh(pertama)
-    assert pertama.status == "DIGANTI"
-    assert kedua.status == "BERLAKU"
-
-    berlaku = await service.tara_berlaku(
-        db, supplier_id=supplier.id, jenis_kode="BERAS_PK"
-    )
-    assert berlaku.id == kedua.id
+    assert pertama.status == "BERLAKU"
+    berlaku = await service.tara_berlaku(db, supplier_id=supplier.id, jenis_kode="BERAS_PK")
+    assert berlaku.id == pertama.id  # pembaca historis masih tersedia
 
 
-async def test_tara_khusus_pihak_menang_atas_tara_umum(db, admin2, supplier):
-    await service.simpan_tara_standar(
-        db, akun=admin2, supplier_id=None, jenis_kode="BERAS_PK",
-        jumlah_sampel=20, total_berat_kg=2.0,          # umum → 0,10
-    )
-    await service.simpan_tara_standar(
-        db, akun=admin2, supplier_id=supplier.id, jenis_kode="BERAS_PK",
-        jumlah_sampel=20, total_berat_kg=1.7,          # khusus → 0,085
-    )
+async def test_tara_umum_tidak_diganti_sampling_pihak(db, admin2, supplier):
+    from test_tara_umum import histori
+    await histori(db, admin2)
+    await histori(db, admin2, supplier.id, .07)
     aturan = await service.aturan_untuk(db, "BERAS_PK")
-    tara, asal = await service.tara_disarankan(
-        db, supplier_id=supplier.id, aturan=aturan
-    )
-    assert tara == pytest.approx(0.085)
-    assert asal is not None and asal.supplier_id == supplier.id
+    tara, asal = await service.tara_disarankan(db, supplier_id=supplier.id, aturan=aturan)
+    assert tara == aturan.tara_default()
+    assert asal is None
 
 
 async def test_tara_bawaan_dipakai_bila_belum_ada_sampling(db, supplier):

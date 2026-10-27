@@ -7,6 +7,7 @@ dan tidak ada layar tambahan yang tidak dipakai setiap hari.
 from __future__ import annotations
 
 from datetime import datetime
+from dataclasses import fields
 from zoneinfo import ZoneInfo
 
 import math
@@ -764,8 +765,8 @@ async def lanjut_partai(
         if aksi == "selesai":
             service.periksa_jumlah_karung([service.InputMuatan(jenis_kode=baris.trx.jenis_kode, jumlah_karung=_karung(jumlah_karung))], wajib=True)
         if aksi != "selesai" and jumlah_karung.strip():
-            await service._pasang_muatan(db, baris.trx, [service.InputMuatan(
-                jenis_kode=baris.trx.jenis_kode, jumlah_karung=_karung(jumlah_karung))])
+            await service._pasang_muatan(db, baris.trx,
+                service.muatan_partai_dengan_karung(baris.trx, _karung(jumlah_karung)))
             if not kiriman.aktif(request):
                 await db.commit()
         # Menutup tanpa menambah apa pun sah: barangnya sudah habis ditimbang
@@ -877,13 +878,13 @@ async def form_timbang_kedua(
         return redirect(f"/partai/{transaksi_id}")
 
     aturan = service.aturan_dari_snapshot(baris.trx) or await service.aturan_untuk(db, baris.trx.jenis_kode)
-    # Sarannya dihitung DI SINI, bukan di timbang pertama seperti dulu.
-    # Kolom karung sudah pindah ke layar ini, dan justru di sini sarannya
-    # lebih tajam: pihaknya sudah diketahui, sehingga sampling khusus pihak
-    # itu bisa dipakai — di layar pertama pihaknya belum dipilih.
-    tara, asal = await service.tara_disarankan(
-        db, supplier_id=baris.trx.supplier_id, aturan=aturan
-    )
+    # Nilai tersimpan, termasuk nol dan empat desimal, menang atas saran.
+    # Tiket lama tidak membaca sampling/master hari ini untuk mengganti tara.
+    tara, _ = await service.tara_disarankan(db, supplier_id=None, aturan=aturan)
+    asal_id = None
+    if baris.trx.muatan:
+        tara = float(baris.trx.muatan[0].tara_per_karung_kg)
+        asal_id = baris.trx.muatan[0].tara_standar_id
     integrasi_muatan = None
     integrasi_error = None
     if baris.trx.arah == logic.KELUAR:
@@ -895,11 +896,30 @@ async def form_timbang_kedua(
     return render(
         request, "timbang2.html",
         kunci=str(uuid4()), b=baris, aturan=aturan, sekarang=sekarang(),
-        tara=tara, asal_tara=asal,
+        tara=tara, asal_tara_id=asal_id,
         integrasi_muatan=integrasi_muatan, integrasi_error=integrasi_error,
         boleh_koreksi=service.boleh_mengubah(baris.trx, akun)[0],
         kembali=f"{PREFIX}/tiket",
     )
+
+
+def _muatan_form_kedua(trx, *, jumlah_karung, tara_per_karung_kg,
+                       berat_acuan_kg, nomor_acuan):
+    """Formulir mengedit baris pertama, menjaga metadata dan baris historis lain.
+
+    Salinan dipakai baik pratinjau maupun simpan. Tidak memutasi ORM saat
+    membaca pratinjau, tidak memilih sampling baru, dan tidak membuang FK lama.
+    """
+    muatan = [service.InputMuatan(**{f.name: getattr(m, f.name)
+                                   for f in fields(service.InputMuatan)}) for m in trx.muatan]
+    if not muatan:
+        muatan = [service.InputMuatan(jenis_kode=trx.jenis_kode)]
+    m = muatan[0]
+    m.jumlah_karung = _karung(jumlah_karung, m.jumlah_karung)
+    m.tara_per_karung_kg = _angka(tara_per_karung_kg, float(m.tara_per_karung_kg))
+    m.berat_acuan_kg = _angka(berat_acuan_kg, float(m.berat_acuan_kg))
+    m.nomor_acuan = nomor_acuan.strip() or m.nomor_acuan
+    return muatan
 
 
 @router.post("/tiket/{transaksi_id}/pratinjau")
@@ -947,13 +967,9 @@ async def pratinjau_timbang_kedua(
                 nomor_acuan=nomor_acuan.strip() or (lama.nomor_acuan if lama else None),
             )]
         elif jumlah_karung or berat_acuan_kg:
-            muatan = [logic.BarisMuatan(
-                jenis_kode=t.jenis_kode,
-                jumlah_karung=_karung(jumlah_karung, lama.jumlah_karung if lama else 0),
-                tara_per_karung_kg=_angka(tara_per_karung_kg, float(lama.tara_per_karung_kg) if lama else 0),
-                berat_acuan_kg=_angka(berat_acuan_kg, float(lama.berat_acuan_kg) if lama else 0),
-                nomor_acuan=nomor_acuan.strip() or (lama.nomor_acuan if lama else None),
-            )]
+            muatan = service._baris_logic(_muatan_form_kedua(
+                t, jumlah_karung=jumlah_karung, tara_per_karung_kg=tara_per_karung_kg,
+                berat_acuan_kg=berat_acuan_kg, nomor_acuan=nomor_acuan))
         service.periksa_jumlah_karung(muatan, wajib=True)
         bermuatan, kosong = service._bermuatan_dan_kosong(t.arah, float(t.timbang1_kg), kedua)
         hasil = logic.hitung(
@@ -1021,18 +1037,9 @@ async def simpan_timbang_kedua(
             nomor_acuan=nomor_acuan.strip() or (lama.nomor_acuan if lama else None),
         )]
     elif baris.trx.arah != logic.KELUAR and (jumlah_karung or berat_acuan_kg):
-        lama = baris.trx.muatan[0] if baris.trx.muatan else None
-        muatan = [service.InputMuatan(
-            jenis_kode=baris.trx.jenis_kode,
-            jumlah_karung=_karung(jumlah_karung, lama.jumlah_karung if lama else 0),
-            tara_per_karung_kg=_angka(
-                tara_per_karung_kg, float(lama.tara_per_karung_kg) if lama else 0
-            ),
-            berat_acuan_kg=_angka(
-                berat_acuan_kg, float(lama.berat_acuan_kg) if lama else 0
-            ),
-            nomor_acuan=(nomor_acuan.strip() or (lama.nomor_acuan if lama else None)),
-        )]
+        muatan = _muatan_form_kedua(
+            baris.trx, jumlah_karung=jumlah_karung, tara_per_karung_kg=tara_per_karung_kg,
+            berat_acuan_kg=berat_acuan_kg, nomor_acuan=nomor_acuan)
 
     try:
         trx = await service.simpan_timbang_kedua(

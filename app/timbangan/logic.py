@@ -203,7 +203,7 @@ class AturanJenis:
         return kode_komoditas_lama(self.kode)
 
     def tara_default(self) -> float:
-        """Tara yang dipakai bila tidak ada tara standar untuk pihak ini."""
+        """Tara umum komoditas; kode SAMPLING historis memakai nilai bawaan."""
         if self.sumber_tara == TARA_TETAP:
             return self.tara_tetap_kg
         if self.sumber_tara == TARA_SAMPLING:

@@ -116,12 +116,9 @@
                'Jumlah dari timbang pertama tetap terisi. Wajib lebih dari 0 sebelum selesai.',
                true, false, 'inputmode="numeric" enterkeyhint="next" data-jumlah-karung') }}
       {{ isian('tara_per_karung_kg', 'Tara per karung',
-               '%.3f'|format(m.tara_per_karung_kg)
-                 if m and m.tara_per_karung_kg
-                 else ('%.3f'|format(tara) if tara else ''),
-               'kg', 'text',
-               ('Dari sampling ' ~ (asal_tara.berlaku_mulai|tgl(true)))
-                 if asal_tara else 'Nilai bawaan aturan komoditas',
+               '%.4f'|format(tara), 'kg', 'text',
+               ('Nilai tersimpan · sampling historis #' ~ asal_tara_id) if asal_tara_id
+                 else ('Nilai tara tersimpan pada tiket' if m else 'Tara umum aturan komoditas'),
                false, false, 'inputmode="decimal" enterkeyhint="done" data-berat') }}
       {% endif %}
     </div>

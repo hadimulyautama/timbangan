@@ -21,7 +21,7 @@
   //
   // Platnya sudah dikenal sistem pada 69% penimbangan, tetapi sopirnya tetap
   // diketik ulang. Begitu platnya dikenali, namanya diisikan — TANPA tombol,
-  // karena tara per karung pun sudah terisi sendiri dari sampling dan itu
+  // karena tara per karung pun sudah terisi sendiri dari aturan komoditas dan itu
   // angka yang langsung memengaruhi hasil. Yang menjaga bukan menahan isian,
   // melainkan menyebut asalnya di bawah kolom.
   //

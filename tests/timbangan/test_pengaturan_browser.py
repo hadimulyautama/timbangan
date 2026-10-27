@@ -10,7 +10,7 @@ from test_rincian_transfer_browser import browser_uji,buka
 from test_pengaturan_kategori import produksi_terpisah
 from app import database
 from app.timbangan.models import TimbanganConfig,TimbanganTransaksi,TimbanganCetak
-OUT=Path('/Users/wahidnurhani/Developer/Hadi Mulya Systems/output/pengaturan-teraflow-20261027')
+OUT=Path(os.environ.get('UJI_PENGATURAN_OUT', '/tmp/uji-pengaturan-teraflow'))
 
 @pytest.mark.parametrize('width,theme,who',[(1440,'light','wahid'),(390,'dark','wahid'),(320,'light','budi'),(768,'dark','miftah')])
 async def test_semua_kategori_navigasi_keyboard_tampilan(klien,app_uji,alamat_ui,width,theme,who):
@@ -28,6 +28,7 @@ async def test_semua_kategori_navigasi_keyboard_tampilan(klien,app_uji,alamat_ui
             assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth'),url
             assert (await page.locator('.bawah__isi>a.aktif').inner_text()).strip()=='Pengaturan'
             assert await page.locator('.set-kembali').is_visible()
+            assert await page.locator('a[href="/timbangan/tara"],form[action="/timbangan/tara"]').count()==0
             await page.screenshot(path=str(OUT/f'{url.split("bagian=")[1]}-{width}-{theme}-{os.environ.get("UJI_BROWSER","chromium")}.png'),full_page=True)
             await page.locator('.set-kembali').press('Enter');await page.locator('.set-kategori').wait_for()
         await page.goto(alamat_ui+'/timbangan/pengaturan?bagian=operasional')

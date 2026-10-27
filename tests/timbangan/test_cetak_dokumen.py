@@ -1,5 +1,5 @@
 """Keluaran nyata dari fixture sintetis: panjang, privasi, ukuran, dan angka."""
-import io
+import io, os
 from copy import deepcopy
 from pathlib import Path
 from decimal import Decimal
@@ -9,7 +9,7 @@ from pypdf import PdfReader
 from test_epos import _trx,_aturan
 from test_pengiriman_gabungan import payload
 from app.timbangan import pdf,epos,pengiriman,bukti
-OUT=Path('/Users/wahidnurhani/Developer/Hadi Mulya Systems/output/pratinjau-cetak-20261027')
+OUT=Path(os.environ.get('UJI_CETAK_OUT','/tmp/uji-cetak-teraflow'))
 
 def data(panjang=False):
     p=payload()

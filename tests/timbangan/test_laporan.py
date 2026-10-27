@@ -28,8 +28,8 @@ async def test_rekap_lima_angka_dengan_retur_exclude_bebas_transfer_void(klien):
     for kode,nilai in [('jumlah','13'),('masuk',fmt.ton(1250)),('keluar',fmt.ton(800)),('batas','4'),('terbuka','6')]:
         assert re.search('data-ringkasan="'+kode+'"><strong>'+re.escape(str(nilai)),teks)
     assert set(daftar(teks))=={ids[0],ids[1],ids[3],ids[4]}
-    assert 'Pemeriksaan selesai' in teks and 'Sampling tara segera kedaluwarsa' in teks
-    assert '/tara' in teks and 'Perbarui sampling' in teks and 'Transfer internal' in teks
+    assert 'Pemeriksaan selesai' in teks and 'Sampling tara segera kedaluwarsa' not in teks
+    assert 'href="/timbangan/tara"' not in teks and 'Perbarui sampling' not in teks and 'Transfer internal' in teks
 
 async def test_tugas_semua_tanggal_urutan_backend_koreksi_normal(klien):
     ids,_=await seed(klien)
@@ -60,8 +60,8 @@ async def test_alias_periode_kembali_dan_tanggal_lama(klien):
     assert 'href="'+html.escape(back,quote=True)+'" aria-label="Kembali"' in detail.text
     r=await klien.get(PREFIX+'/laporan?dari=x');assert f'name="dari" value="{hari_ini()-timedelta(days=30)}"' in r.text
     r=await klien.get(PREFIX+'/laporan?dari=2099-12-31&sampai=2000-01-01');assert not daftar(konten(r))
-    # Sampling uses today, not an old/reversed recap period.
-    assert 'Sampling tara segera kedaluwarsa' in r.text
+    # Pengingat sampling dipensiunkan; rekap lama tetap dapat dibaca.
+    assert 'Sampling tara segera kedaluwarsa' not in r.text
 
 async def test_monitoring_backend_tanpa_penerapan_status_dan_get_tanpa_mutasi(klien):
     ids,s=await seed(klien)

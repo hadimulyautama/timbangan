@@ -59,10 +59,6 @@
       <p class="lp-muted">Sesuai periode rekap · status kontrol tetap tercatat meski pemeriksaannya selesai. Ditampilkan hingga 20 transaksi terbaru; seluruh hasil tersedia di Riwayat Timbang.</p>
       <div class="lp-list">{% for b in perlu_periksa %}{{ catatan(b) }}{% else %}<div class="lp-empty">Tidak ada selisih di luar batas pada periode ini.</div>{% endfor %}</div>
     </section>
-    {% if tara_jatuh_tempo %}<section class="lp-record"><h2>Sampling tara segera kedaluwarsa</h2>
-      {% for tara,nama in tara_jatuh_tempo %}<div class="lp-row"><span>{{ NAMA_JENIS.get(tara.jenis_kode,tara.jenis_kode) }} · {{ nama or 'umum' }}</span><b>sampai {{ tara.berlaku_sampai|tgl(true) }}</b></div>{% endfor %}
-      <a class="tbl halus" href="{{ PREFIX }}/tara">Perbarui sampling</a>
-    </section>{% endif %}
   {% elif tab == 'pemeriksaan' %}
     <div class="lp-section"><h2>Pemeriksaan terbuka</h2><p class="lp-muted">Semua tanggal · daftar ini tidak mengikuti periode rekap.</p>
       <p class="lp-muted">Mengoreksi angka tidak otomatis menutup lembar. Penutupan mencatat hasil penelusuran; status kontrol dan fakta selisih tetap tersimpan.</p>

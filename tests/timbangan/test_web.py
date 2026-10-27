@@ -229,15 +229,16 @@ async def test_alur_lengkap_masuk_sampai_hasil(klien):
     })
     assert r.status_code == 200
     assert "PERLU PEMERIKSAAN" in r.text
-    assert "10.000 kg" in r.text     # berat barang
-    assert "-48 kg" in r.text        # selisih
+    assert "10.000,00 kg" in r.text     # detail memakai dua desimal
+    assert (await trx_oleh_id(trx_id)).berat_barang_kg == 10000
+    assert "-48,00 kg" in r.text        # selisih
 
 
 async def test_angka_dengan_koma_maupun_titik_diterima(klien):
     """Petugas mengetik apa adanya; sistem yang menyesuaikan diri."""
     await login(klien)
     for berat, harapan in (("13.600", "13.600"), ("13600", "13.600"),
-                           ("13600,7", "13.601")):
+                           ("13600,7", "13.600,70")):
         form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
         r = await klien.post(f"{PREFIX}/timbang/GABAH_BASAH", data={
             "kunci": kode_dari(form), "berat_kg": berat,
@@ -464,7 +465,7 @@ async def test_tara_prasetel_bertahan_melintasi_dua_tahap(klien):
     """
     await login(klien)
     form = (await klien.get(f"{PREFIX}/timbang/GABAH_BASAH")).text
-    assert 'value="0.250"' in form          # disodorkan server apa adanya
+    assert 'value="0.2500"' in form          # disodorkan server apa adanya
 
     await klien.post(f"{PREFIX}/timbang/GABAH_BASAH", data={
         "kunci": kode_dari(form), "berat_kg": "13.600",
@@ -479,7 +480,7 @@ async def test_tara_prasetel_bertahan_melintasi_dua_tahap(klien):
     tiket = await klien.get(f"{PREFIX}/tiket")
     trx_id = int(re.search(r"/tiket/(\d+)", tiket.text).group(1))
     tahap2 = (await klien.get(f"{PREFIX}/tiket/{trx_id}")).text
-    assert 'value="0.250"' in tahap2
+    assert 'value="0.2500"' in tahap2
 
     r = await klien.post(f"{PREFIX}/tiket/{trx_id}", data={
         "berat_kg": "3570", "jumlah_karung": "120",
@@ -487,7 +488,8 @@ async def test_tara_prasetel_bertahan_melintasi_dua_tahap(klien):
         "nomor_acuan": "NOTA-01", "waktu": "", "catatan": "",
     })
     assert "Tara lebih besar" not in r.text
-    assert "10.000 kg" in r.text        # berat barang, tara 30 kg bukan 30.000
+    assert "10.000,00 kg" in r.text
+    assert (await trx_oleh_id(trx_id)).berat_barang_kg == 10000  # angka tersimpan juga diperiksa
 
 
 # ─────────────────── Halaman pengaturan ───────────────────
@@ -2155,15 +2157,17 @@ async def test_beranda_menawarkan_transfer_internal(klien):
 async def test_transfer_internal_timbang_bermuatan_lalu_kosong(klien):
     """Armada datang bermuatan dan ditimbang ulang setelah dibongkar —
     urutannya sama seperti barang masuk."""
+    from test_rincian_transfer import master
+    await master()
     await login(klien)
     form = (await klien.get(f"{PREFIX}/timbang/TRANSFER")).text
     assert "Berat truk bermuatan" in form
-    assert "Asal → tujuan" in form
+    assert 'name="transfer_asal"' in form and 'name="transfer_tujuan"' in form
 
     await klien.post(f"{PREFIX}/timbang/TRANSFER", data={
         "kunci": kode_dari(form), "berat_kg": "13600",
         "cara_timbang": "DUA_KALI", "supplier_id": "",
-        "pihak_nama": "Gudang 1 → Gudang 2", "nomor_polisi": "AD 7 CC",
+        "lintasan_format":"1", "transfer_asal":"101", "transfer_tujuan":"gudang:102", "nomor_polisi": "AD 7 CC",
         "nama_sopir": "Slamet", "jumlah_karung": "100", "tara_per_karung_kg": "",
         "berat_acuan_kg": "", "nomor_acuan": "", "tara_lain_kg": "0",
         "waktu": "", "catatan": "",
@@ -2186,7 +2190,7 @@ async def test_transfer_internal_timbang_bermuatan_lalu_kosong(klien):
     assert trx.berat_bermuatan_kg == 13600
     assert trx.berat_kosong_kg == 3600
     assert trx.netto_timbangan_kg == 10000
-    assert trx.pihak_nama == "Gudang 1 → Gudang 2"
+    assert trx.pihak_nama == "Gudang 1 uji → Tumpukan · Gudang 2 uji"
 
 
 async def test_transfer_internal_tanpa_dokumen_pembanding(klien):
@@ -2987,7 +2991,7 @@ async def test_catatan_menyebut_arah_pada_kolom_komoditas(klien, app_uji):
     ("GABAH_BASAH", "Supplier", "Pelanggan"),
     ("BERAS", "Pelanggan", "Supplier"),
     ("BEBAS", "Pemilik barang", "Supplier"),
-    ("TRANSFER", "Asal → tujuan", "Supplier"),
+    ("TRANSFER", "Asal", "Supplier"),
 ])
 async def test_lawan_transaksi_dinamai_menurut_arah(klien, jenis, sebutan, bukan):
     """Satu kolom data, empat nama. Memakai "Supplier" untuk semuanya membuat
@@ -3320,8 +3324,7 @@ async def test_karung_boleh_baru_diisi_di_timbang_kedua(klien):
 
 
 async def test_tara_disarankan_juga_di_timbang_kedua(klien):
-    """Sarannya justru lebih tajam di sini: pihaknya sudah diketahui, jadi
-    sampling khusus pihak itu bisa dipakai."""
+    """Nilai tersimpan nol tidak diganti saran baru berdasarkan pihak."""
     await login(klien)
     form = (await klien.get(f"{PREFIX}/timbang/BERAS_PK")).text
     await klien.post(f"{PREFIX}/timbang/BERAS_PK", data={
@@ -3335,8 +3338,8 @@ async def test_tara_disarankan_juga_di_timbang_kedua(klien):
     tiket = await klien.get(f"{PREFIX}/tiket")
     trx_id = int(re.search(r"/tiket/(\d+)", tiket.text).group(1))
     form2 = (await klien.get(f"{PREFIX}/tiket/{trx_id}")).text
-    assert 'value="0.100"' in form2          # bawaan aturan Beras PK
-    assert "aturan komoditas" in form2
+    assert 'value="0.0000"' in form2          # nol yang tersimpan tetap nol
+    assert "Nilai tara tersimpan" in form2
 
 
 # ─────────────── Istilah Ringkasan: fakta, bukan tugas ───────────────

@@ -1,6 +1,11 @@
 <div class="kartu"><h2 class="kartu__judul">Aturan & referensi</h2>
 {{ pintu('/aturan', 'Aturan komoditas', jumlah.komoditas|string + ' komoditas aktif · arah, tara, batas, dan kerahasiaan', 'Lihat saja') }}
-{% if akun.is_admin %}{{ pintu('/tara', 'Tara standar', jumlah.tara|string + ' sampling berlaku · per pihak dan komoditas', 'Admin ke atas') }}{% endif %}
+<h3>Tara umum <span class="lencana lencana--netral">Lihat saja</span></h3>
+<p class="bantu">Transaksi baru memakai tara tetap atau nilai bawaan aturan komoditas, tanpa membedakan pihak.
+Pengiriman mengikuti tara setiap kemasan pada muatan PadiFlow. Satuan tara adalah kilogram per karung.
+Retur tetap tanpa potongan tara; tara manual transfer dan jasa timbang mengikuti aturan yang berlaku.</p>
+<p class="bantu">Nilai dan sumber tara yang sudah tersimpan pada tiket berjalan maupun historis tetap dipertahankan.
+Perubahan master berlaku untuk rincian baru, tanpa menghitung ulang tiket lama.</p>
 </div>
   {% if akun.is_admin %}
   <div class="kartu" id="tara-kemasan">
@@ -33,21 +38,20 @@
   <details class="kartu">
     <summary>Arti informasi pada aturan komoditas</summary>
     <div class="bantu" style="margin-bottom:10px">
-      Sebelas hal berikut disetel per komoditas dan disalin ke tiap transaksi
+      Informasi berikut disetel per komoditas dan disalin ke tiap transaksi
       saat disimpan — merevisinya tidak pernah mengubah status transaksi lama.
     </div>
     {% for nama, arti in [
         ('Arah barang', 'Masuk, keluar, atau bebas'),
         ('Pembanding', 'Nota supplier, surat jalan, atau tanpa pembanding'),
-        ('Sumber tara', 'Tetap, hasil sampling, atau diisi manual'),
+        ('Sumber tara', 'Tara umum komoditas, master kemasan, atau manual sesuai alur'),
         ('Tara tetap', 'Berat satu karung kosong, bila sudah pasti'),
-        ('Tara bawaan', 'Dipakai sampai ada sampling yang berlaku'),
+        ('Tara umum bawaan', 'Nilai bawaan komoditas, sama untuk semua pihak'),
         ('Jenis batas', 'Per ton, per karung, tetap, atau tanpa batas'),
         ('Nilai batas', 'Angka batas kewajaran selisih'),
         ('Arah batas', 'Simetris, kurang saja, atau tidak boleh kurang'),
         ('Batas investigasi', 'Ambang kedua yang lebih serius'),
-        ('Kerahasiaan hasil', 'Selisih dicetak untuk pengirim atau tidak'),
-        ('Masa berlaku sampling tara', 'Umur satu hasil sampling, dalam hari') ] %}
+        ('Kerahasiaan hasil', 'Selisih dicetak untuk pengirim atau tidak') ] %}
       <div class="baris">
         <span>{{ nama }}</span>
         <b style="font-family:var(--teks);font-size:13px;color:var(--tinta-4);

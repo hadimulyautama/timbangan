@@ -1,4 +1,4 @@
-"""Rute master: tara standar, aturan komoditas, dan akun.
+"""Rute master: tara umum, aturan komoditas, dan akun.
 
 Aturan komoditas hanya dapat dilihat di sini, tidak diubah lewat layar. Mengubah
 ambang berarti mengubah cara perusahaan menilai kejujuran timbangan — itu
@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, Request, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,7 +21,6 @@ from app.timbangan.db import get_db, hari_ini
 from app.timbangan.models import (
     TimbanganAkun,
     TimbanganJenis,
-    TimbanganTaraStandar,
 )
 from app.timbangan.routes.pos import _angka
 from app.timbangan.security import (
@@ -132,7 +131,7 @@ async def _status_kledo() -> dict:
 KATEGORI = (
     ("akun", "Akun saya", "Profil, sandi, dan informasi akun", '<circle cx="12" cy="8" r="4"/><path d="M4 22v-3a8 8 0 0 1 16 0v3"/>'),
     ("printer", "Pos & printer", "Alamat printer, pemeriksaan, dan uji cetak", '<path d="M6 8V3h12v5M6 17H3V8h18v9h-3M6 14h12v8H6z"/>'),
-    ("aturan", "Aturan timbang & tara", "Aturan komoditas, tara standar, dan tara kemasan", '<path d="M12 3v18M7 21h10M3 7h18M5 7l-4 8h8zM19 7l-4 8h8z"/>'),
+    ("aturan", "Aturan timbang & tara umum", "Aturan komoditas, tara umum, dan master kemasan", '<path d="M12 3v18M7 21h10M3 7h18M5 7l-4 8h8zM19 7l-4 8h8z"/>'),
     ("pihak", "Pihak & integrasi", "Pemantauan pihak dan pembaruan kontak Kledo", '<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="12" cy="9" r="3"/><path d="M7 19a5 5 0 0 1 10 0"/>'),
     ("pengguna", "Pengguna & akses", "Pengguna, peran, kode perangkat, dan jejak audit", '<circle cx="9" cy="8" r="3"/><path d="M2 21v-3a7 7 0 0 1 14 0v3M17 5a3 3 0 0 1 0 6M18 14a5 5 0 0 1 4 5v2"/>'),
     ("sistem", "Sistem & operasional", "Batas alat, identitas bukti, keamanan, dan versi", '<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="10" cy="18" r="2"/>'),
@@ -167,8 +166,6 @@ async def pengaturan(
     jumlah = {}
     if bagian == "aturan":
         jumlah["komoditas"] = await hitung(TimbanganJenis, TimbanganJenis.status == "aktif")
-        if akun.is_admin:
-            jumlah["tara"] = await hitung(TimbanganTaraStandar, TimbanganTaraStandar.status == "BERLAKU")
     elif bagian == "pengguna":
         jumlah["akun"] = await hitung(TimbanganAkun, TimbanganAkun.status == "aktif")
     elif bagian == "pihak":
@@ -267,50 +264,21 @@ async def daftar_tara(
     akun: TimbanganAkun = Depends(butuh_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    baris = list((await db.execute(
-        select(TimbanganTaraStandar)
-        .order_by(TimbanganTaraStandar.status, TimbanganTaraStandar.id.desc())
-    )).scalars())
-    return render(
-        request, "tara.html",
-        baris=baris,
-        supplier=await service.daftar_supplier(db),
-        jenis=await service.daftar_jenis(db),
-        nama_pihak={s.id: s.nama_supplier
-                    for s in await service.daftar_supplier(db)},
-        kembali=f"{PREFIX}/pengaturan?bagian=aturan",
-    )
+    # Bookmark lama mempertahankan gerbang Admin; tidak membuka formulir lagi.
+    return redirect("/pengaturan?bagian=aturan")
 
 
 @router.post("/tara")
 async def simpan_tara(
     request: Request,
-    jenis_kode: str = Form(...),
-    jumlah_sampel: str = Form(...),
-    total_berat_kg: str = Form(...),
-    supplier_id: str = Form(""),
-    jenis_karung: str = Form(""),
-    alasan: str = Form(""),
     akun: TimbanganAkun = Depends(butuh_admin),
-    db: AsyncSession = Depends(get_db),
 ):
-    try:
-        baris = await service.simpan_tara_standar(
-            db, akun=akun,
-            supplier_id=int(supplier_id) if supplier_id.isdigit() else None,
-            jenis_kode=jenis_kode,
-            jumlah_sampel=int(_angka(jumlah_sampel)),
-            total_berat_kg=_angka(total_berat_kg),
-            jenis_karung=jenis_karung.strip() or None,
-            alasan=alasan.strip() or None,
-        )
-        await db.commit()
-    except service.LayananError as e:
-        return redirect("/tara", err=str(e))
-    return redirect(
-        "/tara",
-        ok=f"Tara baru {baris.tara_per_karung_kg:.3f} kg/karung berlaku mulai hari ini.",
-    )
+    # Bahkan payload kosong/lama tidak boleh membuat sampling. Penjaga peran
+    # tetap dijalankan sebelum jawaban 410; pembacaan histori tidak diubah.
+    raise HTTPException(status_code=410, detail=(
+        "Pencatatan sampling dihentikan. Gunakan tara umum pada Pengaturan "
+        "→ Aturan timbang & tara umum. Data historis tetap tersimpan."
+    ))
 
 
 @router.get("/audit")

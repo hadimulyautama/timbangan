@@ -67,7 +67,6 @@ async def _halaman(request, db, tab_awal="rekap"):
                 status_kontrol=sorted(logic.STATUS_WAJIB_PERIKSA)),
             batas=20,
         )
-        ctx["tara_jatuh_tempo"] = await service.tara_jatuh_tempo(db)
     elif tab == "pemantauan":
         ctx["baris"] = await service.monitoring_supplier(db, f)
     # Status lembar dipisahkan dari status kontrol; tidak disimpulkan dari

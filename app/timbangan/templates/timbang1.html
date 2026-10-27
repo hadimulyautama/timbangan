@@ -195,7 +195,7 @@
      petugas mengetik. Semula ini sebuah tombol "Pakai" yang harus ditekan,
      dengan alasan sopir adalah saksi sehingga namanya jangan menyelinap
      masuk. Alasan itu tidak konsisten dengan aplikasi ini sendiri: tara per
-     karung sudah terisi otomatis dari sampling tanpa tombol, dan itu angka
+     karung sudah terisi otomatis dari aturan komoditas tanpa tombol, dan itu angka
      yang langsung memengaruhi hasil timbang. Yang penting bukan menahan
      isian, melainkan menyebut ASALNYA — itulah guna keterangan di bawah. #}
   {{ pilihan_sopir(sopir_pilihan, '', true, 'data-sopir-isian') }}
@@ -230,9 +230,8 @@
                  'Boleh dikosongkan dan dihitung saat bongkar. Wajib diisi sebelum selesai.',
                  false, false, 'inputmode="numeric" enterkeyhint="next" data-jumlah-karung') }}
         {{ isian('tara_per_karung_kg', 'Tara per karung',
-                 '%.3f'|format(tara) if tara else '', 'kg', 'text',
-                 'Dari sampling ' ~ (asal_tara.berlaku_mulai|tgl(true))
-                   if asal_tara else 'Nilai bawaan aturan komoditas',
+                 '%.4f'|format(tara) if tara else '', 'kg', 'text',
+                 'Nilai bawaan aturan komoditas',
                  false, false, 'inputmode="decimal" enterkeyhint="done" data-berat') }}
       </div>
     </div>
@@ -290,9 +289,8 @@
                  'Boleh dikosongkan dan dihitung saat bongkar. Wajib diisi sebelum selesai.',
                  false, false, 'inputmode="numeric" enterkeyhint="next" data-jumlah-karung') }}
         {{ isian('tara_per_karung_kg', 'Tara per karung',
-                 '%.3f'|format(tara) if tara else '', 'kg', 'text',
-                 'Dari sampling ' ~ (asal_tara.berlaku_mulai|tgl(true))
-                   if asal_tara else 'Nilai bawaan aturan komoditas',
+                 '%.4f'|format(tara) if tara else '', 'kg', 'text',
+                 'Nilai bawaan aturan komoditas',
                  false, false, 'inputmode="decimal" enterkeyhint="done" data-berat') }}
       </div>
     </div>
