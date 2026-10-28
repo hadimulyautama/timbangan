@@ -40,8 +40,8 @@ jobs:
       - name: Pasang interpreter terpisah
         run: |
           python -m pip install -r timbangan/requirements.txt -r timbangan/requirements-dev.txt
-          # Modul tes tertentu mengimpor Playwright saat koleksi; binary browser
-          # hanya diperlukan job browser dan tidak menahan dua job lainnya.
+          # Suite layanan juga menjalankan uji responsif tara kemasan;
+          # paket Playwright dipasang pada semua job untuk koleksi tes.
           python -m pip install playwright==1.62.0
       - name: Pasang interpreter migrasi PadiFlow
         if: matrix.suite == 'postgres'
@@ -49,7 +49,7 @@ jobs:
           python -m venv produksi/.venv
           produksi/.venv/bin/pip install -r produksi/requirements.txt
       - name: Pasang Chromium
-        if: matrix.suite == 'browser'
+        if: matrix.suite == 'browser' || matrix.suite == 'layanan'
         run: python -m playwright install --with-deps chromium
       - name: Bangun skema kedua rantai tanpa melompati migrasi
         if: matrix.suite == 'postgres'
