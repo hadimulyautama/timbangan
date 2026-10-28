@@ -10,7 +10,7 @@ from reportlab.lib.units import mm
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib import colors
 from reportlab.pdfgen.canvas import Canvas
-from reportlab.platypus import SimpleDocTemplate,Paragraph,Spacer,Table,TableStyle,KeepTogether,HRFlowable
+from reportlab.platypus import BaseDocTemplate,Frame,PageTemplate,Paragraph,Spacer,Table,TableStyle,KeepTogether,HRFlowable
 from app.timbangan import format as fmt
 from app.timbangan.bukti import baris_angka
 from app.timbangan.pengiriman import rincian_bukti
@@ -39,14 +39,23 @@ def _bukti(*,trx,aturan,pihak,petugas,muatan,perusahaan,alamat,telepon,arah_masu
     tanda=_tanda_ulang(trx,cetakan_ke)
     if tanda:story.append(p(tanda,tengah))
     story += [Spacer(1,2*mm),HRFlowable(width='100%',thickness=.8),Spacer(1,2*mm)]
-    def tabel(rows,rasio=.56):
-        t=Table([[p(a),p(b)] for a,b in rows],colWidths=[isi*rasio,isi*(1-rasio)],hAlign='LEFT')
-        t.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),('LEFTPADDING',(0,0),(-1,-1),0),('RIGHTPADDING',(0,0),(0,-1),5),('RIGHTPADDING',(1,0),(1,-1),0),('BOTTOMPADDING',(0,0),(-1,-1),4),('TOPPADDING',(0,0),(-1,-1),2)]))
+    def tabel_kolom(rows,lebar_kolom):
+        t=Table([[p(v) for v in row] for row in rows],colWidths=lebar_kolom,hAlign='LEFT')
+        t.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),('LEFTPADDING',(0,0),(-1,-1),0),('RIGHTPADDING',(0,0),(-1,-1),5),('RIGHTPADDING',(-1,0),(-1,-1),0),('BOTTOMPADDING',(0,0),(-1,-1),2 if ncr else 4),('TOPPADDING',(0,0),(-1,-1),1 if ncr else 2)]))
         return t
+    def tabel(rows,rasio=.56):
+        return tabel_kolom(rows,[isi*rasio,isi*(1-rasio)])
     ident=[('Nomor tiket',trx.kode),('Tanggal',trx.tanggal.strftime('%d-%m-%Y')),('Pengirim' if arah_masuk else 'Pihak',pihak),('Kegiatan',aturan.nama)]
     if not getattr(trx,'partai',False):ident += [('Nomor polisi',trx.nomor_polisi or '-'),('Sopir',trx.nama_sopir or '-')]
     if muatan and muatan[0].nomor_acuan:ident.append(('Nota' if arah_masuk else 'Surat jalan',muatan[0].nomor_acuan))
-    story.append(tabel(ident,.40))
+    if ncr:
+        # Setengah NCR lebar: dua pasangan identitas per baris memberi ruang
+        # untuk isi dan tanda tangan tanpa mengecilkan huruf atau kertas.
+        pasangan=[[*ident[i],*(ident[i+1] if i+1<len(ident) else ('',''))]
+                  for i in range(0,len(ident),2)]
+        story.append(tabel_kolom(pasangan,[isi*r for r in (.16,.34,.14,.36)]))
+    else:
+        story.append(tabel(ident,.40))
     story += [Spacer(1,2*mm),HRFlowable(width='100%',thickness=.5)]
     rows=[(b.label+(f' · {b.jam}' if b.jam else ''),b.nilai) for b in baris_angka(trx,arah_masuk)]
     story.append(tabel(rows))
@@ -67,19 +76,18 @@ def _bukti(*,trx,aturan,pihak,petugas,muatan,perusahaan,alamat,telepon,arah_masu
                [Spacer(1,jarak),Spacer(1,jarak)],
                [p(petugas,tengah),p(saksi,tengah)]],colWidths=[isi/2,isi/2])
     sig.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),('TOPPADDING',(0,0),(-1,-1),2),('BOTTOMPADDING',(0,0),(-1,-1),2),('LINEABOVE',(0,2),(-1,2),.5,colors.black),('LEFTPADDING',(0,0),(-1,-1),5),('RIGHTPADDING',(0,0),(-1,-1),5)]))
-    story.append(KeepTogether([Spacer(1,5*mm),sig,Spacer(1,3*mm),p('Ditandatangani kedua pihak sebagai bukti',tengah)]))
+    blok_ttd=[Spacer(1,5*mm),sig,Spacer(1,3*mm),p('Ditandatangani kedua pihak sebagai bukti',tengah)]
+    ttd=KeepTogether(blok_ttd)
+    story.append(ttd)
     # Ukur seluruh flowable; tinggi struk dinamis. Dokumen sangat panjang
     # berpaginasi dengan ukuran baca tetap dan blok tanda tangan tak terbelah.
     tinggi=NCR_T
     if not ncr:
-        h=0
-        for f in story:
-            if isinstance(f,KeepTogether):
-                h+=sum(x.wrap(isi,100000)[1] for x in f._content)
-            else:h+=f.wrap(isi,100000)[1]
-        tinggi=min(500*mm,max(100*mm,h+2*margin+14))
+        ukur=[bagian for f in story for bagian in (blok_ttd if f is ttd else [f])]
+        h=sum(f.wrap(isi,100000)[1]+f.getSpaceBefore()+f.getSpaceAfter() for f in ukur)
+        tinggi=min(500*mm,max(100*mm,h+2*margin+2))
     buf=io.BytesIO()
-    doc=SimpleDocTemplate(buf,pagesize=(lebar,tinggi),leftMargin=margin,rightMargin=margin,topMargin=margin,bottomMargin=margin,title=trx.kode,author=perusahaan,pageCompression=1,invariant=1)
+    doc=BaseDocTemplate(buf,pagesize=(lebar,tinggi),leftMargin=margin,rightMargin=margin,topMargin=margin,bottomMargin=margin,title=trx.kode,author=perusahaan,pageCompression=1,invariant=1)
     def halaman(canvas, dok):
         if not ncr:return
         canvas.saveState()
@@ -89,7 +97,12 @@ def _bukti(*,trx,aturan,pihak,petugas,muatan,perusahaan,alamat,telepon,arah_masu
         if dok.page>1:
             canvas.drawString(margin,NCR_T-4*mm,f'Lampiran bukti timbang - {trx.kode} · revisi {int(getattr(trx,"jumlah_revisi",0) or 0)}')
         canvas.restoreState()
-    doc.build(story,canvasmaker=partial(Canvas,invariant=1),onFirstPage=halaman,onLaterPages=halaman)
+    # Frame bawaan menambah padding 6 pt di setiap sisi yang tidak ikut
+    # pengukuran wrap. Lebar/tinggi layout harus sama dengan yang diukur.
+    frame=Frame(margin,margin,isi,tinggi-2*margin,leftPadding=0,rightPadding=0,
+                topPadding=0,bottomPadding=0,id='bukti')
+    doc.addPageTemplates(PageTemplate(id='bukti',frames=[frame],onPage=halaman))
+    doc.build(story,canvasmaker=partial(Canvas,invariant=1))
     return buf.getvalue()
 
 def bukti_ncr(**kwargs):
