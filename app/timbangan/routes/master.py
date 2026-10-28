@@ -581,12 +581,14 @@ async def simpan_tara_kemasan(
     db: AsyncSession = Depends(get_db),
 ):
     from sqlalchemy.exc import DBAPIError
+    # Identitas baris hanya mengarahkan pesan PRG; izin dan penulisan tetap di layanan lama.
+    tujuan = f'/pengaturan?bagian=aturan&tara_id={tara_id}'
     try:
         nilai = await kemasan_tara.simpan(db, akun=akun, tara_id=tara_id,
             teks=tara_per_karung_kg, ip=request.client.host if request.client else None)
     except service.LayananError as exc:
-        return redirect('/pengaturan?bagian=aturan', err=str(exc))
+        return redirect(tujuan, err=str(exc))
     except DBAPIError:
         await db.rollback()
-        return redirect('/pengaturan?bagian=aturan', err='Master tara kemasan belum tersedia. Pastikan pembaruan Produksi sudah diterapkan.')
-    return redirect('/pengaturan?bagian=aturan', ok=f'Tara kemasan tersimpan: {fmt.angka(nilai,4)} kg per karung.')
+        return redirect(tujuan, err='Master tara kemasan belum tersedia. Pastikan pembaruan Produksi sudah diterapkan.')
+    return redirect(tujuan, ok=f'Tara kemasan tersimpan: {fmt.angka(nilai,4)} kg per karung.')

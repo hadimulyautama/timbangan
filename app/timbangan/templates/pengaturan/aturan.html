@@ -9,28 +9,39 @@ Perubahan master berlaku untuk rincian baru, tanpa menghitung ulang tiket lama.<
 </div>
   {% if akun.is_admin %}
   <div class="kartu" id="tara-kemasan">
-    <h2 class="kartu__judul">Tara kemasan</h2><span class="lencana lencana--netral">Master bersama PadiFlow</span>
-    <div class="bantu" style="margin-bottom:12px">
-      Master ini dipakai Produksi dan Timbangan untuk pengiriman. Perubahan berlaku untuk rincian baru;
-      rincian yang sudah disimpan dan tiket lama tetap memakai tara sebelumnya.
-      Satuan kilogram per karung: 0,07 kg berarti 70 gram.
-    </div>
+    <h2 class="kartu__judul">Tara kemasan</h2>
+    <p class="bantu set-tara__catatan">Dipakai bersama PadiFlow untuk pengiriman.</p>
+    <p class="bantu set-tara__catatan">Perubahan hanya berlaku untuk rincian baru.</p>
     {% if tara_kemasan is none %}
-      <div class="bantu">Master tara belum tersedia. Pastikan pembaruan Produksi sudah diterapkan.</div>
+      <p class="bantu">Master tara belum tersedia. Pastikan pembaruan Produksi sudah diterapkan.</p>
     {% else %}
       {% for t in tara_kemasan %}
       <form method="post" action="{{ PREFIX }}/pengaturan/tara-kemasan"
-            style="display:flex;align-items:end;gap:10px;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--garis)">
+            class="set-tara" id="kemasan-{{ t.id }}" data-set-tara>
         <input type="hidden" name="tara_id" value="{{ t.id }}">
-        <div style="flex:1;min-width:150px">{{ t.jenis }} · {{ t.ukuran_kg }} kg</div>
-        <label style="max-width:140px">Tara (kg/karung)
-          <input class="fld" name="tara_per_karung_kg" value="{{ '%g'|format(t.tara_per_karung_kg) }}"
-                 inputmode="decimal" required aria-label="Tara {{ t.jenis }} {{ t.ukuran_kg }} kg">
-        </label>
-        <button class="tbl" type="submit">Simpan</button>
+        <div class="set-tara__nama"><h3 id="nama-kemasan-{{ t.id }}">{{ t.jenis }}</h3><span>{{ t.ukuran_kg }} kg</span></div>
+        <div class="set-tara__kontrol">
+          <label for="tara-kemasan-{{ t.id }}">Tara (kg/karung)
+            <input class="fld" id="tara-kemasan-{{ t.id }}" name="tara_per_karung_kg"
+                   value="{{ t.tara_per_karung_kg }}" inputmode="decimal" required
+                   aria-label="Tara {{ t.jenis }} {{ t.ukuran_kg }} kg" aria-describedby="gram-kemasan-{{ t.id }}">
+          </label>
+          <button class="tbl" type="submit" aria-describedby="nama-kemasan-{{ t.id }}">Simpan</button>
+        </div>
+        <p class="bantu set-tara__gram" id="gram-kemasan-{{ t.id }}" data-set-gram aria-live="polite"></p>
+        {% if request.query_params.get('tara_id') == t.id|string %}
+          {% if pesan_err %}<p class="pesan pesan--err set-tara__pesan" role="alert">{{ pesan_err }}</p>
+          {% elif pesan_ok %}<p class="pesan pesan--ok set-tara__pesan" role="status">{{ pesan_ok }}</p>{% endif %}
+        {% endif %}
       </form>
-      {% endfor %}
+      {% else %}<p class="bantu">Belum ada jenis dan ukuran kemasan aktif.</p>{% endfor %}
     {% endif %}
+    <details class="set-tara__bantuan">
+      <summary>Tentang tara kemasan</summary>
+      <p class="bantu">Nilai disimpan dalam kilogram per karung. Padanan gram hanya membantu membaca nilai dan tidak mengubah nilai yang dikirim.</p>
+      <p class="bantu">Master ini dipakai bersama PadiFlow untuk pengiriman. Perubahan hanya berlaku untuk rincian baru; rincian yang sudah disimpan dan tiket lama tetap memakai tara sebelumnya.</p>
+      <p class="bantu">Perubahan master hanya dapat disimpan oleh Admin dan Super Admin.</p>
+    </details>
   </div>
   {% endif %}
 

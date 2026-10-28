@@ -22,7 +22,7 @@
     <div class="bantu" data-uji="baris-versi"
          style="text-align:center;margin-top:20px;font-family:var(--mono);font-size:11px">
       Versi {{ versi.versi }} · {{ versi.komit or 'commit ?' }} ·
-      migrasi {{ versi.revisi or '?' }}{% if versi.keadaan != 'selaras' %} (kode: {{ versi.head or '?' }}){% endif %}
+      migrasi {{ versi.revisi or '?' }}{% if akun.is_admin and versi.keadaan != 'selaras' %} (kode: {{ versi.head or '?' }}){% endif %}
     </div>
   {% endif %}
 

@@ -26,3 +26,21 @@ body:has([data-pengaturan]) main.isi {max-width:1100px}
 .set-halaman .tbl {white-space:normal;height:auto;min-height:44px}
 @media(min-width:1000px){body:has([data-pengaturan]) .isi{max-width:1100px}}
 @media(max-width:480px){.set-halaman .kartu{padding:16px}.set-halaman .set-kategori{padding:0}.set-kategori__baris{grid-template-columns:38px minmax(0,1fr) 12px;gap:12px;padding:18px 14px}.set-ikon{width:36px;height:40px}.set-kategori__baris strong{font-size:16px}.set-kategori__baris small{font-size:13px}.set-halaman .baris{flex-wrap:wrap}.set-halaman .baris b{text-align:left}.set-halaman form{flex-wrap:wrap}.set-halaman .baris>span{min-width:0}}
+
+/* Tara kemasan: tiap record tetap formulir sendiri. Grid khusus ini tidak
+ * mengubah formulir akun, parameter, ataupun transaksi. */
+.set-halaman .set-tara {padding:20px 0;border-bottom:1px solid var(--garis);scroll-margin-block:100px}
+.set-halaman .set-tara__catatan {margin:6px 0}
+.set-tara__nama {display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:12px}
+.set-tara__nama h3 {font-size:16px;margin:0;min-width:0;overflow-wrap:anywhere}
+.set-tara__nama>span {flex-shrink:0;font-size:13px;padding:3px 8px;border-radius:6px;background:var(--pd-soft);color:var(--tinta-4)}
+.set-tara__kontrol {display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:10px;max-width:480px}
+.set-tara__kontrol label {display:grid;gap:6px;margin:0;min-width:0;font-size:13px}
+.set-tara__kontrol .fld,.set-tara__kontrol .tbl {box-sizing:border-box;height:48px;min-height:48px;margin:0;font-size:16px}
+.set-tara__kontrol .fld {width:100%;min-width:0}
+.set-tara__kontrol .tbl {padding:0 16px;white-space:nowrap}
+.set-tara__kontrol .fld:focus-visible {outline:3px solid var(--aksi);outline-offset:2px}
+.set-halaman .set-tara__gram {min-height:22px;margin:6px 0 0;font-variant-numeric:tabular-nums}
+.set-tara__pesan {margin:8px 0 0}
+.set-halaman .set-tara__bantuan {margin-top:18px}
+@media(max-width:480px){.set-tara__nama h3{font-size:15px}.set-tara__kontrol{gap:8px}.set-tara__kontrol .tbl{padding-inline:12px}}

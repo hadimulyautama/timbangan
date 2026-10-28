@@ -785,6 +785,67 @@
     return e;
   }
 
+  // Respons ePOS harus berasal dari HTTP berhasil dan XML yang sah.
+  // Teks HTML atau XML terpotong dapat memuat success="true" tanpa ACK cetak.
+  function bacaJawabanPrinter(teks) {
+    var xml = new DOMParser().parseFromString(teks, 'text/xml');
+    if (xml.doctype || xml.getElementsByTagName('parsererror').length ||
+        xml.getElementsByTagNameNS('*', 'parsererror').length) {
+      throw new Error('Jawaban printer bukan XML ePOS yang sah.');
+    }
+    var akar = xml.documentElement;
+    var eposNS = 'http://www.epson-pos.com/schemas/2011/03/epos-print';
+    var jawaban = akar;
+    if (akar && akar.localName === 'Envelope' &&
+        (akar.namespaceURI === 'http://schemas.xmlsoap.org/soap/envelope/' ||
+         akar.namespaceURI === 'http://www.w3.org/2003/05/soap-envelope')) {
+      var tubuh = akar.getElementsByTagNameNS(akar.namespaceURI, 'Body');
+      if (tubuh.length !== 1 || tubuh[0].parentNode !== akar ||
+          tubuh[0].children.length !== 1) {
+        throw new Error('Amplop jawaban printer tidak sah.');
+      }
+      jawaban = tubuh[0].children[0];
+    }
+    if (!jawaban || jawaban.localName !== 'response' ||
+        (jawaban.namespaceURI && jawaban.namespaceURI !== eposNS) ||
+        jawaban.children.length ||
+        !/^(true|false|1|0)$/.test(jawaban.getAttribute('success') || '')) {
+      throw new Error('Jawaban printer bukan respons ePOS yang sah.');
+    }
+    return { berhasil: /^(true|1)$/.test(jawaban.getAttribute('success')),
+             kode: jawaban.getAttribute('code') || '' };
+  }
+
+  // Tenggat mencakup header DAN seluruh isi ACK. Putus koneksi setelah
+  // pengiriman tetap belum pasti: kertas mungkin sudah keluar, jangan retry.
+  function mintaPrinter(tujuan, perintah, batas, alamat) {
+    var henti = new AbortController();
+    var habis = false;
+    var jam = setTimeout(function () { habis = true; henti.abort(); }, batas);
+    return fetch(tujuan, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/xml; charset=utf-8' },
+      body: perintah,
+      signal: henti.signal
+    }).then(function (r) {
+      if (!r.ok) { throw new Error('HTTP printer ' + r.status + '.'); }
+      return r.text();
+    }).then(bacaJawabanPrinter).then(function (jawaban) {
+      clearTimeout(jam);
+      return jawaban;
+    }, function (err) {
+      clearTimeout(jam);
+      henti.abort();
+      var gagal = KirimGagal(habis
+        ? 'Printer tidak menjawab dalam ' + (batas / 1000) +
+          ' detik. Periksa izin jaringan lokal dan sambungan printer.'
+        : 'Hasil printer belum dapat dipastikan di ' + alamat + '. ' +
+          (err && err.message ? err.message : ''), true);
+      gagal.belumPasti = true;
+      throw gagal;
+    });
+  }
+
   /* Kirim satu perintah cetak. `sumber` adalah alamat di server ini yang
    * menyusun perintahnya — perangkat tidak pernah menyusun sendiri. */
   function cetakKePrinter(sumber, perintahSiap) {
@@ -793,53 +854,23 @@
       return Promise.reject(
         KirimGagal('Printer belum disetel di perangkat ini.', true));
     }
-
     var persiapan = perintahSiap != null ? Promise.resolve(perintahSiap) : fetch(sumber, { credentials: 'same-origin' })
       .then(function (r) {
         if (!r.ok) { throw new Error('Gagal menyiapkan struk (' + r.status + ').'); }
         return r.text();
       });
     return persiapan.then(function (perintah) {
-        var devid = document.body.dataset.printerDevid || 'local_printer';
-        var tujuan = alamat + '/cgi-bin/epos/service.cgi?devid=' +
-                     encodeURIComponent(devid) + '&timeout=10000';
-
-        // AbortController dipakai langsung, bukan AbortSignal.timeout: yang
-        // kedua belum ada di Safari lama, dan tablet gudang jarang diperbarui.
-        var henti = new AbortController();
-        var jam = setTimeout(function () { henti.abort(); }, TENGGAT_MS);
-
-        return fetch(tujuan, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/xml; charset=utf-8' },
-          body: perintah,
-          signal: henti.signal
-        }).then(function (r) {
-          clearTimeout(jam);
-          return r.text();
-        }, function (err) {
-          clearTimeout(jam);
-          // Baik permintaan yang ditolak maupun yang menggantung sampai batas
-          // waktu berujung di sini, dan keduanya bermuara pada hal yang sama:
-          // browser ini belum diizinkan menghubungi printer.
-          var gagal = KirimGagal(
-            err && err.name === 'AbortError'
-              ? 'Printer tidak menjawab dalam ' + (TENGGAT_MS / 1000) +
-                ' detik. Biasanya izin jaringan lokal belum diberikan, atau ' +
-                'perangkat ini ada di jaringan yang berbeda.'
-              : 'Perangkat ini belum bisa menghubungi printer di ' + alamat + '.',
-            true);
-          gagal.belumPasti = true;
-          throw gagal;
-        });
-      })
-      .then(function (jawaban) {
-        if (/success="true"/.test(jawaban)) { return true; }
-        var kode = (jawaban.match(/code="([^"]*)"/) || [])[1] || '';
-        var gagal = new Error(ARTI_GAGAL[kode] || ('Hasil printer belum dapat dipastikan' + (kode ? ' ('+kode+')' : '') + '.'));
-        gagal.belumPasti = !ARTI_GAGAL[kode];
-        throw gagal;
-      });
+      var devid = document.body.dataset.printerDevid || 'local_printer';
+      var tujuan = alamat + '/cgi-bin/epos/service.cgi?devid=' +
+                   encodeURIComponent(devid) + '&timeout=10000';
+      return mintaPrinter(tujuan, perintah, TENGGAT_MS, alamat);
+    }).then(function (jawaban) {
+      if (jawaban.berhasil) { return true; }
+      var kode = jawaban.kode;
+      var gagal = new Error(ARTI_GAGAL[kode] || ('Hasil printer belum dapat dipastikan' + (kode ? ' ('+kode+')' : '') + '.'));
+      gagal.belumPasti = !ARTI_GAGAL[kode];
+      throw gagal;
+    });
   }
 
   window.TeraFlowPrinter = { alamat: alamatPrinter, kirim: cetakKePrinter };
@@ -1051,29 +1082,19 @@
 
       // Perintah cetak KOSONG: printer menjawab, kertas tidak keluar.
       var devid = document.body.dataset.printerDevid || 'local_printer';
-      return _tunggu(fetch(
+      return mintaPrinter(
         alamat + '/cgi-bin/epos/service.cgi?devid=' + encodeURIComponent(devid) +
         '&timeout=5000',
-        { method: 'POST', headers: { 'Content-Type': 'text/xml; charset=utf-8' },
-          body: '<?xml version="1.0" encoding="utf-8"?><s:Envelope xmlns:s=' +
-                '"http://schemas.xmlsoap.org/soap/envelope/"><s:Body>' +
-                '<epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/' +
-                'epos-print"></epos-print></s:Body></s:Envelope>' }), 12000);
-    }).then(function (h) {
-      if (h === null) { return hasil; }
-      if (h.lambat || !h.ok) {
-        catat('Layanan cetak', 'err',
-              'Printer terjangkau, tetapi layanan ePOS-Print tidak menjawab. ' +
-              'Periksa di panel printer: TM-i Settings > ePOS-Print harus Enable.');
-        return hasil;
-      }
-      return h.nilai.text().then(function (t) {
-        catat('Layanan cetak', /success="true"/.test(t) ? 'ok' : 'err',
-              /success="true"/.test(t)
-                ? 'Menjawab berhasil. Perangkat ini siap mencetak.'
-                : 'Menjawab, tetapi menolak perintah: ' + t.slice(0, 120));
-        return hasil;
-      });
+        '<?xml version="1.0" encoding="utf-8"?><s:Envelope xmlns:s=' +
+        '"http://schemas.xmlsoap.org/soap/envelope/"><s:Body>' +
+        '<epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/' +
+        'epos-print"></epos-print></s:Body></s:Envelope>', 12000, alamat);
+    }).then(function (jawaban) {
+      if (jawaban === null) { return hasil; }
+      catat('Layanan cetak', jawaban.berhasil ? 'ok' : 'err',
+        jawaban.berhasil ? 'Menjawab berhasil. Perangkat ini siap mencetak.'
+          : (ARTI_GAGAL[jawaban.kode] || 'Printer menolak perintah pemeriksaan.'));
+      return hasil;
     }).catch(function (e) {
       catat('Pemeriksaan', 'err', 'Terhenti: ' + (e && e.message));
       return hasil;
