@@ -313,6 +313,10 @@
         return { berhasil: true, tujuan: tujuanAman(data.tujuan), peringatan: data.peringatan };
       }
       if (response.status >= 500 || response.status === 408 || response.status === 429) throw new Error('Server belum mengonfirmasi. Kiriman tetap di perangkat.');
+      // Penolakan sah berarti server telah menjawab. Pesan jaringan atau
+      // proses kirim sebelumnya tidak boleh menutupi hasil per kiriman.
+      // Payload/draf tetap disimpan oleh jalur periksa/sesi di bawah.
+      pesanGlobal = '';
       await ubah(item.kunci, function (r) {
         r.status = response.status === 401 || response.status === 403 ? 'sesi' : 'periksa'; r.lease = 0;
         r.pesan = typeof data.pesan === 'string' ? data.pesan : 'Isian ditolak server. Periksa isian; salinan tetap tersimpan.'; return r;
