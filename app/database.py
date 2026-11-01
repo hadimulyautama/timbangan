@@ -55,6 +55,8 @@ def _siapkan() -> None:
         settings.database_url, echo=False, pool_pre_ping=True,
         connect_args={"server_settings": {"timezone": settings.app_timezone}},
     )
+    from app.performa import pasang_penghitung
+    pasang_penghitung(_engine)
     _pabrik = async_sessionmaker(
         _engine, class_=AsyncSession, expire_on_commit=False
     )

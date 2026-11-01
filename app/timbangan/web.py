@@ -36,7 +36,7 @@ BASE_DIR = Path(__file__).parent
 PREFIX = "/timbangan"
 
 # Dinaikkan bila CSS/JS berubah, supaya perangkat tidak memakai berkas lama.
-VERSI = "96"
+VERSI = "97"
 
 #: Warna tiap status. Dipisahkan dari `logic` karena ini urusan tampilan.
 NADA_STATUS = {
@@ -210,6 +210,20 @@ def redirect(path: str, *, ok: str | None = None, err: str | None = None):
     return RedirectResponse(url, status_code=303)
 
 
+class StatisTerCache(StaticFiles):
+    """Aset beralamat versi boleh dipakai lagi tanpa menunggu jaringan."""
+
+    async def get_response(self, path, scope):
+        respons = await super().get_response(path, scope)
+        if respons.status_code in (200, 304):
+            versi = Request(scope).query_params.get("v")
+            respons.headers["Cache-Control"] = (
+                "public, max-age=31536000, immutable" if versi == VERSI
+                else "public, max-age=3600"
+            )
+        return respons
+
+
 def pasang(app: FastAPI) -> None:
     """Sematkan modul Timbangan ke aplikasi FastAPI."""
     from app.timbangan.routes import router
@@ -218,7 +232,7 @@ def pasang(app: FastAPI) -> None:
     app.include_router(router)
     app.mount(
         f"{PREFIX}/static",
-        StaticFiles(directory=str(BASE_DIR / "static")),
+        StatisTerCache(directory=str(BASE_DIR / "static")),
         name="timbangan_static",
     )
 

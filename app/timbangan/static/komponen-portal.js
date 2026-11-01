@@ -26,6 +26,12 @@
   if (open) open.addEventListener('click', () => setDrawer(true));
   if (close) close.addEventListener('click', () => setDrawer(false));
   if (backdrop) backdrop.addEventListener('click', () => setDrawer(false));
+  if (menu) menu.addEventListener('click', e => {
+    if (e.target.closest('a[href]')) setDrawer(false, false);
+  });
+  // Back dari detail tidak boleh memulihkan lapisan menu dan main.inert
+  // yang tersimpan saat link sidebar sebelumnya ditekan.
+  window.addEventListener('pageshow', () => setDrawer(false, false));
   document.addEventListener('keydown', e => {
     if (!body.classList.contains('pd-drawer-open')) return;
     if (e.key === 'Escape') { e.preventDefault(); setDrawer(false); }

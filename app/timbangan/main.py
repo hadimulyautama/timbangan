@@ -77,3 +77,7 @@ async def health() -> dict:
         "skema": skema,
         "modul": "timbangan",
     }
+
+
+from app.performa import PerformaMiddleware
+app.add_middleware(PerformaMiddleware)

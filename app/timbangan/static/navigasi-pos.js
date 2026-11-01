@@ -45,3 +45,43 @@
     a.href = u.pathname + u.search + u.hash;
   });
 })();
+
+/* Umpan balik segera untuk navigasi/formulir native; tidak mencegat simpan. */
+(function () {
+  'use strict';
+  var status = null, timer = null;
+  function selesai() {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    if (status) status.remove();
+    status = null;
+  }
+  function tampil(tulisan) {
+    selesai();
+    status = document.createElement('div');
+    status.setAttribute('role', 'status');
+    status.setAttribute('aria-live', 'polite');
+    status.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;padding:8px 16px;background:#174c41;color:#fff;text-align:center;font:500 14px/1.5 system-ui;pointer-events:none';
+    status.textContent = tulisan;
+    document.body.appendChild(status);
+    timer = setTimeout(function () {
+      if (status) status.textContent = 'Respons belum diterima. Periksa hasil sebelum mengirim ulang.';
+    }, 15000);
+  }
+  document.addEventListener('click', function (e) {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    var a = e.target.closest && e.target.closest('a[href]');
+    if (!a || a.target || a.hasAttribute('download') || a.hasAttribute('data-unduh')) return;
+    var href = a.getAttribute('href');
+    if (!href || href.charAt(0) === '#') return;
+    var url = new URL(a.href, location.href);
+    if (url.origin !== location.origin || /\.(pdf|csv)(?:$|[?#])/.test(url.href)) return;
+    if (url.pathname === location.pathname && url.search === location.search && url.hash) return;
+    tampil('Membuka halaman…');
+  });
+  document.addEventListener('submit', function (e) {
+    if (e.defaultPrevented || e.target.target) return;
+    tampil((e.target.method || 'get').toLowerCase() === 'get' ? 'Memuat hasil…' : 'Menyimpan…');
+  });
+  window.addEventListener('pageshow', selesai);
+})();

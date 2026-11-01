@@ -133,6 +133,20 @@ async def _penanda(db: AsyncSession) -> dict:
     return {"n": ".".join(str(x) for x in r), "versi": VERSI}
 
 
+from app.performa import NilaiSingkat as _NilaiSingkat
+_cache_penanda = _NilaiSingkat(detik=1.0, batas=1)
+
+
+async def _penanda_bersama():
+    from app import database
+
+    async def baca():
+        async with database.SessionLocal() as db:
+            return await _penanda(db)
+
+    return await _cache_penanda.ambil("timbangan", baca)
+
+
 async def aliran_penanda(jeda: float = 2.0):
     """Kanal dorong (SSE): penanda seketika saat tersambung, lalu hanya
     ketika bergerak; komentar `: hidup` tiap ~15 detik menahan proxy."""
@@ -144,8 +158,7 @@ async def aliran_penanda(jeda: float = 2.0):
     terakhir = None
     hidup = 0.0
     while True:
-        async with database.SessionLocal() as db:
-            p = await _penanda(db)
+        p = await _penanda_bersama()
         if p != terakhir:            # n ATAU versi — versi baru pun terdorong
             terakhir = p
             hidup = 0.0
@@ -207,7 +220,7 @@ async def keadaan(
     """
     # Uji sumber menjaga rumusnya lewat teks di blok ini: max(id),
     # max(updated_at), extract(epoch — rumus sesungguhnya di `_penanda`.
-    return await _penanda(db)
+    return await _penanda_bersama()
 
 
 @router.get("/acuan")

@@ -21,6 +21,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable
 
+from app.performa import baca_sekali
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -151,6 +153,7 @@ def _baca(teks: str) -> float:
         raise SetelanError(f"'{teks}' bukan angka.") from None
 
 
+@baca_sekali
 async def semua(db: AsyncSession) -> dict[str, float]:
     """Nilai yang sedang berlaku untuk seluruh setelan."""
     tersimpan = {

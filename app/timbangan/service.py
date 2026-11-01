@@ -4379,53 +4379,29 @@ async def daftar_pemeriksaan_terbuka(db: AsyncSession) -> list[BarisTransaksi]:
 async def ringkasan_dashboard(
     db: AsyncSession, f: FilterTransaksi
 ) -> RingkasanDashboard:
-    baris = (await db.execute(_terapkan_filter(
-        select(
-            func.count(TimbanganTransaksi.id),
-            func.coalesce(func.sum(TimbanganTransaksi.berat_barang_kg), 0),
-            func.coalesce(func.sum(TimbanganTransaksi.selisih_kg), 0),
-        ).select_from(TimbanganTransaksi),
-        f,
-    ))).one()
-
-    perlu = (await db.execute(_terapkan_filter(
-        select(func.count(TimbanganTransaksi.id)).select_from(TimbanganTransaksi), f
-    ).where(
-        TimbanganTransaksi.status_kontrol.in_(sorted(logic.STATUS_WAJIB_PERIKSA))
-    ))).scalar_one()
-
-    terbuka = (await db.execute(_terapkan_filter(
-        select(func.count(TimbanganTransaksi.id)).select_from(TimbanganTransaksi), f
-    ).where(TimbanganTransaksi.status_tiket == TIKET_TERBUKA))).scalar_one()
-
-    lembar = (await db.execute(
-        select(func.count(TimbanganPemeriksaan.id))
-        .where(TimbanganPemeriksaan.status == PEMERIKSAAN_DIBUKA)
-    )).scalar_one()
-
-    # Dijumlah PER ARAH. Jasa timbang (BEBAS) dan transfer internal sengaja
-    # tak ikut di mana pun: barangnya tak masuk dan tak keluar, jadi
-    # menjumlahkannya ke salah satu sisi membuat angka itu berbohong.
-    per_arah = dict((await db.execute(_terapkan_filter(
-        select(TimbanganTransaksi.arah,
-               func.coalesce(func.sum(TimbanganTransaksi.berat_barang_kg), 0))
-        .select_from(TimbanganTransaksi), f,
-    ).group_by(TimbanganTransaksi.arah))).all())
-
-    masuk = float(per_arah.get(logic.MASUK, 0) or 0) + \
-        float(per_arah.get(logic.RETUR_MASUK, 0) or 0)
-    keluar = float(per_arah.get(logic.KELUAR, 0) or 0) + \
-        float(per_arah.get(logic.RETUR_KELUAR, 0) or 0)
-
+    # Satu lintasan dan satu perjalanan database untuk seluruh ringkasan.
+    # Pemeriksaan terbuka tetap global, sebagaimana rumus sebelumnya.
+    t = TimbanganTransaksi
+    masuk_syarat = t.arah.in_((logic.MASUK, logic.RETUR_MASUK))
+    keluar_syarat = t.arah.in_((logic.KELUAR, logic.RETUR_KELUAR))
+    lembar = (select(func.count(TimbanganPemeriksaan.id))
+              .where(TimbanganPemeriksaan.status == PEMERIKSAAN_DIBUKA)
+              .scalar_subquery())
+    hasil = (await db.execute(_terapkan_filter(select(
+        func.count(t.id).label("jumlah"),
+        func.count(t.id).filter(t.status_tiket == TIKET_TERBUKA).label("terbuka"),
+        func.count(t.id).filter(t.status_kontrol.in_(sorted(logic.STATUS_WAJIB_PERIKSA))).label("perlu"),
+        func.coalesce(func.sum(t.selisih_kg), 0).label("selisih"),
+        func.coalesce(func.sum(case((masuk_syarat, t.berat_barang_kg), else_=0)), 0).label("masuk"),
+        func.coalesce(func.sum(case((keluar_syarat, t.berat_barang_kg), else_=0)), 0).label("keluar"),
+        lembar.label("lembar"),
+    ).select_from(t), f))).one()
+    masuk, keluar = float(hasil.masuk), float(hasil.keluar)
     return RingkasanDashboard(
-        jumlah=baris[0],
-        tiket_terbuka=terbuka,
-        perlu_periksa=perlu,
-        pemeriksaan_terbuka=lembar,
-        masuk_kg=masuk,
-        keluar_kg=keluar,
-        total_barang_kg=masuk + keluar,
-        total_selisih_kg=float(baris[2] or 0),
+        jumlah=hasil.jumlah, tiket_terbuka=hasil.terbuka,
+        perlu_periksa=hasil.perlu, pemeriksaan_terbuka=hasil.lembar,
+        masuk_kg=masuk, keluar_kg=keluar, total_barang_kg=masuk + keluar,
+        total_selisih_kg=float(hasil.selisih),
     )
 
 

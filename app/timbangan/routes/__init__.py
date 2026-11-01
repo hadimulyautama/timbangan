@@ -11,6 +11,11 @@ from app.timbangan.routes import auth, laporan, master, pos, printer, transaksi
 
 async def _muat_setelan(request: Request, db: AsyncSession = Depends(get_db)):
     """Setelan & jumlah tiket terbuka, tersedia untuk setiap halaman."""
+    path = request.url.path
+    # Kanal mesin tidak merender navigasi. Membaca setelan dan menghitung
+    # tiket di sini hanya membuka transaksi sebelum stream dipasang.
+    if path.endswith(("/aliran", "/keadaan", "/acuan", "/kiriman/sesi")):
+        return
     await setelan.muat_ke_permintaan(request, db)
 
     # Dipakai bilah navigasi bawah. Truk yang sedang menunggu adalah hal
