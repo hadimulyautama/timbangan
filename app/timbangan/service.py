@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal, ROUND_HALF_UP
 from datetime import date, datetime, time, timedelta
 
-from sqlalchemy import String, cast, case, delete, func, literal, or_, select, text, update
+from sqlalchemy import String, cast, case, delete, func, literal, or_, select, text, update, tuple_
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import raiseload, selectinload
@@ -4424,7 +4424,7 @@ HALAMAN_MONITORING = 1_000
 BATAS_MONITORING = 50_000
 
 
-async def _data_monitoring(db: AsyncSession, f: FilterTransaksi, *, batas: int, offset: int):
+async def _data_monitoring(db: AsyncSession, f: FilterTransaksi, *, batas: int, offset: int = 0, setelah=None):
     """Kolom skor saja; tidak membangun objek tiket beserta seluruh relasinya."""
     t = TimbanganTransaksi
     q = _terapkan_filter(select(
@@ -4434,6 +4434,8 @@ async def _data_monitoring(db: AsyncSession, f: FilterTransaksi, *, batas: int, 
         func.coalesce(Supplier.nama_supplier, Pelanggan.nama_pelanggan).label("supplier_nama"),
     ).outerjoin(Supplier, Supplier.id == t.supplier_id)
      .outerjoin(Pelanggan, Pelanggan.id == t.pelanggan_id), f)
+    if setelah is not None:
+        q=q.where(tuple_(t.tanggal,t.id)<tuple_(*setelah))
     return (await db.execute(q.order_by(t.tanggal.desc(), t.id.desc())
                              .limit(batas).offset(offset))).all()
 
@@ -4458,9 +4460,10 @@ async def monitoring_supplier(
     jumlah_per_supplier: dict[int, int] = {}
     nama: dict[int, str] = {}
     halaman = 0
+    setelah = None
     while True:
         potong = await _data_monitoring(db, f, batas=HALAMAN_MONITORING,
-                                       offset=halaman * HALAMAN_MONITORING)
+                                       setelah=setelah)
         for t in potong:
             if t.supplier_id is None:
                 continue
@@ -4473,6 +4476,7 @@ async def monitoring_supplier(
                 kumpulan.append(ringkas)
         if len(potong) < HALAMAN_MONITORING:
             break
+        setelah = (potong[-1].tanggal,potong[-1].id)
         halaman += 1
         if halaman * HALAMAN_MONITORING >= BATAS_MONITORING:
             # Halaman penuh belum membuktikan ada sisa. Periksa satu id
@@ -4480,9 +4484,10 @@ async def monitoring_supplier(
             # memasukkannya ke skor. Batas pemrosesan tetap 50.000.
             sisa = await db.scalar(
                 _terapkan_filter(select(TimbanganTransaksi.id), f)
+                .where(tuple_(TimbanganTransaksi.tanggal,TimbanganTransaksi.id)<tuple_(*setelah))
                 .order_by(TimbanganTransaksi.tanggal.desc(),
                           TimbanganTransaksi.id.desc())
-                .offset(BATAS_MONITORING).limit(1)
+                .limit(1)
             )
             if sisa is not None:
                 log.warning(

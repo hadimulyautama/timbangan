@@ -135,9 +135,9 @@ def acuan_skor(rows,nama):
 async def test_batas_monitoring_postgres_asli(mesin,klien,monkeypatch,caplog,jumlah):
     benih=await isi(mesin,jumlah);expected=await oracle(mesin,50000);full=await oracle(mesin)
     before=await snapshot(mesin);calls=[];ids=[];original=service._data_monitoring;relasi=[]
-    async def amati(db,f,*,batas=100,offset=0):
-        result=await original(db,f,batas=batas,offset=offset)
-        calls.append({'offset':offset,'limit':batas,'records':len(result)});ids.extend(b.id for b in result)
+    async def amati(db,f,*,batas=100,offset=0,setelah=None):
+        result=await original(db,f,batas=batas,offset=offset,setelah=setelah)
+        calls.append({'offset':offset,'setelah':setelah,'limit':batas,'records':len(result)});ids.extend(b.id for b in result)
         return result
     monkeypatch.setattr(service,'_data_monitoring',amati)
     engine=mesin.kw['bind'].sync_engine
@@ -152,7 +152,8 @@ async def test_batas_monitoring_postgres_asli(mesin,klien,monkeypatch,caplog,jum
     event.remove(engine,'before_cursor_execute',baca_relasi)
     assert len(full)==jumlah and len(ids)==min(jumlah,50000)
     assert ids==[r['id'] for r in expected] and len(set(ids))==len(ids)
-    assert len(calls)==50 and [c['offset'] for c in calls]==list(range(0,50000,1000))
+    assert len(calls)==50 and all(c['offset']==0 for c in calls)
+    assert calls[0]['setelah'] is None and all(c['setelah'] is not None for c in calls[1:])
     assert all(c['limit']==1000 for c in calls) and calls[-1]['records']==(999 if jumlah==49999 else 1000)
     warnings=[r for r in caplog.records if 'Monitoring pemasok berhenti' in r.getMessage()]
     assert bool(warnings)==(jumlah>50000)

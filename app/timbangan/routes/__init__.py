@@ -2,20 +2,27 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.timbangan import setelan
-from app.timbangan.db import get_db
+from app.timbangan.db import sesi_db
 from app.timbangan.routes import auth, laporan, master, pos, printer, transaksi
 
 
-async def _muat_setelan(request: Request, db: AsyncSession = Depends(get_db)):
+async def _muat_setelan(request: Request):
     """Setelan & jumlah tiket terbuka, tersedia untuk setiap halaman."""
     path = request.url.path
     # Kanal mesin tidak merender navigasi. Membaca setelan dan menghitung
     # tiket di sini hanya membuka transaksi sebelum stream dipasang.
     if path.endswith(("/aliran", "/keadaan", "/acuan", "/kiriman/sesi")):
         return
+    # Lepaskan koneksi sebelum dependency autentikasi mengambil sesinya.
+    # Menahan sesi yield get_db di sini membuat seluruh pool penuh oleh
+    # permintaan yang masing-masing menunggu koneksi kedua untuk login.
+    async with sesi_db() as db:
+        await _baca_navigasi(request, db)
+
+
+async def _baca_navigasi(request, db):
     await setelan.muat_ke_permintaan(request, db)
 
     # Dipakai bilah navigasi bawah. Truk yang sedang menunggu adalah hal

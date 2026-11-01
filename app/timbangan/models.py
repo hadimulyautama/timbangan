@@ -357,6 +357,7 @@ class TimbanganTransaksi(Base, TimestampMixin):
     __table_args__ = (
         Index("ix_timbangan_transaksi_tanggal_supplier", "tanggal", "supplier_id"),
         Index("ix_timbangan_transaksi_tiket", "status_tiket", "tanggal"),
+        Index("ix_timbangan_transaksi_aktif_urut", "status_transaksi", "tanggal", "id"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)

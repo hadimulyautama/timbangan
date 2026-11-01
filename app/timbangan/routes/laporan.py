@@ -26,6 +26,18 @@ from app.timbangan.web import PREFIX, render
 
 router = APIRouter(prefix=PREFIX)
 
+from app.performa import NilaiSingkat
+_pemantauan = NilaiSingkat(detik=2, batas=32)
+
+
+async def _monitoring_bersama(f):
+    """Gabungkan laporan baca dengan rentang yang sama, bukan transaksi."""
+    from app.timbangan.db import sesi_db
+    async def baca():
+        async with sesi_db() as db:
+            return await service.monitoring_supplier(db, f)
+    return await _pemantauan.ambil((f.dari,f.sampai),baca)
+
 
 def _rentang(q) -> tuple[date, date]:
     try:
@@ -53,6 +65,9 @@ async def _halaman(request, db, tab_awal="rekap"):
     tab = request.query_params.get("tab", tab_awal)
     if tab not in ("rekap", "pemeriksaan", "pemantauan"):
         tab = tab_awal
+    # Lakukan sebelum query pada db request: satu permintaan tidak menahan
+    # koneksi sambil menunggu pembaca laporan bersama memperoleh koneksi.
+    pemantauan = await _monitoring_bersama(f) if tab == 'pemantauan' else None
     tautan = {t: f"{PREFIX}/laporan?" + urlencode({
         "tab": t, "dari": dari.isoformat(), "sampai": sampai.isoformat(),
     }) for t in ("rekap", "pemeriksaan", "pemantauan")}
@@ -68,7 +83,7 @@ async def _halaman(request, db, tab_awal="rekap"):
             batas=20,
         )
     elif tab == "pemantauan":
-        ctx["baris"] = await service.monitoring_supplier(db, f)
+        ctx["baris"] = pemantauan
     # Status lembar dipisahkan dari status kontrol; tidak disimpulkan dari
     # angka selisih. Query terbatas pada tiket yang benar-benar ditampilkan.
     ids = {b.trx.id for b in ctx["lembar_terbuka"]}

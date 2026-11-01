@@ -65,6 +65,7 @@ TANPA_KOLOM_BARU = {
     "0038_kunci_baris_64.py": "hanya melebarkan String(36) → String(64) (R-T-01)",
     "0040_jasa_tiga_komoditas.py": "hanya mengisi data (membuka boleh_jasa)",
     "0043_jasa_beras_masuk.py": "hanya mengisi data (membuka boleh_jasa Beras masuk)",
+    "0050_indeks_urut_aktif.py": "hanya menambah indeks urutan, tanpa kolom baru",
 }
 # Migrasi 0042 menambah kolom serta FK ke master milik aplikasi lain. Uji ini
 # membangun skema SQLite sementara untuk mencocokkan kolom; FK lintas aplikasi
