@@ -14,7 +14,9 @@ from app.timbangan.web import VERSI
 @pytest.mark.parametrize('engine',os.environ.get('UJI_PONSEL_ENGINES','chromium').split(','))
 @pytest.mark.parametrize('width',[320,390])
 async def test_sidebar_detail_sekali_sentuh(klien,alamat_ui,engine,width):
-    tid=await buat_tiket();await login(klien,'wahid')
+    tid=await buat_tiket()
+    for _ in range(6):await buat_tiket()
+    await login(klien,'wahid')
     daftar='/timbangan/transaksi';detail=f'/timbangan/transaksi/{tid}'
     gates={p:asyncio.Event() for p in (daftar,detail)};started={p:asyncio.Event() for p in gates}
     async with async_playwright() as pw:
@@ -67,11 +69,12 @@ async def test_sidebar_detail_sekali_sentuh(klien,alamat_ui,engine,width):
             field=page.locator('main input[type=search]').first
             await field.fill('ketikan belum dikirim')
             await field.evaluate('(el)=>window.inputAsli=el')
-            top=await page.locator('main').evaluate('(el)=>{el.scrollTop=40;return el.scrollTop}')
+            top=await page.evaluate("() => {window.readScroller=[document.querySelector('main'),document.scrollingElement].find(el=>el && el.scrollHeight>el.clientHeight+40);if(!window.readScroller)return 0;window.readScroller.scrollTop=40;return window.readScroller.scrollTop}")
+            assert top>0, 'Halaman uji harus benar-benar dapat digulir'
             await asyncio.sleep(2);gates[daftar].set();await asyncio.sleep(.4)
             await expect(field).to_have_value('ketikan belum dikirim')
             assert await page.evaluate('window.inputAsli.isConnected')
-            assert await page.locator('main').evaluate('(el)=>el.scrollTop')==top
+            assert await page.evaluate('window.readScroller.scrollTop')==top
             await field.fill('');await field.evaluate('(el)=>el.blur()')
             link=page.locator('main a[href^="'+detail+'"]').first
             href=await link.get_attribute('href')
@@ -90,7 +93,7 @@ async def test_sidebar_detail_sekali_sentuh(klien,alamat_ui,engine,width):
             out=Path(os.environ.get('UJI_PONSEL_OUT','output/ponsel'));out.mkdir(parents=True,exist_ok=True)
             name=f'teraflow-{engine}-{width}'
             await page.screenshot(path=str(out/(name+'.png')))
-            (out/(name+'.json')).write_text(json.dumps({'engine':engine,'width':width,'touch':True,'sidebar_taps':navigasi_taps.count(daftar),'detail_taps':navigasi_taps.count(detail),'data_delay_ms':2000,'input_preserved':True,'scroll_preserved':True,'shell_frames':frames,'errors':errors,'writes':writes})+'\n')
+            (out/(name+'.json')).write_text(json.dumps({'engine':engine,'width':width,'touch':True,'sidebar_taps':navigasi_taps.count(daftar),'detail_taps':navigasi_taps.count(detail),'data_delay_ms':2000,'input_preserved':True,'scroll_preserved':True,'scroll_test_top':top,'shell_frames':frames,'errors':errors,'writes':writes})+'\n')
             await page.go_back();await expect(page).to_have_url(alamat_ui+daftar)
             await expect(page.locator('main.isi')).to_be_visible()
         finally:
