@@ -79,7 +79,9 @@ def test_tak_memuat_ulang_bila_tak_ada_yang_berubah():
     bahwa aplikasinya rewel."""
     blok = SEBAR[SEBAR.index("function periksa() {"):SEBAR.index("function mulaiDenyut")]
     assert "innerHTML === lama" in blok
-    assert blok.index("innerHTML === lama") < blok.index("location.reload()")
+    assert blok.index("innerHTML === lama") < blok.index("KEADAAN_BACA.tukar")
+    assert "location.reload()" not in blok
+    assert "KEADAAN_BACA.pulihkan" in blok
 
 
 def test_opt_in_per_halaman():

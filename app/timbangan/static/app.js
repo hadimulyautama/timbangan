@@ -1180,8 +1180,8 @@
     /* Sekali disentuh, halaman ini tak lagi boleh disegarkan sampai orangnya
        pergi sendiri. Borang saring memang memakai GET — isinya kembali dari
        alamat — tetapi yang BELUM dikirim tidak ada di alamat mana pun. */
-    document.addEventListener('input', function () { kotor = true; }, true);
-    document.addEventListener('change', function () { kotor = true; }, true);
+    document.addEventListener('input', function (e) { if (!e.target.form || (e.target.form.method || 'get').toLowerCase() !== 'get') kotor = true; }, true);
+    document.addEventListener('change', function (e) { if (!e.target.form || (e.target.form.method || 'get').toLowerCase() !== 'get') kotor = true; }, true);
 
     function adaAntrean() {
       /* Antrean luring berisi = sinyal sedang buruk. Reload saat itu bisa
@@ -1253,25 +1253,9 @@
        sasaran ketukan (`data-segar-sendiri`). */
     var jumlahPerubahan = 0;
 
-    function tawarkanPerubahan() {
-      var pil = document.querySelector('.pil-perubahan');
-      if (!pil) {
-        pil = document.createElement('button');
-        pil.type = 'button';
-        pil.className = 'pil pil-perubahan';
-        pil.setAttribute('data-pil', 'perubahan');
-        pil.setAttribute('role', 'status');
-        pil.addEventListener('click', function () { location.reload(); });
-        document.body.appendChild(pil);
-      }
-      pil.textContent = jumlahPerubahan + ' perubahan baru — ketuk untuk muat';
-    }
+    function tawarkanPerubahan() { periksaIsi(); }
 
-    function adaPerubahan() {
-      if (document.querySelector('[data-segar-sendiri]') && bolehSegar()) { location.reload(); return; }
-      jumlahPerubahan++;
-      tawarkanPerubahan();
-    }
+    function adaPerubahan() { periksaIsi(); }
 
     function periksa() {
       if (!bolehSegar()) { return; }
@@ -1323,18 +1307,21 @@
     window.timbangan.jalur = function () { return jalur; };
     window.timbangan.statistik = function () { return { tanya: statistik.tanya, dorongan: statistik.dorongan }; };
 
+    var membacaIsi = false;
     function periksaIsi() {
-      if (!bolehSegar()) { return; }
+      if (membacaIsi || !bolehSegar()) { return; }
+      membacaIsi = true;
+      var alamatSegar = location.href, akunSegar = badan.dataset.akunId;
       var sekarang = document.querySelector('.bingkai');
-      if (!sekarang) { return; }
+      if (!sekarang) { membacaIsi=false; return; }
       sekarang = sekarang.cloneNode(true);
       sekarang.querySelectorAll('[data-luring-panel]').forEach(function (e) { e.remove(); });
       var lama = sekarang.innerHTML;
 
       fetch(location.href, { credentials: 'same-origin', cache: 'no-store' })
-        .then(function (r) { return r.ok ? r.text() : null; })
+        .then(function (r) { return r.ok && !r.redirected ? r.text() : null; })
         .then(function (teks) {
-          if (!teks) { return; }
+          if (!teks || location.href !== alamatSegar) { return; }
           // Diperiksa LAGI: orangnya bisa mulai mengetik tepat selagi
           // permintaan ini di jalan.
           if (!bolehSegar()) { return; }
@@ -1342,9 +1329,15 @@
           var baru = doc.querySelector('.bingkai');
           if (baru) baru.querySelectorAll('[data-luring-panel]').forEach(function (e) { e.remove(); });
           if (!baru || baru.innerHTML === lama) { return; }
-          adaPerubahan();   // bukan location.reload(): pil dulu, orangnya yang memutuskan
+          if (!doc.body || doc.body.dataset.akunId !== akunSegar || !window.KEADAAN_BACA) return;
+          var root=document.querySelector('.bingkai'),keadaan=KEADAAN_BACA.ambil(root);
+          KEADAAN_BACA.tukar(root,baru);
+          KEADAAN_BACA.pulihkan(root,keadaan);
+          document.title=doc.title;
+          var pil=document.querySelector('.pil-perubahan');if(pil)pil.remove();
+          window.dispatchEvent(new Event('teraflow:data'));
         })
-        .catch(function () { /* jaringan buruk: diamkan, denyut berikutnya mencoba lagi */ });
+        .catch(function () { /* data terakhir tetap terlihat saat jaringan terputus */ }).finally(function () { membacaIsi=false; });
     }
 
     function mulaiDenyut() {
