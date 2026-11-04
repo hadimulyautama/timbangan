@@ -12,8 +12,14 @@ from test_rincian_keluar import buat_tiket
 from app.timbangan.web import VERSI
 
 @pytest.mark.parametrize('engine',os.environ.get('UJI_PONSEL_ENGINES','chromium').split(','))
-@pytest.mark.parametrize('width',[320,390])
-async def test_sidebar_detail_sekali_sentuh(klien,alamat_ui,engine,width):
+@pytest.mark.parametrize('width',[int(v) for v in os.environ.get('UJI_PONSEL_WIDTHS','320,390').split(',')])
+async def test_sidebar_detail_sekali_sentuh(klien,alamat_ui,engine,width,monkeypatch):
+    from app.timbangan.routes import pos
+    async def penanda_stabil(jeda=2):
+        yield 'data: '+json.dumps({"n":"uji","versi":VERSI})+"\n\n"
+        while True:
+            await asyncio.sleep(15);yield ": hidup\n\n"
+    monkeypatch.setattr(pos,"aliran_penanda",penanda_stabil)
     tid=await buat_tiket()
     for _ in range(6):await buat_tiket()
     await login(klien,'wahid')
@@ -21,7 +27,8 @@ async def test_sidebar_detail_sekali_sentuh(klien,alamat_ui,engine,width):
     gates={p:asyncio.Event() for p in (daftar,detail)};started={p:asyncio.Event() for p in gates}
     async with async_playwright() as pw:
         browser=await getattr(pw,engine).launch()
-        ctx=await browser.new_context(viewport={'width':width,'height':844},is_mobile=True,has_touch=True,device_scale_factor=2,service_workers='block',reduced_motion='reduce')
+        profile=pw.devices['iPhone SE' if width<=375 else 'iPhone 13'] if engine=='webkit' else {}
+        ctx=await browser.new_context(**{**profile,'viewport':{'width':width,'height':844},'is_mobile':True,'has_touch':True,'device_scale_factor':2,'service_workers':'block','reduced_motion':'reduce'})
         await ctx.add_cookies([{'name':x.name,'value':x.value,'url':alamat_ui} for x in klien.cookies.jar])
         await ctx.add_init_script("""sessionStorage.setItem('pembuka','1');document.addEventListener('click',e=>{let a=e.target.closest('a[href]');if(a){window.lastTap=performance.now();console.debug('PONSEL_TAP:'+a.pathname)}},true);new MutationObserver(()=>{if(document.querySelector('.tf-kerangka')&&!window.measured){window.measured=true;requestAnimationFrame(()=>console.debug('PONSEL_FRAME:'+JSON.stringify({ms:performance.now()-window.lastTap,shown:getComputedStyle(document.querySelector('main.isi')).display==='none'})))}}).observe(document,{childList:true,subtree:true});""")
         writes=[];errors=[];frames=[];taps=[];refresh=[False]
@@ -29,8 +36,8 @@ async def test_sidebar_detail_sekali_sentuh(klien,alamat_ui,engine,width):
             req=route.request;u=urlsplit(req.url)
             if not req.url.startswith(alamat_ui+'/'):return await route.abort()
             if req.method!='GET':writes.append(u.path);return await route.abort()
-            if u.path.endswith('/aliran'):return await route.fulfill(status=204,body='')
-            if u.path.endswith('/keadaan'):return await route.fulfill(json={'n':'uji','versi':VERSI,'jumlah_tiket':0})
+            if u.path.endswith('/aliran'):return await route.continue_()
+            if u.path.endswith('/keadaan'):return await route.fulfill(json={'n':'uji-baru' if refresh[0] else 'uji','versi':VERSI,'jumlah_tiket':0})
             if refresh[0] and not req.is_navigation_request() and u.path==daftar:
                 response=await route.fetch();started[daftar].set()
                 try:await asyncio.wait_for(gates[daftar].wait(),15)
