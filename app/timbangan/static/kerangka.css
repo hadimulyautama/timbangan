@@ -1,0 +1,9 @@
+/* DOM formulir disimpan; browser tetap menangani navigasi, draf dan cetak. */
+.tf-halaman-menunggu main.isi{display:none!important}
+.tf-kerangka{padding:clamp(20px,4vw,40px);min-height:300px;color:var(--tinta,#183d34)}
+.tf-kerangka h1{font-size:clamp(22px,4vw,30px);line-height:1.25;margin:0 0 12px}
+.tf-kerangka p{margin:0 0 24px;color:var(--redup,#526b63)}
+.tf-kerangka>div{display:grid;gap:14px;max-width:960px}
+.tf-kerangka i{display:block;height:76px;background:var(--panel,#f2f6f3);border:1px solid var(--garis,#d7e3dc);border-radius:12px;animation:tf-tunggu 1.6s ease-in-out infinite alternate}
+@keyframes tf-tunggu{to{opacity:.5}}
+@media(prefers-reduced-motion:reduce){.tf-kerangka i{animation:none}}
