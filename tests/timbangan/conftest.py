@@ -27,6 +27,10 @@ async def db():
     mesin = create_async_engine("sqlite+aiosqlite://")
     async with mesin.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Tabel dimiliki migrasi PadiFlow; TeraFlow hanya membaca identitas.
+        # Basis data uji terisolasi tidak menjalankan migrasi aplikasi sebelah.
+        from sqlalchemy import text
+        await conn.execute(text('CREATE TABLE IF NOT EXISTS setelan_pabrik (kunci VARCHAR(64) PRIMARY KEY, nilai TEXT NOT NULL)'))
     Sesi = async_sessionmaker(mesin, expire_on_commit=False)
     async with Sesi() as sesi:
         yield sesi

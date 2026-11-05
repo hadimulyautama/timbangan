@@ -12,6 +12,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt tzdata
 
 # Paket bersama (repo core/, di-vendor oleh core/scripts/sinkron.py).
+COPY hmu_dokumen ./hmu_dokumen
 COPY hmu_core ./hmu_core
 COPY hmu_identitas ./hmu_identitas
 COPY app ./app

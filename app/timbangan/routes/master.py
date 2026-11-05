@@ -78,16 +78,12 @@ async def _parameter_alat(db: AsyncSession) -> list[dict]:
     ]
 
 
-def _parameter_bukti() -> list[dict]:
-    return [
-        {"nama": "Nama perusahaan", "nilai": tsettings.perusahaan_nama,
-         "env": "TIMBANGAN_PERUSAHAAN", "arti": "Kepala bukti timbang."},
-        {"nama": "Alamat", "nilai": tsettings.perusahaan_alamat,
-         "env": "TIMBANGAN_ALAMAT", "arti": "Baris kedua kepala bukti."},
-        {"nama": "Nomor telepon", "nilai": tsettings.perusahaan_telepon,
-         "env": "TIMBANGAN_TELEPON",
-         "arti": "Baris ketiga. Alamat surel sengaja tidak dicetak."},
-    ]
+async def _parameter_bukti(db) -> list[dict]:
+    from hmu_dokumen.perusahaan import baca
+    identitas=await baca(db)
+    return [dict(nama=nama,nilai=nilai,env='Pengaturan PadiFlow → Data perusahaan',arti='Berlaku saat dokumen dibuat kembali.')
+            for nama,nilai in [('Nama perusahaan',identitas.nama),('Alamat',identitas.alamat),
+                               ('Nomor telepon',identitas.telepon),('Email',identitas.email),('Website',identitas.website)]]
 
 
 def _parameter_sesi() -> list[dict]:
@@ -180,7 +176,7 @@ async def pengaturan(
         # begitu ada satu yang aktif. Lihat `security.butuh_super_atau_pertama`.
         boleh_kelola_pengguna=kelola,
         alat=await _parameter_alat(db) if bagian == "operasional" else [],
-        bukti=_parameter_bukti(),
+        bukti=await _parameter_bukti(db) if bagian == "sistem" else [],
         sesi=_parameter_sesi(),
         sumber_label=SUMBER_LABEL,
         # Hanya Admin ke atas yang melihat (dan memicu) tombolnya — sama

@@ -18,13 +18,15 @@ async def kunci_tiket(db,tid):
     return t
 
 async def bahan(db,tid,akun):
+    from hmu_dokumen.perusahaan import baca
+    identitas=await baca(db)
     b=await service.ambil_transaksi(db,tid)
     if b is None:raise service.LayananError('Transaksi tidak ditemukan.')
     service.pastikan_boleh_cetak(b.trx)
     aturan=service.aturan_dari_snapshot(b.trx) or await service.aturan_untuk(db,b.trx.jenis_kode)
     umum=dict(trx=b.trx,aturan=aturan,pihak=b.pihak_tampil,petugas=akun.nama,
-        muatan=list(b.trx.muatan),perusahaan=tsettings.perusahaan_nama,alamat=tsettings.perusahaan_alamat,
-        telepon=tsettings.perusahaan_telepon,arah_masuk=logic.timbang_pertama_bermuatan(b.trx.arah),
+        muatan=list(b.trx.muatan),perusahaan=identitas.nama,alamat=identitas.alamat.replace("\n", ", "),
+        telepon=identitas.kontak+((" | "+identitas.website) if identitas.website else ""),arah_masuk=logic.timbang_pertama_bermuatan(b.trx.arah),
         cetakan_ke=await service.cetakan_ke(db,tid))
     return b,aturan,umum
 

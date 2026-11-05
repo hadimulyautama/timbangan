@@ -43,6 +43,10 @@ async def mesin(monkeypatch):
     m = create_async_engine(url)
     async with m.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Tabel dimiliki migrasi PadiFlow; TeraFlow hanya membaca identitas.
+        # Basis data uji terisolasi tidak menjalankan migrasi aplikasi sebelah.
+        from sqlalchemy import text
+        await conn.execute(text('CREATE TABLE IF NOT EXISTS setelan_pabrik (kunci VARCHAR(64) PRIMARY KEY, nilai TEXT NOT NULL)'))
     Sesi = async_sessionmaker(m, expire_on_commit=False)
     monkeypatch.setattr(database, "SessionLocal", Sesi)
     monkeypatch.setattr(sec, "_KUNCI_SEMENTARA", b"k" * 32, raising=False)

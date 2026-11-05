@@ -18,6 +18,8 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
 
 from app.timbangan import epos
+from app.timbangan.db import get_db
+from hmu_dokumen.perusahaan import baca
 from app.timbangan.config import tsettings
 from app.timbangan.models import TimbanganAkun
 from app.timbangan.security import butuh_akun
@@ -35,13 +37,14 @@ async def penyiapan(
 
 
 @router.get("/printer/uji")
-async def cetak_uji(akun: TimbanganAkun = Depends(butuh_akun)):
+async def cetak_uji(akun: TimbanganAkun = Depends(butuh_akun), db=Depends(get_db)):
     """Perintah cetak pendek untuk memastikan printer benar-benar terjangkau.
 
     Seperti struk sungguhan, ia hanya dikembalikan — yang mengirimkannya ke
     printer tetap perangkat yang meminta.
     """
+    identitas=await baca(db)
     return Response(
-        epos.struk_uji(perusahaan=tsettings.perusahaan_nama),
+        epos.struk_uji(perusahaan=identitas.nama),
         media_type="text/xml; charset=utf-8",
     )

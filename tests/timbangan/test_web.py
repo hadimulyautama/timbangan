@@ -41,6 +41,9 @@ async def app_uji(monkeypatch):
     mesin = create_async_engine("sqlite+aiosqlite://")
     async with mesin.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Identitas dokumen dibaca dari tabel milik migrasi PadiFlow.
+        from sqlalchemy import text
+        await conn.execute(text('CREATE TABLE IF NOT EXISTS setelan_pabrik (kunci VARCHAR(64) PRIMARY KEY, nilai TEXT NOT NULL)'))
     Sesi = async_sessionmaker(mesin, expire_on_commit=False)
     # Modul mengambil SessionLocal lewat `app.database`, bukan meng-import
     # objeknya — justru supaya bisa dialihkan seperti ini.
