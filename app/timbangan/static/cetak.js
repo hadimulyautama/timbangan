@@ -1,7 +1,8 @@
 /* Pekerjaan cetak dipisahkan dari tampilan. Tidak masuk antrean luring timbang. */
 (function(){
 'use strict';
-var root=document.querySelector('[data-cetak-halaman]');if(!root||root.dataset.aktif)return;root.dataset.aktif='1';
+function pasang(root,opsi){
+if(!root||root.dataset.aktif)return;root.dataset.aktif='1';opsi=opsi||{};
 var $=function(s){return root.querySelector(s);};
 var job=JSON.parse($('[data-cp-job]').textContent),busy=false;
 var storage='tf-cetak:'+root.dataset.identitas,key='';
@@ -21,7 +22,7 @@ function pilihan(){
  $('[data-cp-label]').textContent=(f==='NCR'?'Setengah NCR · 215 × 165 mm':'Struk 80 mm')+' · pratinjau revisi tiket saat halaman dibuka';
 }
 root.querySelectorAll('[name=cp-format],[name=cp-keluaran]').forEach(function(x){x.addEventListener('change',pilihan);});
-function kunci(){root.querySelectorAll('[name=cp-format],[name=cp-keluaran],[name=alasan]').forEach(function(e){e.disabled=busy||!!job;});$('[data-cp-jalankan]').disabled=busy||!!(job&&job.status!=='siap');$('[data-cp-ya]').disabled=busy;$('[data-cp-tidak]').disabled=busy;}
+function kunci(){root.dataset.sibuk=busy?'1':'0';root.querySelectorAll('[name=cp-format],[name=cp-keluaran],[name=alasan]').forEach(function(e){e.disabled=busy||!!job;});$('[data-cp-jalankan]').disabled=busy||!!(job&&job.status!=='siap');$('[data-cp-ya]').disabled=busy;$('[data-cp-tidak]').disabled=busy;}
 function tampilJob(){
  $('[data-cp-pending]').hidden=!job;
  if(job){
@@ -45,19 +46,19 @@ async function minta(url,data){
  if(!r.ok){var d=await r.json().catch(function(){return {};});var err=new Error(d.error||'Server belum mengonfirmasi pekerjaan cetak.');err.status=r.status;throw err;}
  return r;
 }
-function segar(){simpan('kunci','');key='';location.reload();}
+function segar(berhasil){simpan('kunci','');key='';if(opsi.segar){opsi.segar(berhasil===true);return;}location.reload();}
 async function hasil(h){
  if(!job||busy)return;busy=true;kunci();
  try{
   var r=await minta(root.dataset.tujuan+'/'+job.kunci+'/hasil',{hasil:h}),j=await r.json();
-  if(j.status==='berhasil'){simpan('alasan','');pesan('Cetak fisik tercatat.');segar();return;}
+  if(j.status==='berhasil'){simpan('alasan','');pesan('Cetak fisik tercatat.');segar(true);return;}
   job=null;simpan('kunci','');key='';$('[data-cp-pdf]').hidden=true;pesan('Belum ada cetak sukses yang ditambahkan. Tinjau pratinjau sebelum membuat perintah baru.');$('[data-cp-segar]').hidden=false;
  }catch(e){pesan(e.message+' Periksa status pekerjaan ini sebelum mencoba lagi.');}
  finally{busy=false;tampilJob();}
 }
 $('[data-cp-ya]').addEventListener('click',function(){hasil('dikonfirmasi');});
 $('[data-cp-tidak]').addEventListener('click',function(){hasil('belum_tercetak');});
-$('[data-cp-segar]').addEventListener('click',segar);
+$('[data-cp-segar]').addEventListener('click',function(){segar(false);});
 $('[data-cp-jalankan]').addEventListener('click',async function(){
  if(busy||(job&&job.status!=='siap'))return;
  var alasan=$('[name=alasan]');if(!job&&alasan.required&&!alasan.value.trim()){pesan('Isi alasan cetak ulang sebelum menyiapkan cetak fisik.');alasan.focus();alasan.reportValidity();return;}
@@ -96,7 +97,7 @@ $('[data-cp-jalankan]').addEventListener('click',async function(){
    pesan('Printer mengonfirmasi berhasil. Menyimpan riwayat…');
    var ack=await minta(root.dataset.tujuan+'/'+frozen.kunci+'/hasil',{hasil:'printer_berhasil'});var j=await ack.json();
    if(j.status!=='berhasil')throw new Error('Riwayat cetak belum terkonfirmasi.');
-   simpan('alasan','');segar();
+   simpan('alasan','');segar(true);
   }
  }catch(e){
   pesan(e.message+(sudahKirim?' Periksa hasil fisik; jangan mengirim ulang.':' Isian tetap tersedia.'));
@@ -104,4 +105,8 @@ $('[data-cp-jalankan]').addEventListener('click',async function(){
  }finally{busy=false;tampilJob();}
 });
 tampilJob();
+return {jalan:function(){$('[data-cp-jalankan]').click();}};
+}
+window.TeraFlowCetak={pasang:pasang};
+pasang(document.querySelector('[data-cetak-halaman]'));
 })();

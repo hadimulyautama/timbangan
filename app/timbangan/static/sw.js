@@ -38,6 +38,7 @@ var RANGKA = [
   PREFIX + '/static/pos-printer-desain.js' + V,
   PREFIX + '/static/cetak.css' + V,
   PREFIX + '/static/cetak.js' + V,
+  PREFIX + '/static/cetak-langsung.js' + V,
   PREFIX + '/static/rincian-keluar.css' + V,
   PREFIX + '/static/rincian-kontrol.css' + V,
   PREFIX + '/static/rincian-keluar.js' + V,

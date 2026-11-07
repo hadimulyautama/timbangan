@@ -85,7 +85,7 @@
         <p>Timbang kedua · {{ trx.timbang2_waktu|tgl_jam }} · {{ masuk.orang.get(trx.timbang2_petugas_id,'Petugas belum tercatat') }}</p>
         <h3>Catatan</h3><p class="dk-catatan">{{ trx.catatan or 'Tidak ada catatan.' }}</p>
         {% if akun.is_super %}<a href="{{ PREFIX }}/audit">Buka jejak audit →</a>{% endif %}</section>
-        <section class="kartu"><h3>Riwayat cetak</h3>{% for c in cetak %}<article class="dk-barang"><b>Cetak {{ c.urutan }} · {{ c.format }} · revisi {{ c.revisi }}</b><p>{{ c.waktu|tgl_jam }} · {{ masuk.orang.get(c.oleh_id,'Petugas belum tercatat') }}</p><p>{{ c.alasan or 'Cetak pertama' }}</p></article>{% else %}<p>Belum ada catatan cetak.</p>{% endfor %}<p class="bantu">Pratinjau dokumen tidak menyatakan printer berhasil mencetak.</p></section>
+        <section class="kartu" data-riwayat-cetak><h3>Riwayat cetak</h3>{% for c in cetak %}<article class="dk-barang"><b>Cetak {{ c.urutan }} · {{ c.format }} · revisi {{ c.revisi }}</b><p>{{ c.waktu|tgl_jam }} · {{ masuk.orang.get(c.oleh_id,'Petugas belum tercatat') }}</p><p>{{ c.alasan or 'Cetak pertama' }}</p></article>{% else %}<p>Belum ada catatan cetak.</p>{% endfor %}<p class="bantu">Pratinjau dokumen tidak menyatakan printer berhasil mencetak.</p></section>
       </section>
 
   </details>

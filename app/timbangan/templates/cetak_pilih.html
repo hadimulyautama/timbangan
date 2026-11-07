@@ -16,18 +16,17 @@
         <h2 id="cp-pdf-judul">Dokumen PDF</h2>
         <p class="bantu">Buka, unduh, atau bagikan PDF tanpa alasan cetak ulang. Tidak menambah hitungan cetak fisik.</p>
         <a class="tbl blok" href="{{ PREFIX }}/transaksi/{{ trx.id }}/cetak/80mm" data-pdf-digital-link data-unduh data-dokumen="pdf" target="_blank" rel="noopener">PDF struk 80 mm</a>
-        <a class="tbl halus blok" href="{{ PREFIX }}/transaksi/{{ trx.id }}/cetak/ncr" data-pdf-digital-link data-unduh data-dokumen="pdf" target="_blank" rel="noopener">PDF setengah NCR</a>
         <div class="pesan" data-hasil-unduh data-pesan="PDF belum dapat dibuka atau dibagikan. Periksa jaringan dan sesi, lalu coba lagi. Tidak ada cetak fisik yang dicatat." role="status" hidden></div>
       </section>
       <details class="kartu cp-fisik" data-cetak-fisik {% if pekerjaan %}open{% endif %}><summary>Cetak fisik</summary><div class="cp-fisik-isi">
-        <fieldset class="cp-options"><legend class="sr-only">Format bukti timbang</legend>
+        <fieldset class="cp-options" hidden><legend class="sr-only">Format bukti timbang</legend>
           <label><input type="radio" name="cp-format" value="80MM" checked> Struk 80 mm</label>
-          <label><input type="radio" name="cp-format" value="NCR"> Setengah NCR</label>
         </fieldset>
-        <fieldset class="cp-options" data-keluaran><legend>Keluaran</legend>
+        <fieldset class="cp-options" data-keluaran hidden><legend>Keluaran</legend>
           <label><input type="radio" name="cp-keluaran" value="printer" checked> Printer pos</label>
-          <label><input type="radio" name="cp-keluaran" value="pdf"> Cetak melalui PDF</label>
         </fieldset>
+        {% if pekerjaan and pekerjaan.format == 'NCR' %}<input type="radio" name="cp-format" value="NCR" hidden>{% endif %}
+        {% if pekerjaan and pekerjaan.keluaran == 'pdf' %}<input type="radio" name="cp-keluaran" value="pdf" hidden>{% endif %}
         <p class="bantu" data-ncr-note hidden>Cetak setengah NCR melalui PDF · 215 × 165 mm. Konfirmasikan hanya setelah kertas benar-benar tercetak.</p>
         <div data-printer-info><b>Printer pos</b><p data-alamat-printer></p><a href="{{ PREFIX }}/printer">Siapkan printer</a></div>
         <label class="grup" {% if not riwayat %}hidden{% endif %}>Alasan cetak ulang
@@ -51,7 +50,7 @@
       </section>
     </div>
     <section class="cp-preview" aria-label="Pratinjau dokumen"><p data-cp-label>Struk 80 mm · revisi {{ trx.jumlah_revisi or 0 }}</p>
-      {% for f in ['80MM','NCR'] %}<article class="cp-paper {{ 'cp-paper--ncr' if f == 'NCR' }}" data-paper="{{ f }}" {% if f == 'NCR' %}hidden{% endif %}>
+      {% for f in (['80MM','NCR'] if pekerjaan and pekerjaan.format == 'NCR' else ['80MM']) %}<article class="cp-paper {{ 'cp-paper--ncr' if f == 'NCR' }}" data-paper="{{ f }}" {% if f == 'NCR' %}hidden{% endif %}>
         <header><b>{{ umum.perusahaan }}</b><div>{{ umum.alamat }}</div><div>{{ umum.telepon }}</div><h2>BUKTI TIMBANG</h2>{% if umum.cetakan_ke > 1 %}<b>CETAKAN ULANG ke-{{ umum.cetakan_ke }}</b>{% endif %}{% if trx.jumlah_revisi %}<div>Revisi {{ trx.jumlah_revisi }}</div>{% endif %}</header>
         <dl><dt>Nomor tiket</dt><dd>{{ trx.kode }}</dd><dt>Tanggal</dt><dd>{{ trx.tanggal|tgl }}</dd><dt>{{ 'Pengirim' if umum.arah_masuk else 'Pihak' }}</dt><dd>{{ umum.pihak }}</dd><dt>Kegiatan</dt><dd>{{ aturan.nama }}</dd>{% if not trx.partai %}<dt>Nomor polisi</dt><dd>{{ trx.nomor_polisi or '—' }}</dd><dt>Sopir</dt><dd>{{ trx.nama_sopir or '—' }}</dd>{% endif %}{% if umum.muatan and umum.muatan[0].nomor_acuan %}<dt>{{ 'Nota' if umum.arah_masuk else 'Surat jalan' }}</dt><dd>{{ umum.muatan[0].nomor_acuan }}</dd>{% endif %}</dl>
         <dl class="cp-angka">{% for r in baris %}<dt>{{ r.label }}{% if r.jam %}<small>{{ r.jam }}</small>{% endif %}</dt><dd>{{ r.nilai }}</dd>{% endfor %}<dt><b>BERAT BARANG</b></dt><dd><b>{{ trx.berat_barang_kg|kg }}</b></dd>
@@ -64,7 +63,7 @@
       <p class="bantu">Pratinjau menyesuaikan layar · ukuran dokumen cetak tetap. Dokumen panjang dapat terdiri dari beberapa halaman.</p>
     </section>
   </div>
-  <noscript><p>Aktifkan JavaScript untuk pratinjau interaktif dan konfirmasi printer.</p><a href="{{ PREFIX }}/transaksi/{{ trx.id }}/cetak/80mm" target="_blank">PDF struk 80 mm</a> · <a href="{{ PREFIX }}/transaksi/{{ trx.id }}/cetak/ncr" target="_blank">PDF setengah NCR</a></noscript>
+  <noscript><p>Aktifkan JavaScript untuk pratinjau interaktif dan konfirmasi printer.</p><a href="{{ PREFIX }}/transaksi/{{ trx.id }}/cetak/80mm" target="_blank">PDF struk 80 mm</a></noscript>
   <script type="application/json" data-cp-job>{{ pekerjaan|tojson }}</script>
 </section>
 {% endblock %}

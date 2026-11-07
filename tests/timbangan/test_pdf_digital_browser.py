@@ -25,8 +25,8 @@ async def test_pdf_tanpa_alasan_setelah_cetak_dan_saat_pending(klien,alamat_ui,w
             before=await keadaan(tid)
             await buka(page,alamat_ui+base)
             assert await page.locator('[name=alasan]').input_value()==('Salinan fisik tertunda' if pending else '')
-            links=page.locator('[data-pdf-digital-link]');assert await links.count()==2
-            for i,fmt in enumerate(('80mm','ncr')):
+            links=page.locator('[data-pdf-digital-link]');assert await links.count()==1
+            for i,fmt in enumerate(('80mm',)):
                 link=links.nth(i)
                 assert await link.is_enabled()
                 if width==1440:
@@ -52,7 +52,7 @@ async def test_pdf_tanpa_alasan_setelah_cetak_dan_saat_pending(klien,alamat_ui,w
                 await page.locator('[data-cetak-fisik]>summary').click()
                 assert await page.locator('.cp-preview').is_hidden()
                 assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
-            out=Path(os.environ['UJI_PDF_OUT']);out.mkdir(parents=True,exist_ok=True)
+            out=Path(os.environ.get('UJI_PDF_OUT',os.environ.get('UJI_CETAK_OUT','/tmp/tf-pdf-digital')));out.mkdir(parents=True,exist_ok=True)
             await page.screenshot(path=str(out/f'pdf-{width}-{pending}.png'),full_page=True)
         assert not errors
         await b.close()

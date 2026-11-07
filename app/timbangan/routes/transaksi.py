@@ -809,6 +809,19 @@ async def catat_cetak(
     return redirect(f"/transaksi/{transaksi_id}/cetak", ok="Cetak tercatat.")
 
 
+@router.get("/transaksi/{transaksi_id}/cetak/konteks")
+async def konteks_cetak_langsung(transaksi_id:int,akun:TimbanganAkun=Depends(butuh_akun),db:AsyncSession=Depends(get_db)):
+    from app.timbangan import cetak as c
+    try:
+        b,a,u=await c.bahan(db,transaksi_id,akun)
+        pending=await c.tertunda(db,transaksi_id,akun)
+        return JSONResponse(dict(sidik=c.sidik(u,akun),identitas=f'{akun.id}-{transaksi_id}',
+            kode=b.trx.kode,ulang=u['cetakan_ke']>1,pekerjaan=c.ringkas(pending) if pending else None),
+            headers={'Cache-Control':'private, no-store'})
+    except service.LayananError as e:
+        return JSONResponse({'error':str(e)},status_code=409,headers={'Cache-Control':'private, no-store'})
+
+
 @router.post("/transaksi/{transaksi_id}/cetak/pekerjaan")
 async def siapkan_pekerjaan_cetak(transaksi_id:int,request:Request,akun:TimbanganAkun=Depends(butuh_akun),db:AsyncSession=Depends(get_db)):
     from app.timbangan import cetak as c

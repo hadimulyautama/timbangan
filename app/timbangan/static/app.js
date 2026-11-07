@@ -652,7 +652,7 @@
     if (!e.target.closest) { return; }
     var tautan = e.target.closest('a[data-unduh]');
     if (!tautan) { return; }
-    if (!perlu_lembar_bagikan()) { return; }   // biarkan tautan bekerja apa adanya
+    if (!tautan.hasAttribute('data-bagikan') && !perlu_lembar_bagikan()) { return; }   // biarkan tautan bekerja apa adanya
     e.preventDefault();
     unduhBerkas(tautan);
   });
@@ -700,7 +700,7 @@
           berkas = new File([hasil.blob], hasil.nama, { type: jenis });
         } catch (err) { berkas = null; }
 
-        if (berkas && navigator.canShare &&
+        if (berkas && navigator.share && navigator.canShare &&
             navigator.canShare({ files: [berkas] })) {
           return navigator.share({ files: [berkas], title: hasil.nama });
         }

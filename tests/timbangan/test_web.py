@@ -907,7 +907,7 @@ async def test_bukti_gabah_tetap_dicetak_dengan_sopir_sebagai_saksi(klien):
     trx_id = await _selesaikan(klien, "GABAH_BASAH")
 
     rincian = (await klien.get(f"{PREFIX}/transaksi/{trx_id}")).text
-    assert "Pratinjau & cetak" in rincian
+    assert "data-cetak-langsung data-tiket" in rincian
     assert "Cetak untuk arsip" not in rincian
 
     cetak = teks_pdf(

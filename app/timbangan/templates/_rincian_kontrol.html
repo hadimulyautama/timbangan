@@ -6,11 +6,15 @@
   <div class="tf-detail-controls__actions rd-buttons">
     {% if panduan %}<button type="button" class="tbl halus" data-rd-guide hidden><span aria-hidden="true">ⓘ</span> Panduan</button>{% endif %}
     {% if trx.status_tiket == 'SELESAI' and trx.status_transaksi != 'VOID' %}
-      <a href="{{ prefix }}/transaksi/{{ trx.id }}/cetak" class="tbl">Pratinjau & cetak{% if cetak %} · {{ cetak|length }}×{% endif %}</a>
+      <a href="{{ prefix }}/transaksi/{{ trx.id }}/cetak" class="tbl" data-cetak-langsung data-tiket="{{ trx.id }}" data-prefix="{{ prefix }}">Cetak</a>
+      <a href="{{ prefix }}/transaksi/{{ trx.id }}/cetak/80mm" class="tbl halus" target="_blank" rel="noopener">Lihat</a>
+      <a href="{{ prefix }}/transaksi/{{ trx.id }}/cetak/80mm" class="tbl halus" data-bagikan data-unduh data-dokumen="pdf" target="_blank" rel="noopener">Bagikan</a>
     {% elif trx.status_tiket == 'TERBUKA' and trx.status_transaksi != 'VOID' %}
       <a href="{{ prefix }}/{{ 'partai' if trx.partai else 'tiket' }}/{{ trx.id }}" class="tbl">{{ 'Lanjutkan partai' if trx.partai else 'Lanjutkan timbang kedua' }}</a>
     {% endif %}
     {% if tindakan %}<button type="button" class="tbl halus" data-rd-actions-open hidden aria-label="Tindakan lainnya">⋯</button>{% endif %}
   </div>
 </div>
+<p class="pesan" data-hasil-unduh data-pesan="PDF belum dapat dibuka atau dibagikan. Periksa jaringan dan sesi, lalu coba lagi." role="status" hidden></p>
+<p class="pesan" data-cetak-langsung-hasil role="status" hidden></p>
 {%- endmacro %}

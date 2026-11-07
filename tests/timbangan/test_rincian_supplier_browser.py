@@ -37,8 +37,11 @@ async def test_referensi_responsif_keyboard_tanpa_mutasi(klien,alamat_ui,monkeyp
         assert '<script>alert' in await panel.inner_text()
         await page.screenshot(path=str(OUT/f'panel-{width}-{theme}-{role}.png'),full_page=True)
         await page.reload();assert await panel.count()==1
-        await page.get_by_role('link',name='Pratinjau & cetak').click()
-        assert '/cetak' in page.url and not writes and not errors
+        lokasi=page.url
+        async with ctx.expect_event('response',predicate=lambda r:'/cetak/80mm' in r.url) as lihat:
+            await page.get_by_role('link',name='Lihat',exact=True).click()
+        assert (await lihat.value).headers['content-type']=='application/pdf'
+        assert page.url==lokasi and not writes and not errors
         await b.close()
 
 async def test_ganti_akun_tidak_membawa_rincian_akun_lain(klien,alamat_ui,monkeypatch):
