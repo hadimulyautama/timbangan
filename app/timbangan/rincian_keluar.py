@@ -44,6 +44,21 @@ async def status_produksi(db, tid):
         log.warning('Status PadiFlow tidak tersedia untuk detail timbang')
         return tidak_pasti
 
+
+def tahap_pengiriman(trx, produksi):
+    """Selesai timbang tidak dipakai untuk menebak hasil verifikasi PadiFlow."""
+    if trx.status_transaksi=='VOID':timbang='Tiket dibatalkan'
+    else:timbang={'SELESAI':'Selesai timbang','TERBUKA':'Menunggu timbang kedua','DITUTUP_PAKSA':'Ditutup tanpa timbang kedua'}.get(trx.status_tiket,'Status timbang belum dapat dipastikan')
+    kode=produksi['kode']
+    if kode=='tidak_pasti':berikut='Status verifikasi PadiFlow belum dapat dibaca. Periksa pengiriman di PadiFlow; hasil timbang yang tersimpan tetap tersedia.'
+    elif kode=='belum':berikut='Admin perlu memeriksa pengiriman yang sesuai di PadiFlow. Tiket ini belum memiliki pengiriman aktif tertaut.'
+    elif kode=='terverifikasi':berikut='Verifikasi pengiriman sudah tercatat di PadiFlow. Metode dan petugas mengikuti jejak verifikasi yang tersimpan.'
+    elif any(p['status']=='perintah' for p in produksi['perintah']):berikut='Operator gudang menyelesaikan catatan muatan di PadiFlow. Verifikasi pengiriman belum selesai.'
+    elif trx.status_transaksi=='VOID':berikut='Admin perlu memeriksa tiket yang dibatalkan dan pengiriman terkait sebelum melanjutkan verifikasi.'
+    elif trx.status_tiket=='TERBUKA':berikut='Petugas timbang menyelesaikan penimbangan. Verifikasi pengiriman di PadiFlow belum selesai.'
+    else:berikut='Admin memeriksa verifikasi pengiriman di PadiFlow. Selesai timbang saja bukan bukti pengiriman terverifikasi.'
+    return dict(timbang=timbang,verifikasi=produksi['label'],berikut=berikut)
+
 async def baca(db, trx, pemeriksaan, cetak):
     data = trx.pengiriman_snapshot
     sumber = 'snapshot' if data else 'historis'
@@ -67,7 +82,8 @@ async def baca(db, trx, pemeriksaan, cetak):
     acuan = trx.berat_acuan_kg
     if trx.status_kontrol == 'TANPA_KONTROL' and not acuan:
         acuan = None
-    return dict(data=data, sumber=sumber, pesan=pesan, kelompok=kelompok, acuan=acuan,
+    produksi=await status_produksi(db,trx.id)
+    return dict(tahap_pengiriman=tahap_pengiriman(trx,produksi),data=data, sumber=sumber, pesan=pesan, kelompok=kelompok, acuan=acuan,
                 total_acuan=sum((p['subtotal'] for p in kelompok), Decimal(0)) if data else None,
                 tara_karung=tara_karung, orang=orang,
-                produksi=await status_produksi(db, trx.id))
+                produksi=produksi)

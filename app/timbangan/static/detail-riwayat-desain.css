@@ -31,3 +31,12 @@ body.padiflow-ui .rd-control-status .tbl{width:auto;min-height:44px;padding:9px 
 body.padiflow-ui .rd-result>.dk-integrasi{padding:14px 0 0;border:0;border-top:1px solid var(--pd-line);border-radius:0;box-shadow:none;background:transparent}
 
 .rd-page .rd-transfer-link{display:grid;gap:12px;padding-top:14px;border-top:1px solid var(--pd-line)}
+
+.rd-page .rd-shipping-title{font-size:16px;margin:0 0 12px}
+.rd-shipping-status{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 20px;margin:0}
+.rd-shipping-status>div{display:grid;gap:6px;align-content:start;min-width:0;overflow-wrap:anywhere}
+.rd-shipping-status dt{font-size:13px;color:var(--pd-muted)}
+.rd-shipping-status dd{font-size:15px;font-weight:600;margin:0;line-height:1.5}
+@media(max-width:600px){.rd-shipping-status{grid-template-columns:minmax(0,1fr)}.rd-shipping-status>div+div{border-top:1px solid var(--pd-line);padding-top:12px}}
+
+body.padiflow-ui .rd-result>.dk-integrasi{border-left:0!important;padding-block:14px}
