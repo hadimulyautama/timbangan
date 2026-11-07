@@ -91,7 +91,7 @@ async def test_pilihan_baru_koreksi_dan_gagal_simpan(klien,alamat_ui,browser):
         await page.wait_for_url('**/transaksi/**')
         async with database.SessionLocal() as db:
             t=await db.scalar(select(TimbanganTransaksi));tid=t.id;assert t.lintasan_transfer['tujuan']['silo_id']==104
-        await page.locator('[data-rd-actions-open]').click();await page.get_by_role('link',name='Koreksi',exact=True).click()
+        await page.locator('[data-tindakan-trigger]').click();await page.get_by_role('link',name='Koreksi',exact=True).click()
         await page.locator('[name=transfer_tujuan]').select_option('gudang:102')
         await page.locator('[data-correction-form] [name=alasan]').fill('Pilihan lokasi uji')
         await page.wait_for_function("document.querySelector('[data-cf-hasil]').textContent.includes('Tumpukan')")
@@ -117,12 +117,12 @@ async def test_tindakan_dan_kunci_ui(klien,alamat_ui,role):
         t=await db.get(TimbanganTransaksi,tid);t.timbang2_waktu_sistem=sekarang()-timedelta(days=10);await db.commit()
     async with async_playwright() as pw:
         b,ctx,page=await browser_uji(pw,klien,alamat_ui)
-        await buka(page,alamat_ui+f'/timbangan/transaksi/{tid}');await page.locator('[data-rd-actions-open]').click()
+        await buka(page,alamat_ui+f'/timbangan/transaksi/{tid}');await page.locator('[data-tindakan-trigger]').click()
         assert await page.get_by_role('link',name='Koreksi',exact=True).count()==int(P.admin_keatas(role))
         form=page.locator('form[action$="/batal"]');assert await form.count()==int(P.admin_keatas(role))
         assert await page.locator('form[action$="/hapus"]').count()==int(role==P.SUPERADMIN)
         if P.admin_keatas(role):
-            await form.locator('..').locator('summary').click();await form.locator('[name=alasan]').fill('Pembatalan uji terpisah')
+            await page.locator('[data-tindakan-menu]').get_by_role('button',name='Batalkan transaksi',exact=True).click();await form.locator('[name=alasan]').fill('Pembatalan uji terpisah')
             await form.locator('button').click();await page.wait_for_url(lambda u:'ok=' in str(u))
             async with database.SessionLocal() as db:assert (await db.get(TimbanganTransaksi,tid)).status_transaksi=='VOID'
         else:

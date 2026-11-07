@@ -16,13 +16,28 @@ gudang yang keluar lewat satu sambungan.
 from __future__ import annotations
 
 import time
-from collections import defaultdict
+from collections import OrderedDict
 
 BATAS_GAGAL = 5
 JEDA_DETIK = 300
 UMUR_DETIK = 900
 
-_gagal: dict[tuple[str, str], list[float]] = defaultdict(list)
+MAKS_KUNCI = 10_000
+_gagal: OrderedDict[tuple[str, str], list[float]] = OrderedDict()
+_terakhir_bersih = 0.0
+
+
+def _pangkas(kini: float) -> None:
+    global _terakhir_bersih
+    if kini - _terakhir_bersih < 60:
+        return
+    for k, nilai in list(_gagal.items()):
+        hidup = _bersih(nilai, kini)
+        if hidup:
+            _gagal[k] = hidup
+        else:
+            _gagal.pop(k, None)
+    _terakhir_bersih = kini
 
 
 def _kunci(username: str, ip: str) -> tuple[str, str]:
@@ -37,8 +52,13 @@ def boleh_coba(username: str, ip: str) -> float | None:
     """None bila boleh mencoba; selain itu sisa detik penahanan."""
     k = _kunci(username, ip)
     kini = time.monotonic()
+    _pangkas(kini)
     waktu = _bersih(_gagal.get(k, []), kini)
-    _gagal[k] = waktu
+    if waktu:
+        _gagal[k] = waktu
+        _gagal.move_to_end(k)
+    else:
+        _gagal.pop(k, None)
     if len(waktu) < BATAS_GAGAL:
         return None
     sisa = JEDA_DETIK - (kini - waktu[-1])
@@ -48,7 +68,12 @@ def boleh_coba(username: str, ip: str) -> float | None:
 def catat_gagal(username: str, ip: str) -> None:
     k = _kunci(username, ip)
     kini = time.monotonic()
-    _gagal[k] = _bersih(_gagal.get(k, []), kini) + [kini]
+    _pangkas(kini)
+    if k not in _gagal and len(_gagal) >= MAKS_KUNCI:
+        # Batas memori tetap; pasangan yang baru dipakai dipertahankan.
+        _gagal.popitem(last=False)
+    _gagal[k] = (_bersih(_gagal.get(k, []), kini) + [kini])[-BATAS_GAGAL:]
+    _gagal.move_to_end(k)
 
 
 def catat_berhasil(username: str, ip: str) -> None:
@@ -60,3 +85,5 @@ def catat_berhasil(username: str, ip: str) -> None:
 def bersihkan() -> None:
     """Kosongkan hitungan. Dipakai uji; tak dipanggil aplikasi."""
     _gagal.clear()
+    global _terakhir_bersih
+    _terakhir_bersih = 0.0

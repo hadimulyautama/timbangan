@@ -411,7 +411,8 @@ async def test_void_menyimpan_data_dan_menuntut_alasan(db, petugas, admin2, supp
     # membatalkan tiket yang masih terbuka (keputusan pemilik), dan yang
     # dijaga di sini penolakan atas transaksi yang SUDAH LENGKAP — di situlah
     # angkanya sudah jadi dasar keputusan orang lain.
-    trx.status_tiket = TIKET_SELESAI
+    trx = await service.simpan_timbang_kedua(db, akun=petugas, kode=trx.kode, berat_kg=5000)
+    assert trx.status_tiket == TIKET_SELESAI
     with pytest.raises(service.LayananError, match="sudah ditimbang kedua"):
         await service.void_transaksi(db, akun=petugas, trx=trx, alasan="salah")
     with pytest.raises(service.LayananError, match="alasan"):

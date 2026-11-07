@@ -108,8 +108,12 @@ async def pastikan_bebas_tautan(db: AsyncSession, trx, *, tindakan: str) -> None
     """
     from app.timbangan.service import LayananError
 
+    # Penerimaan PadiFlow mengunci tiket yang sama. Pertahankan kunci sampai
+    # tindakan selesai agar penerimaan tidak menyelinap setelah pemeriksaan.
+    await db.refresh(trx, with_for_update=True)
     kode = await batch_tertaut(db, getattr(trx, "id", None))
     kode.extend(await pengiriman_tertaut(db, getattr(trx, "id", None)))
+    kode.extend(await produk_tertaut(db, trx))
     if getattr(trx, "arah", None) == "RETUR_MASUK":
         # Retur yang sudah diterima menjadi sumber stok. Mengubah bobot atau
         # kemasannya sesudah itu akan membuat kedua aplikasi berselisih.
@@ -123,3 +127,38 @@ async def pastikan_bebas_tautan(db: AsyncSession, trx, *, tindakan: str) -> None
         f"{tindakan} tidak bisa: tiket ini sudah dicatat produksi sebagai "
         f"{', '.join(kode)} — minta produksi melepas tautannya dulu."
     )
+
+
+async def produk_tertaut(db: AsyncSession, trx) -> list[str]:
+    """Bukti penerimaan produk tetap berlaku sesudah stok habis/masuk silo.
+
+    Pembaca kompatibel dengan instalasi mandiri yang belum memiliki tabel
+    PadiFlow. Tidak menebak hubungan dari nama pemilik atau saldo saat ini.
+    """
+    tabel = await db.run_sync(lambda s: set(inspect(s.connection()).get_table_names()))
+    hasil = []
+    for nama, label in (("finished_goods_stock", "stok beras"),
+                        ("byproduct_stock", "stok hasil samping"),
+                        ("beras_ke_silo", "pemindahan beras ke silo")):
+        if nama not in tabel:
+            continue
+        kolom = await db.run_sync(lambda s: {c['name'] for c in inspect(s.connection()).get_columns(nama)})
+        if not {'source_type', 'source_id', 'id'} <= kolom:
+            continue
+        # Nama tabel berasal dari daftar tetap di atas, bukan payload.
+        nomor = await db.scalar(text(f"SELECT id FROM {nama} WHERE source_type='timbangan' AND source_id=:tid LIMIT 1"), {'tid': trx.id})
+        if nomor is not None:
+            hasil.append(f"{label} #{nomor}")
+    if 'activity_logs' in tabel:
+        kolom = await db.run_sync(lambda s: {c['name'] for c in inspect(s.connection()).get_columns('activity_logs')})
+        if {'action', 'table_name', 'aksi', 'field_name', 'old_value', 'new_value'} <= kolom:
+            pola = trx.kode.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_') + ' · %'
+            ada = await db.scalar(text("""
+                SELECT 1 FROM activity_logs
+                WHERE action='INSERT' AND table_name IN ('finished_goods_stock','byproduct_stock')
+                  AND ((aksi='produk_timbang_masuk' AND field_name='timbangan_transaksi_id' AND old_value=:tid)
+                       OR new_value LIKE :kode ESCAPE '\\') LIMIT 1
+            """), {'tid': str(trx.id), 'kode': pola})
+            if ada:
+                hasil.append('arsip penerimaan produk PadiFlow')
+    return hasil

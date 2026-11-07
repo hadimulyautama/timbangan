@@ -523,7 +523,7 @@ async def pilih_cetak(
             rinci_ncr=pengiriman.rincian_bukti(b.trx, berat=False),
             tampil_selisih=epos.tampilkan_selisih(b.trx,aturan),
             riwayat=await cetak_bukti.riwayat(db,transaksi_id),
-            pekerjaan=cetak_bukti.ringkas(pending) if pending else None,
+            pekerjaan=cetak_bukti.ringkas(pending, akun) if pending else None,
             kembali=f"{PREFIX}/transaksi/{transaksi_id}" + ("?"+urlencode({'kembali':_kembali_riwayat(request)}) if _kembali_riwayat(request) else ""))
     except service.LayananError as e:
         return redirect("/transaksi" if akun.is_admin else "/", err=str(e))
@@ -816,7 +816,7 @@ async def konteks_cetak_langsung(transaksi_id:int,akun:TimbanganAkun=Depends(but
         b,a,u=await c.bahan(db,transaksi_id,akun)
         pending=await c.tertunda(db,transaksi_id,akun)
         return JSONResponse(dict(sidik=c.sidik(u,akun),identitas=f'{akun.id}-{transaksi_id}',
-            kode=b.trx.kode,ulang=u['cetakan_ke']>1,pekerjaan=c.ringkas(pending) if pending else None),
+            kode=b.trx.kode,ulang=u['cetakan_ke']>1,pekerjaan=c.ringkas(pending, akun) if pending else None),
             headers={'Cache-Control':'private, no-store'})
     except service.LayananError as e:
         return JSONResponse({'error':str(e)},status_code=409,headers={'Cache-Control':'private, no-store'})
@@ -829,7 +829,7 @@ async def siapkan_pekerjaan_cetak(transaksi_id:int,request:Request,akun:Timbanga
         data=await request.json()
         if not isinstance(data,dict):raise service.LayananError('Data pekerjaan tidak sah.')
         j=await c.siapkan(db,transaksi_id,akun,data)
-        return JSONResponse(c.ringkas(j),headers={'Cache-Control':'private, no-store'})
+        return JSONResponse(c.ringkas(j, akun),headers={'Cache-Control':'private, no-store'})
     except (service.LayananError,ValueError) as e:
         await db.rollback()
         return JSONResponse({'error':str(e)},status_code=409)
@@ -851,8 +851,8 @@ async def hasil_pekerjaan_cetak(transaksi_id:int,kunci:str,request:Request,akun:
     from app.timbangan import cetak as c
     try:
         data=await request.json()
-        j=await c.hasil(db,transaksi_id,kunci,akun,data.get('hasil'),ip=request.client.host if request.client else None)
-        return JSONResponse(c.ringkas(j),headers={'Cache-Control':'private, no-store'})
+        j=await c.hasil(db,transaksi_id,kunci,akun,data.get('hasil'),ip=request.client.host if request.client else None,alasan_penyelesaian=data.get('alasan_penyelesaian'))
+        return JSONResponse(c.ringkas(j, akun),headers={'Cache-Control':'private, no-store'})
     except (service.LayananError,ValueError,AttributeError) as e:
         await db.rollback()
         return JSONResponse({'error':str(e)},status_code=409)

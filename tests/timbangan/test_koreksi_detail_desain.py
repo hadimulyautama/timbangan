@@ -102,8 +102,8 @@ async def test_detail_ringkas_data_penerimaan_dan_pemeriksaan(lokal,monkeypatch,
         assert await page.get_by_label('Catatan resolusi',exact=True).input_value()=='Temuan uji dipertahankan'
         await page.locator('#rd-exam [data-rd-close]').click();await page.locator('[data-rd-exam-open]').click();assert await page.get_by_label('Catatan resolusi',exact=True).input_value()=='Temuan uji dipertahankan'
         await page.locator('#rd-exam [data-rd-close]').click()
-        await page.locator('[data-rd-actions-open]').click();assert await page.locator('#rd-actions').get_by_role('link',name='Koreksi',exact=True).is_visible()
-        await page.locator('#rd-actions [data-rd-close]').click()
+        await page.locator('[data-tindakan-trigger]').click();assert await page.locator('[data-tindakan-menu]').get_by_role('link',name='Koreksi',exact=True).is_visible()
+        await page.keyboard.press('Escape')
         assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
         for selector in ['#rd-perhitungan>summary','#rd-penerimaan>summary']:
             if await page.locator(selector).evaluate('e=>e.parentElement.open'):await page.locator(selector).click()

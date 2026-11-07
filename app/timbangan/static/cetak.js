@@ -6,6 +6,12 @@ if(!root||root.dataset.aktif)return;root.dataset.aktif='1';opsi=opsi||{};
 var $=function(s){return root.querySelector(s);};
 function rangkap(){return job&&job.rangkap||2;}
 var job=JSON.parse($('[data-cp-job]').textContent),busy=false;
+// Alasan pengawasan terpisah dari alasan cetak milik pencetak semula.
+var resolusi=document.createElement('label');resolusi.className='grup';
+resolusi.textContent='Alasan penyelesaian oleh Admin';resolusi.hidden=true;
+var alasanResolusi=document.createElement('textarea');alasanResolusi.name='alasan_penyelesaian';alasanResolusi.maxLength=2000;alasanResolusi.className='fld';
+resolusi.append(alasanResolusi);$('[data-cp-pending]').insertBefore(resolusi,$('[data-cp-ya]'));
+
 var storage='tf-cetak:'+root.dataset.identitas,key='';
 try{key=sessionStorage.getItem(storage+':kunci')||'';$('[name=alasan]').value=sessionStorage.getItem(storage+':alasan')||'';}catch(e){}
 function simpan(k,v){try{sessionStorage.setItem(storage+':'+k,v);}catch(e){}}
@@ -23,9 +29,10 @@ function pilihan(){
  $('[data-cp-label]').textContent=(f==='NCR'?'Setengah NCR · 215 × 165 mm':'Struk 80 mm')+' · pratinjau revisi tiket saat halaman dibuka';
 }
 root.querySelectorAll('[name=cp-format],[name=cp-keluaran]').forEach(function(x){x.addEventListener('change',pilihan);});
-function kunci(){root.dataset.sibuk=busy?'1':'0';root.querySelectorAll('[name=cp-format],[name=cp-keluaran],[name=alasan]').forEach(function(e){e.disabled=busy||!!job;});$('[data-cp-jalankan]').disabled=busy||!!(job&&job.status!=='siap');$('[data-cp-ya]').disabled=busy;$('[data-cp-tidak]').disabled=busy;}
+function kunci(){root.dataset.sibuk=busy?'1':'0';root.querySelectorAll('[name=cp-format],[name=cp-keluaran],[name=alasan]').forEach(function(e){e.disabled=busy||!!job;});$('[data-cp-jalankan]').disabled=busy||!!(job&&(job.status!=='siap'||job.boleh_menuntaskan));alasanResolusi.disabled=busy;$('[data-cp-ya]').disabled=busy;$('[data-cp-tidak]').disabled=busy;}
 function tampilJob(){
  $('[data-cp-pending]').hidden=!job;
+ resolusi.hidden=!(job&&job.boleh_menuntaskan);
  if(job){
   $('[name=cp-format][value="'+job.format+'"]').checked=true;
   $('[name=cp-keluaran][value="'+job.keluaran+'"]').checked=true;
@@ -33,6 +40,8 @@ function tampilJob(){
   $('[data-pending-judul]').textContent=job.status==='pdf_siap'?'Cetak melalui PDF · konfirmasi hasil fisik':job.status==='siap'?'Pekerjaan belum dikirim':'Hasil cetak perlu dipastikan';
   $('[data-pending-teks]').textContent=job.nama+' · '+job.format+' · revisi '+job.revisi+'. Periksa seluruh '+(job.rangkap||1)+' rangkap pekerjaan ini sebelum membuat cetakan lain.';
   $('[data-cp-ya]').hidden=job.status==='siap';
+  if(job.boleh_menuntaskan)$('[data-pending-teks]').textContent+=' Pekerjaan milik '+job.nama+'. Pastikan perangkat pencetak semula sudah berhenti mengirim. Periksa seluruh hasil fisik dan isi alasan sebelum menuntaskannya. Perintah tidak dikirim ulang.';
+  $('[data-cp-tidak]').textContent=job.status==='siap'?'Batalkan pekerjaan yang belum dikirim':'Belum tercetak';
   if(job.status==='pdf_siap'){
    $('[data-cp-pdf]').href=root.dataset.tujuan+'/'+encodeURIComponent(job.kunci)+'/berkas';$('[data-cp-pdf]').hidden=false;
   }
@@ -49,9 +58,11 @@ async function minta(url,data){
 }
 function segar(berhasil){simpan('kunci','');key='';if(opsi.segar){opsi.segar(berhasil===true);return;}location.reload();}
 async function hasil(h){
- if(!job||busy)return;busy=true;kunci();
+ if(!job||busy)return;
+ if(job.boleh_menuntaskan&&!alasanResolusi.value.trim()){pesan('Isi alasan penyelesaian setelah memeriksa hasil cetak petugas semula.');alasanResolusi.focus();return;}
+ busy=true;kunci();
  try{
-  var r=await minta(root.dataset.tujuan+'/'+job.kunci+'/hasil',{hasil:h}),j=await r.json();
+  var r=await minta(root.dataset.tujuan+'/'+job.kunci+'/hasil',{hasil:h,alasan_penyelesaian:alasanResolusi.value}),j=await r.json();
   if(j.status==='berhasil'){simpan('alasan','');pesan('Cetak fisik tercatat.');segar(true);return;}
   job=null;simpan('kunci','');key='';$('[data-cp-pdf]').hidden=true;pesan('Belum ada cetak sukses yang ditambahkan. Tinjau pratinjau sebelum membuat perintah baru.');$('[data-cp-segar]').hidden=false;
  }catch(e){pesan(e.message+' Periksa status pekerjaan ini sebelum mencoba lagi.');}

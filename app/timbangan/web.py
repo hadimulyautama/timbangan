@@ -36,7 +36,7 @@ BASE_DIR = Path(__file__).parent
 PREFIX = "/timbangan"
 
 # Dinaikkan bila CSS/JS berubah, supaya perangkat tidak memakai berkas lama.
-VERSI = "114"
+VERSI = "115"
 
 #: Warna tiap status. Dipisahkan dari `logic` karena ini urusan tampilan.
 NADA_STATUS = {
@@ -256,6 +256,15 @@ def pasang(app: FastAPI) -> None:
              "pesan": str(exc)},
             status_code=403,
         )
+
+    @app.exception_handler(logic.ValidasiError)
+    async def _angka_tidak_sah(request: Request, exc: logic.ValidasiError):
+        # Beberapa formulir kompatibilitas membaca angka sebelum blok simpan.
+        # Kosong tetap memakai bawaan; teks angka tidak sah harus terlihat.
+        # Pembungkus kiriman PWA mengembalikan 422 dan menyimpan seluruh isian.
+        if request.method == 'POST':
+            return redirect(request.url.path.removeprefix(PREFIX), err=str(exc))
+        return JSONResponse({'error': str(exc)}, status_code=422)
 
     # Jaring terakhir untuk galat basis data yang lolos dari rute mana pun
     # (R-T-01). Rute simpan sudah menangkapnya sendiri dan kembali ke
