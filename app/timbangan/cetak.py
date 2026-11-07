@@ -49,20 +49,23 @@ async def riwayat(db,tid):
     return [dict(c=c,nama=j.nama_pencetak if j else nama or 'Tidak tercatat',metode=j.metode if j else 'Pencatatan lama') for c,nama,j in rows]
 
 async def tertunda(db,tid,akun):
-    return await db.scalar(select(Job).where(Job.transaksi_id==tid,Job.oleh_id==akun.id,Job.status.in_(AKTIF)).order_by(Job.waktu.desc()))
+    q=select(Job).where(Job.transaksi_id==tid,Job.status.in_(AKTIF))
+    if not akun.is_admin:q=q.where(Job.oleh_id==akun.id)
+    return await db.scalar(q.order_by(Job.waktu.desc()))
 
 def rangkap(j):
     # Baca konten beku: pekerjaan satu lembar sebelum rilis tetap satu.
     return 2 if j.keluaran == 'printer' and j.konten.count(b'<cut type="feed"/>') == 2 else 1
 
-def ringkas(j):
-    return dict(rangkap=rangkap(j),kunci=j.kunci,status=j.status,format=j.format,keluaran=j.keluaran,revisi=j.revisi,nama=j.nama_pencetak,alasan=j.alasan or '')
+def ringkas(j,akun=None):
+    return dict(rangkap=rangkap(j),kunci=j.kunci,status=j.status,format=j.format,keluaran=j.keluaran,revisi=j.revisi,nama=j.nama_pencetak,alasan=j.alasan or '',
+        boleh_menuntaskan=bool(akun and akun.is_admin and j.oleh_id!=akun.id))
 
-async def milik(db,tid,key,akun):
+async def milik(db,tid,key,akun,*,pengawasan=False):
     # Selalu kunci tiket dahulu: urutan kunci sama dengan prepare/legacy audit.
     await kunci_tiket(db,tid)
     j=await db.scalar(select(Job).where(Job.kunci==key).with_for_update())
-    if not j or j.transaksi_id!=tid or j.oleh_id!=akun.id:
+    if not j or j.transaksi_id!=tid or (j.oleh_id!=akun.id and not (pengawasan and akun.is_admin)):
         raise service.LayananError('Pekerjaan ini tidak tersedia bagi akun sekarang. Masuk kembali dengan akun pencetak semula.')
     return j
 
@@ -82,8 +85,8 @@ async def siapkan(db,tid,akun,data):
     cap=sidik(u,akun)
     if data.get('sidik')!=cap:raise service.LayananError('Data tiket atau riwayat cetak berubah. Perbarui pratinjau dan tinjau data terbaru sebelum mencetak.')
     if u['cetakan_ke']>1 and not alasan:raise service.LayananError('Cetak ulang harus disertai alasan.')
-    pending=await db.scalar(select(Job.kunci).where(Job.transaksi_id==tid,Job.status.in_(AKTIF)))
-    if pending:raise service.LayananError('Masih ada pekerjaan cetak yang perlu dituntaskan oleh pencetaknya. Periksa hasilnya sebelum membuat perintah baru.')
+    pending=await db.scalar(select(Job).where(Job.transaksi_id==tid,Job.status.in_(AKTIF)))
+    if pending:raise service.LayananError('Masih ada pekerjaan cetak milik '+pending.nama_pencetak+'. Periksa hasilnya atau minta Admin menuntaskannya sebelum membuat perintah baru.')
     j=Job(kunci=key,transaksi_id=tid,oleh_id=akun.id,nama_pencetak=akun.nama,
         format=format,keluaran=keluaran,status='siap',sidik=cap,versi_tiket=service.versi_tiket(b.trx),
         revisi=int(b.trx.jumlah_revisi or 0),urutan=u['cetakan_ke'],alasan=alasan or None,konten=dokumen(u,format,keluaran))
@@ -111,11 +114,24 @@ async def keluarkan(db,tid,key,akun):
     j.status='dikirim' if j.keluaran=='printer' else 'pdf_siap'
     await db.commit();return j
 
-async def hasil(db,tid,key,akun,hasil,ip=None):
-    j=await milik(db,tid,key,akun)
+async def hasil(db,tid,key,akun,hasil,ip=None,alasan_penyelesaian=None):
+    j=await milik(db,tid,key,akun,pengawasan=True)
     if hasil not in ('printer_berhasil','dikonfirmasi','belum_tercetak','gagal'):
         raise service.LayananError('Hasil cetak tidak dikenal.')
     if j.status in ('berhasil','gagal','belum_tercetak','dibatalkan'):return j
+    pencetak=akun
+    if j.oleh_id!=akun.id:
+        if hasil=='printer_berhasil':
+            raise service.LayananError('Admin harus memeriksa hasil fisik, lalu memilih konfirmasi petugas; ACK pencetak lain tidak boleh diklaim.')
+        if not isinstance(alasan_penyelesaian,str) or not alasan_penyelesaian.strip():
+            raise service.LayananError('Isi alasan penyelesaian pekerjaan petugas lain setelah memeriksa hasil cetak.')
+        alasan_penyelesaian=alasan_penyelesaian.strip()
+        if len(alasan_penyelesaian)>2000:raise service.LayananError('Alasan penyelesaian maksimal 2000 karakter.')
+        pencetak=await db.get(TimbanganAkun,j.oleh_id)
+        if pencetak is None:raise service.LayananError('Identitas pencetak semula tidak tersedia.')
+        await service.catat_audit(db,akun=akun,aksi='TUNTASKAN_CETAK',entitas='transaksi',entitas_id=tid,
+            ringkasan=alasan_penyelesaian,sebelum={'pekerjaan':key,'status':j.status,'pencetak_id':j.oleh_id},
+            sesudah={'hasil':hasil,'penyelesai_id':akun.id},ip=ip)
     if hasil in ('belum_tercetak','gagal'):
         j.status=hasil;await db.commit();return j
     if j.status not in ('dikirim','pdf_siap') or (hasil=='printer_berhasil' and j.keluaran!='printer'):
@@ -123,5 +139,5 @@ async def hasil(db,tid,key,akun,hasil,ip=None):
     trx=await db.get(TimbanganTransaksi,tid)
     j.metode='Printer mengonfirmasi' if hasil=='printer_berhasil' else 'Dikonfirmasi petugas'
     if rangkap(j) == 2:j.metode += ' (2 lbr)'
-    await service.catat_cetak(db,akun=akun,trx=trx,alasan=j.alasan,format=j.format,ip=ip,pekerjaan=j)
+    await service.catat_cetak(db,akun=pencetak,trx=trx,alasan=j.alasan,format=j.format,ip=ip,pekerjaan=j)
     return j

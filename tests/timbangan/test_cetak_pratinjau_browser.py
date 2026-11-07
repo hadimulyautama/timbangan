@@ -96,3 +96,26 @@ async def test_printer_belum_ada_pdf_keyboard_dan_versi_berubah(klien,alamat_ui)
         async with database.SessionLocal() as db:assert await db.scalar(select(func.count()).select_from(TimbanganCetak))==0
         assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
         await b.close()
+
+@pytest.mark.parametrize('browser',['chromium','webkit'])
+async def test_admin_menuntaskan_pekerjaan_shift_lama_tanpa_kirim_ulang(klien,alamat_ui,browser):
+    from test_cetak_pratinjau import siapkan
+    tid=await tiket();await login(klien,'budi');job,_=await siapkan(klien,tid)
+    await klien.post(f'/timbangan/transaksi/{tid}/cetak/pekerjaan/'+job['kunci']+'/kirim',json={})
+    await login(klien,'wahid')
+    async with async_playwright() as pw:
+        b,ctx,page=await browser_uji(pw,klien,alamat_ui,390,browser=browser)
+        errors=[];prints=[];page.on('pageerror',lambda e:errors.append(str(e)))
+        await page.route('**/cgi-bin/epos/**',lambda r:prints.append(r.request.url))
+        await buka(page,alamat_ui+f'/timbangan/transaksi/{tid}/cetak')
+        await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
+        assert await page.locator('[data-cp-jalankan]').is_disabled()
+        await page.locator('[data-cp-ya]').click()
+        assert 'Isi alasan' in await page.locator('[data-cp-status]').text_content()
+        await page.locator('[name=alasan_penyelesaian]').fill('Shift sebelumnya berhenti mengirim; kedua lembar diperiksa')
+        await page.locator('[data-cp-ya]').click()
+        await page.wait_for_function("document.querySelector('.cp-history').textContent.includes('Cetak ke-1')")
+        assert not prints and not errors
+        async with database.SessionLocal() as db:
+            assert await db.scalar(select(func.count()).select_from(TimbanganCetak))==1
+        await b.close()

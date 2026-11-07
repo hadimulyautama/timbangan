@@ -362,13 +362,13 @@ async def test_bukti_memuat_petugas_dan_identitas_perusahaan(klien):
     trx_id = await _selesaikan(klien, "GABAH_BASAH")
     cetak = teks_pdf(
         (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak/80mm")).content)
-    assert "PT Hadi Mulya Utama" in cetak
-    assert "Masaran, Kab. Sragen" in cetak
+    from hmu_dokumen.perusahaan import Perusahaan
+    assert Perusahaan().nama in cetak
+    assert "Masaran" in cetak and "Sragen" in cetak
     assert "Budi" in cetak                      # petugas timbang
     assert TELEPON_UJI in cetak
-    # Alamat surel sengaja tidak ikut dicetak — Direksi memutuskan bukti
-    # timbang cukup memuat alamat dan nomor telepon.
-    assert not re.search(r"[\w.+-]+@[\w-]+\.[\w.]+", cetak)
+    # Kop bersama memuat kontak perusahaan, bukan alamat login petugas.
+    assert set(re.findall(r"[\w.+-]+@[\w-]+\.[\w.]+", cetak)) <= {Perusahaan().email}
 
 
 # ─────────────────── Tidak ada harga di mana pun ───────────────────
@@ -445,7 +445,6 @@ async def test_ekspor_csv_tanpa_kolom_uang(klien):
     ("13600,7", 13600.7),
     # Bukan angka → nilai bawaan
     ("", 0.0),
-    ("abc", 0.0),
 ])
 def test_membaca_angka_yang_diketik(ketikan, harapan):
     """Regresi: tara '0.250' pernah terbaca 250 kg.
@@ -1049,7 +1048,9 @@ async def test_pemilih_menawarkan_dua_ukuran(klien):
     assert "Struk 80 mm" in teks
     assert "215 × 165 mm" in teks
     assert f"/transaksi/{trx_id}/cetak/80mm" in teks
-    assert f"/transaksi/{trx_id}/cetak/ncr" in teks
+    # Dokumen digital menawarkan struk 80 mm; URL NCR tetap kompatibel.
+    ncr = await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak/ncr")
+    assert ncr.status_code == 200 and ncr.headers['content-type'] == 'application/pdf'
 
 
 async def test_lembar_ncr_berukuran_setengah_folio(klien):
@@ -2901,12 +2902,12 @@ async def test_formulir_ubah_jenis_hanya_tampak_bagi_admin(klien, app_uji):
     await login(klien, "budi")
     trx_id = await _mulai_masuk(klien)
     milik_petugas = (await klien.get(f"{PREFIX}/transaksi/{trx_id}/koreksi")).text
-    assert "Salah pilih jenis atau arah barang?" not in milik_petugas
+    assert 'name="jenis_kode"' not in milik_petugas
     await klien.post(f"{PREFIX}/keluar")
 
     await login(klien, "wahid")
     milik_admin = (await klien.get(f"{PREFIX}/transaksi/{trx_id}/koreksi")).text
-    assert "Salah pilih jenis atau arah barang?" in milik_admin
+    assert "Ubah jenis &amp; arah" in milik_admin
     assert 'name="jenis_kode"' in milik_admin
 
 
@@ -3528,11 +3529,11 @@ async def test_tautan_cetak_dibuka_bukan_diunduh(klien):
     teks = (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak")).text
     # Pilihan format kini memakai tautan pekerjaan yang sudah disiapkan.
     # Tautan PDF lama tetap tersedia sebagai fallback tanpa JavaScript.
-    potongan = re.search(r'<a[^>]+data-cp-pdf[^>]*>', teks).group(0)
+    potongan = re.search(r'<a[^>]+data-pdf-digital-link[^>]*>', teks).group(0)
     assert "data-unduh" in potongan and 'target="_blank"' in potongan
     assert "download" not in potongan
-    for jalur in ("cetak/80mm", "cetak/ncr"):
-        assert jalur in teks
+    assert "cetak/80mm" in teks
+    assert (await klien.get(f"{PREFIX}/transaksi/{trx_id}/cetak/ncr")).status_code == 200
 
 
 async def test_tautan_csv_tetap_diunduh(klien, app_uji):
@@ -3603,7 +3604,7 @@ async def test_penyiapan_printer_menegaskan_sertifikat_per_perangkat(klien):
     dikira satu langkah, dan Android tetap tidak bisa mencetak."""
     await login(klien)
     r = await klien.get(f"{PREFIX}/printer")
-    assert "tiap perangkat" in r.text
+    assert "setiap browser/perangkat" in r.text
 
 
 async def test_penyiapan_printer_menjelaskan_cap_tidak_aman(klien):
@@ -3616,8 +3617,8 @@ async def test_penyiapan_printer_menjelaskan_cap_tidak_aman(klien):
     await login(klien)
     r = await klien.get(f"{PREFIX}/printer")
     assert "Tidak aman" in r.text
-    assert "terenkripsi" in r.text
-    assert "tidak melewati printer" in r.text
+    assert "sertifikat bawaan printer" in r.text
+    assert "kata sandi, dan foto bukti tidak dikirim melalui printer" in r.text
 
 
 async def test_penyiapan_printer_tertutup_bagi_yang_belum_masuk(klien):
@@ -4597,7 +4598,7 @@ async def test_timbang_kedua_punya_akses_koreksi_plat_tiket_terbuka(klien):
     tid = int(re.search(r'/tiket/(\d+)', tiket.text).group(1))
     halaman = (await klien.get(f'{PREFIX}/tiket/{tid}')).text
     assert f'href="{PREFIX}/transaksi/{tid}/koreksi"' in halaman
-    assert 'Koreksi data tiket (plat / sopir)' in halaman
+    assert 'Koreksi data tiket' in halaman
     koreksi = await klien.get(f'{PREFIX}/transaksi/{tid}/koreksi')
     assert 'name="nomor_polisi"' in koreksi.text
     r = await klien.post(f'{PREFIX}/transaksi/{tid}/koreksi', data={

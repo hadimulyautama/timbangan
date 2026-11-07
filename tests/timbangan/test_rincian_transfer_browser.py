@@ -91,7 +91,7 @@ async def test_pilihan_baru_koreksi_dan_gagal_simpan(klien,alamat_ui,browser):
         await page.wait_for_url('**/transaksi/**')
         async with database.SessionLocal() as db:
             t=await db.scalar(select(TimbanganTransaksi));tid=t.id;assert t.lintasan_transfer['tujuan']['silo_id']==104
-        await page.locator('[data-rd-actions-open]').click();await page.get_by_role('link',name='Koreksi',exact=True).click()
+        await page.locator('[data-tindakan-trigger]').click();await page.get_by_role('link',name='Koreksi',exact=True).click()
         await page.locator('[name=transfer_tujuan]').select_option('gudang:102')
         await page.locator('[data-correction-form] [name=alasan]').fill('Pilihan lokasi uji')
         await page.wait_for_function("document.querySelector('[data-cf-hasil]').textContent.includes('Tumpukan')")
@@ -117,12 +117,12 @@ async def test_tindakan_dan_kunci_ui(klien,alamat_ui,role):
         t=await db.get(TimbanganTransaksi,tid);t.timbang2_waktu_sistem=sekarang()-timedelta(days=10);await db.commit()
     async with async_playwright() as pw:
         b,ctx,page=await browser_uji(pw,klien,alamat_ui)
-        await buka(page,alamat_ui+f'/timbangan/transaksi/{tid}');await page.locator('[data-rd-actions-open]').click()
+        await buka(page,alamat_ui+f'/timbangan/transaksi/{tid}');await page.locator('[data-tindakan-trigger]').click()
         assert await page.get_by_role('link',name='Koreksi',exact=True).count()==int(P.admin_keatas(role))
         form=page.locator('form[action$="/batal"]');assert await form.count()==int(P.admin_keatas(role))
         assert await page.locator('form[action$="/hapus"]').count()==int(role==P.SUPERADMIN)
         if P.admin_keatas(role):
-            await form.locator('..').locator('summary').click();await form.locator('[name=alasan]').fill('Pembatalan uji terpisah')
+            await page.locator('[data-tindakan-menu]').get_by_role('button',name='Batalkan transaksi',exact=True).click();await form.locator('[name=alasan]').fill('Pembatalan uji terpisah')
             await form.locator('button').click();await page.wait_for_url(lambda u:'ok=' in str(u))
             async with database.SessionLocal() as db:assert (await db.get(TimbanganTransaksi,tid)).status_transaksi=='VOID'
         else:
@@ -145,65 +145,52 @@ async def test_riwayat_teks_panjang_tanpa_kendaraan(klien,alamat_ui):
 
 @pytest.mark.parametrize('role',[P.OPERATOR,P.ADMIN,P.SUPERADMIN])
 async def test_cetak_pdf_printer_sintetis_dan_audit(klien,alamat_ui,role):
-    import io
-    from pypdf import PdfReader
     OUT.mkdir(parents=True,exist_ok=True)
     await master();tid=await tiket();siapa='miftah' if role==P.OPERATOR else 'wahid'
     await tautkan(siapa,role);await login(klien,siapa)
+    # Kedua endpoint dokumen tetap terbaca; PDF digital tidak mencatat cetak fisik.
+    for fmt in ('80mm','ncr'):
+        response=await klien.get(f'/timbangan/transaksi/{tid}/cetak/{fmt}')
+        assert response.status_code==200 and response.content.startswith(b'%PDF')
+        reader=PdfReader(io.BytesIO(response.content))
+        assert len(reader.pages)==1 and 'selisih' not in reader.pages[0].extract_text().lower()
+        (OUT/f'{fmt}-{role}.pdf').write_bytes(response.content)
     async with async_playwright() as pw:
         browser,ctx,page=await browser_uji(pw,klien,alamat_ui)
-        await buka(page,alamat_ui+f'/timbangan/transaksi/{tid}')
-        await page.get_by_role('link',name='Pratinjau & cetak',exact=True).click()
-        await page.locator('[data-cetak]').wait_for(state='visible')
-        assert await page.locator('[data-cetak]').count()==1
-        for fmt in ('80mm','ncr'):
-            async with page.expect_download() as event:
-                await page.locator(f'a[data-unduh][href$="/{fmt}"]').click()
-            d=await event.value;data=Path(await d.path()).read_bytes()
-            assert data.startswith(b'%PDF')
-            txt='\n'.join(p.extract_text() for p in PdfReader(io.BytesIO(data)).pages)
-            assert 'selisih' not in txt.lower()
-            (OUT/f'{fmt}-{role}.pdf').write_bytes(data)
-        async with database.SessionLocal() as db:assert await db.scalar(select(func.count()).select_from(TimbanganCetak))==0
-        await page.locator('a[href$="/printer"]').click()
-        await page.locator('[name=printer_url]').wait_for(state='visible')
-        assert await page.locator('[name=printer_url]').count()==1
-        await page.go_back()
-        await page.locator('[data-cetak]').wait_for(state='visible')
+        await buka(page,alamat_ui+f'/timbangan/transaksi/{tid}/cetak')
+        await page.locator('[data-cetak-halaman]').wait_for()
         await page.evaluate("localStorage.setItem('timbangan-printer','http://127.0.0.1:9999')")
         async def tolak(r):return await r.fulfill(status=200,content_type='text/xml',body='<response success="false" code="EPTR_COVER_OPEN"/>')
         await page.route('**/cgi-bin/epos/**',tolak)
-        await page.locator('[data-cetak]').click()
-        await page.wait_for_function("document.querySelector('[data-hasil-cetak]').textContent.includes('Penutup printer terbuka')")
+        await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
+        await page.locator('[data-cp-jalankan]').click()
+        await page.wait_for_function("document.querySelector('[data-cp-status]').textContent.includes('Penutup printer terbuka')")
         async with database.SessionLocal() as db:assert await db.scalar(select(func.count()).select_from(TimbanganCetak))==0
-        await page.unroute('**/cgi-bin/epos/**')
-        await page.route('**/cgi-bin/epos/**',lambda r:r.abort())
-        await page.locator('[data-cetak]').click()
-        await page.wait_for_function("document.querySelector('[data-hasil-cetak]').textContent.includes('Printer belum dapat dihubungi')")
+        await page.unroute('**/cgi-bin/epos/**');await page.route('**/cgi-bin/epos/**',lambda r:r.abort())
+        await page.locator('[data-cp-jalankan]').click()
+        await page.wait_for_function("document.querySelector('[data-cp-status]').textContent.includes('Printer belum dapat dihubungi')")
         async with database.SessionLocal() as db:assert await db.scalar(select(func.count()).select_from(TimbanganCetak))==0
-        await page.unroute('**/cgi-bin/epos/**')
-        dikirim=[]
+        await page.unroute('**/cgi-bin/epos/**');dikirim=[]
         async def sukses(r):
-            if '<text' not in (r.request.post_data or ''):
-                return await r.fulfill(content_type='text/xml',body='<response success="true"/>')
-            dikirim.append(r.request.post_data)
+            if '<text' in (r.request.post_data or ''):dikirim.append(r.request.post_data)
             return await r.fulfill(status=200,content_type='text/xml',body='<response success="true"/>')
         await page.route('**/cgi-bin/epos/**',sukses)
-        await page.locator('[data-cetak]').evaluate('(a)=>{a.click();a.click()}')
-        await page.wait_for_url(lambda u:'ok=' in str(u))
-        assert len(dikirim)==1 and 'epos-print' in dikirim[0]
+        await page.locator('[data-cp-jalankan]').evaluate('e=>{e.click();e.click()}')
+        await page.wait_for_function("document.querySelector('.cp-history').textContent.includes('Cetak ke-1')")
+        assert len(dikirim)==1 and dikirim[0].count('<cut type="feed"/>')==2
         async with database.SessionLocal() as db:
-            row=await db.scalar(select(TimbanganCetak));assert row and row.urutan==1
-            petugas=await db.get(TimbanganAkun,row.oleh_id);assert petugas.username==siapa
-        await page.locator('[data-cetak]').click()
-        await page.wait_for_function("document.activeElement?.name==='alasan'")
-        async with database.SessionLocal() as db:assert await db.scalar(select(func.count()).select_from(TimbanganCetak))==1
-        await page.locator('form[data-catat-cetak] [name=alasan]').fill('Kertas uji rusak, cetak ulang sintetis')
-        await page.locator('form[data-catat-cetak] button').click()
-        await page.wait_for_url(lambda u:'ok=' in str(u))
+            row=await db.scalar(select(TimbanganCetak));assert row.urutan==1
+            assert (await db.get(TimbanganAkun,row.oleh_id)).username==siapa
+        await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
+        await page.locator('[data-cp-jalankan]').click()
+        assert len(dikirim)==1
+        await page.locator('[name=alasan]').fill('Kertas uji rusak, cetak ulang sintetis')
+        await page.locator('[data-cp-jalankan]').evaluate('e=>{e.click();e.click()}')
+        await page.wait_for_function("document.querySelector('.cp-history').textContent.includes('Cetak ke-2')")
         async with database.SessionLocal() as db:
             rows=(await db.scalars(select(TimbanganCetak).order_by(TimbanganCetak.urutan))).all()
             assert len(rows)==2 and rows[-1].alasan=='Kertas uji rusak, cetak ulang sintetis'
+        assert len(dikirim)==2
         await browser.close()
 
 async def test_draf_formulir_lama_tidak_kehilangan_catatan_lintasan(klien,alamat_ui):

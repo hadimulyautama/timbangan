@@ -114,7 +114,7 @@ async def test_seluruh_pilihan_dan_hak_akses(klien,alamat_ui,jenis,width,role):
             await page.locator('[data-tindakan-menu]').get_by_role('button',name='Batalkan transaksi',exact=True).click()
             form=page.locator('.tf-actions-dialog form[action$="/batal"]')
             await form.locator('[name=alasan]').fill('Pembatalan data audit sementara')
-            await form.locator('button[type=submit]').click();await page.wait_for_url('**?ok=**')
+            await form.locator('button[type=submit]').click();await page.wait_for_url(lambda u:'ok=' in str(u))
             await page.wait_for_function("!document.querySelector('.tf-actions-dialog')?.open")
             async with database.SessionLocal() as db:assert (await db.get(TimbanganTransaksi,tid)).status_transaksi=='VOID'
         elif role==P.SUPERADMIN:

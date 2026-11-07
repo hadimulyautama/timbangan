@@ -126,7 +126,7 @@ async def test_pulihkan_draf_lain_pada_halaman_yang_sama(klien,alamat_ui):
         lain['data']=[[k,('7.654,32' if k=='berat_kg' else lain['kunci'] if k=='kunci' else v)] for k,v in lain['data']]
         await simpan_db(page,'draf',[lain]);await page.reload();await siap(page)
         await page.locator('[data-draf-id]').filter(has_text=lain['label']).get_by_role('link',name='Pulihkan draf',exact=False).click()
-        await page.wait_for_function("document.querySelector('[name=berat_kg]').value==='7.654,32'")
+        await page.wait_for_function("document.querySelector('[name=berat_kg]')?.value==='7.654,32'")
         await siap(page)
         assert await page.locator('form[data-simpan-luring]').evaluate('f=>f._luringDrafId')==lain['id']
         assert len(await page.evaluate('window.timbanganLuring.draf()'))==2

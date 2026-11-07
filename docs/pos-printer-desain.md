@@ -22,6 +22,14 @@ Tidak ada perubahan route, query, model, database atau migrasi.
 
 ## Pemulihan sambungan
 
+Pekerjaan aktif tetap menghalangi cetak baru sampai hasilnya dipastikan. Jika
+petugas berganti atau akun pencetak nonaktif, Admin dapat melihat pekerjaan
+tersebut dan menuntaskannya dari halaman cetak. Admin harus memastikan perangkat
+semula berhenti mengirim, memeriksa kedua lembar, lalu mengisi alasan penyelesaian.
+Tindakan ini tidak mengirim ulang XML atau mengklaim ACK printer petugas lain.
+Riwayat tetap mencatat pencetak semula; audit `TUNTASKAN_CETAK` mencatat Admin
+penyelesai dan alasannya. Konfirmasi bersamaan hanya menghasilkan satu riwayat.
+
 Setiap cetak langsung memeriksa ePOS dengan XML kosong terlebih dahulu.
 Pemeriksaan kosong boleh diulang satu kali setelah 500 ms ketika transport
 terputus; setiap permintaan punya AbortController dan tenggat yang mencakup

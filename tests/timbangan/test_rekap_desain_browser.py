@@ -43,9 +43,9 @@ async def test_kontrol_angka_tautan_unduhan_dan_periode(lokal,width):
         assert len(rows)==14  # 13 transaksi aktif dan satu header.
         assert 'tab=rekap' in page.url
         # Lembar dari tanggal lama tetap terlihat di tab Pemeriksaan.
-        await root.locator('.lp-urgent a').click();await page.wait_for_url('**tab=pemeriksaan**')
+        await root.locator('.lp-urgent a').click();await page.wait_for_url(lambda u:'tab=pemeriksaan' in str(u))
         assert await page.locator('[data-laporan-id]').count()==3
-        await page.get_by_role('link',name='Rekap',exact=True).click();await page.wait_for_url('**tab=rekap**')
+        await page.get_by_role('link',name='Rekap',exact=True).click();await page.wait_for_url(lambda u:'tab=rekap' in str(u))
         assert await root.locator('[data-laporan-id]').count()==4
         OUT.mkdir(parents=True,exist_ok=True);await page.screenshot(path=str(OUT/f'rekap-{width}.png'),full_page=True)
         if not await root.locator('[data-lr-period]').evaluate('e=>e.open'):await root.locator('[data-lr-period]>summary').click()
@@ -53,7 +53,7 @@ async def test_kontrol_angka_tautan_unduhan_dan_periode(lokal,width):
         await form.locator('[name=dari]').fill(tomorrow);await form.locator('[name=sampai]').fill(day)
         assert await form.locator('[name=sampai]').evaluate('e=>!e.checkValidity()')
         await form.locator('[name=sampai]').fill(tomorrow);await form.get_by_role('button',name='Terapkan periode').click()
-        await page.wait_for_url('**dari='+tomorrow+'**')
+        await page.wait_for_url(lambda u:'dari='+tomorrow in str(u))
         assert await root.locator('[data-ringkasan=jumlah] strong').inner_text()=='0'
         assert await root.locator('[data-laporan-id]').count()==0
         assert '3 lembar' in await root.locator('.lp-urgent').inner_text()

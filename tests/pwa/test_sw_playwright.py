@@ -163,15 +163,17 @@ def test_luring_menampilkan_acuan_dengan_cap_waktu(server, page):
 
 # ─────────────── Tahap C: dorongan server, pil "perubahan baru" ───────────────
 
-def test_dorongan_memunculkan_pil_tanpa_mengganti_layar(server, page):
+def test_dorongan_memperbarui_data_tanpa_memuat_ulang_halaman(server, page):
     """Sesi B (petugas lain) menyimpan tiket → beranda sesi A menerima
-    dorongan dalam hitungan detik; layar TIDAK berganti sendiri, pil menunggu
-    diketuk; ketukan memuat ulang dan tiketnya muncul."""
+    dorongan dalam hitungan detik; data baca diperbarui otomatis tanpa
+    navigasi atau reload seluruh halaman."""
     import subprocess
 
     _masuk(page, server.alamat)
     _tunggu(page, "window.timbangan && window.timbangan.jalur && window.timbangan.jalur() === 'sse'")
     lama = page.evaluate("document.querySelector('.bingkai').innerHTML")
+    alamat = page.url
+    page.evaluate("window.__halamanSemula = true")
 
     # Sesi B lewat layanan, di proses lain — bukan lewat peramban A.
     kode = subprocess.run(
@@ -182,14 +184,17 @@ def test_dorongan_memunculkan_pil_tanpa_mengganti_layar(server, page):
             "from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine\n"
             "from app.timbangan import logic, service\n"
             "from app.timbangan.models import TimbanganAkun\n"
+            "from app.models import Supplier\n"
             "async def m():\n"
             "    m = create_async_engine(os.environ['UJI_PG_URL']); S = async_sessionmaker(m, expire_on_commit=False)\n"
             "    async with S() as db:\n"
             "        akun = (await db.execute(select(TimbanganAkun).where(TimbanganAkun.username == 'wahid'))).scalar_one()\n"
             "        jenis = next(j for j in await service.daftar_jenis(db) if j.arah == logic.MASUK)\n"
+            "        pemasok = Supplier(nama_supplier='Pak Dorong', kledo_contact_id=801)\n"
+            "        db.add(pemasok); await db.flush()\n"
             "        trx = await service.simpan_timbang_pertama(db, akun=akun, data=service.InputTimbang(\n"
             "            kunci=str(uuid4()), arah=jenis.arah, jenis_kode=jenis.kode, berat_kg=12000,\n"
-            "            pihak_nama='Pak Dorong', nomor_polisi='B 2 UJ', nama_sopir='Sopir'))\n"
+            "            supplier_id=pemasok.id, nomor_polisi='B 2 UJ', nama_sopir='Pak Hartono'))\n"
             "        print(trx.kode)\n"
             "    await m.dispose()\n"
             "asyncio.run(m())\n")],
@@ -197,16 +202,8 @@ def test_dorongan_memunculkan_pil_tanpa_mengganti_layar(server, page):
     assert kode.returncode == 0, kode.stderr[-800:]
     kode_tiket = kode.stdout.strip().splitlines()[-1]
 
-    pil = page.locator("[data-pil]")
-    pil.wait_for(state="visible", timeout=5000)
-    assert "perubahan baru" in pil.inner_text()
-    assert page.evaluate("document.querySelector('.bingkai').innerHTML") == lama, "layar berganti sendiri"
-    assert kode_tiket not in page.content()
-
-    kotak = pil.bounding_box()
-    with page.expect_navigation():
-        page.mouse.click(kotak["x"] + kotak["width"] / 2, kotak["y"] + kotak["height"] / 2)
-    page.wait_for_load_state("networkidle")
+    _tunggu(page, "document.querySelector('.bingkai').innerHTML.includes(" + json.dumps(kode_tiket) + ")")
+    assert page.url == alamat and page.evaluate('window.__halamanSemula')
     isi = page.evaluate("document.querySelector('.bingkai').innerHTML")
-    assert isi != lama, "sesudah diketuk layar tak berubah"
-    assert kode_tiket in isi or "B 2 UJ" in isi or "Pak Dorong" in isi, "tiket sesi B tak muncul"
+    assert isi != lama and kode_tiket in isi
+    assert page.locator('.pil-perubahan').count() == 0

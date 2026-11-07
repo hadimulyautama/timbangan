@@ -46,7 +46,7 @@ async def test_catatan_lama_tidak_terkunci_oleh_aturan_baru(db,admin,supplier,ol
  await db.commit()
  data.nomor_polisi=old
  replay=await service.simpan_timbang_pertama(db,akun=admin,data=data)
- assert replay.id==t.id and replay.nomor_polisi==normalisasi_nomor_polisi(old)
+ assert replay.id==t.id and replay.nomor_polisi==old  # replay tidak menulis ulang tiket historis
  # Tiket lama tanpa nomor lengkap tidak ditawarkan untuk perjalanan baru.
  saran=await service.kendaraan_dikenal(db)
  assert (len(saran)==1)==(old=='H9313 IC')

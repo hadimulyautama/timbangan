@@ -41,6 +41,7 @@ async def sesi(monkeypatch):
     mesin = create_async_engine("sqlite+aiosqlite://")
     async with mesin.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.execute(text("CREATE TABLE IF NOT EXISTS setelan_pabrik (kunci VARCHAR(64) PRIMARY KEY, nilai TEXT NOT NULL)"))
         await conn.execute(text(
             f"CREATE TABLE {TABEL} (version_num VARCHAR(64) NOT NULL PRIMARY KEY)"))
         await conn.execute(text(f"INSERT INTO {TABEL} VALUES (:r)"),

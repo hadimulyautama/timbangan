@@ -94,6 +94,7 @@ async def test_ui_kelompok_cetak_dan_koreksi(klien,monkeypatch,width,theme,alama
             await page.screenshot(path=str(OUT/f'{label}-{width}-{theme}.png'),full_page=True)
             if label=='koreksi' and width==390:
                 p['sidik_sumber']='c'*64;p['muatan'][0]['berat_kg']=600
+                await page.locator('.kc-documents > summary').click()
                 await page.locator('[name=perbarui_muatan]').check()
                 await page.wait_for_function('document.querySelector("[data-cf-hasil]").textContent.includes("4.100")')
                 async with database.SessionLocal() as db:

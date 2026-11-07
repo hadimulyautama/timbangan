@@ -67,13 +67,13 @@ def _angka(teks: str | None, bawaan: float = 0.0) -> float:
     try:
         n = float(bersih)
     except ValueError:
-        return bawaan
+        raise logic.ValidasiError("Angka tidak sah. Periksa berat, tara, dan nilai nota yang diisi.") from None
     # "nan" dan "inf" LOLOS `float()` — itulah lubangnya. NaN lalu membuat
     # SETIAP perbandingan bernilai salah, jadi kekurangan 10 ton lolos sebagai
     # NORMAL: batas atas dan batas bawah sama-sama tak terlampaui, karena
     # perbandingan dengan NaN memang selalu False. Temuan QA T-08.
     if not math.isfinite(n):
-        return bawaan
+        raise logic.ValidasiError("Angka harus berupa nilai yang terbatas; NaN dan tak hingga tidak dapat dipakai.")
     return n
 
 

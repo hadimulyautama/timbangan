@@ -412,21 +412,28 @@
       if (String((await session.json()).akun_id) !== akun) { tampilkanPesan('Akun yang sedang masuk berbeda. Kiriman tetap milik akun pembuatnya dan belum dikirim.'); return; }
       var rows = (await baca('kiriman')).filter(function (r) { return r.akun === akun && r.status !== 'terkirim'; }).sort(function (a,b) { return a.created-b.created; });
       var terhalang = new Set();
+      function ketergantungan(r) {
+        // Bacaan lanjutan tiket/partai yang SAMA tetap berurutan. Formulir
+        // awal truk berbeda tidak saling bergantung hanya karena jenis sama.
+        var m = r.jalur.match(/^\/timbangan\/(?:tiket|partai)\/\d+(?:\/|$)/);
+        return m ? m[0].replace(/\/$/, '') : 'kiriman:' + r.kunci;
+      }
       for (var row of rows) {
-        if (row.status === 'periksa') { terhalang.add(row.jalur); continue; }
-        if (terhalang.has(row.jalur)) continue;
+        var grup = ketergantungan(row);
+        if (row.status === 'periksa') { terhalang.add(grup); continue; }
+        if (terhalang.has(grup)) continue;
         var item = await ubah(row.kunci, function (r) {
           if (r.status === 'terkirim' || (r.lease > Date.now() && r.pemegang !== halaman)) return null;
           r.pemegang = halaman; r.lease = Date.now()+30000; return r;
         });
-        if (!item) { terhalang.add(row.jalur); continue; }
+        if (!item) { terhalang.add(grup); continue; }
         var result = await kirim(item);
         if (result.berhasil && langsung === item.kunci && !item.offline && !result.peringatan && document.visibilityState === 'visible') {
           // Hanya keberhasilan langsung memindahkan formulir yang tadi
           // dikirim. Pemulihan latar belakang tak mengganti isian layar lain.
           location.assign(result.tujuan); return;
         }
-        if (!result.berhasil) terhalang.add(row.jalur);
+        if (!result.berhasil) terhalang.add(grup);
         if (result.berhenti) break;
       }
     } catch (_) { /* jaringan/penyimpanan gagal: semua salinan tetap ada */ }

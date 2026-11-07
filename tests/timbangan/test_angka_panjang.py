@@ -45,8 +45,8 @@ def _muatan(**kw):
 def test_angka_menolak_tak_hingga(teks):
     """`_angka` mengembalikan bawaannya untuk teks yang bukan angka — tetapi
     "nan" LOLOS `float()`, jadi ia menembus tanpa satu pun keluhan."""
-    hasil = rute._angka(teks, bawaan=0.0)
-    assert math.isfinite(hasil), f"{teks!r} → {hasil!r}"
+    with pytest.raises(logic.ValidasiError):
+        rute._angka(teks, bawaan=0.0)
 
 
 def test_hitung_menolak_berat_tak_hingga():
