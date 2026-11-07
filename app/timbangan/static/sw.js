@@ -29,6 +29,8 @@ var RANGKA = [
   PREFIX + '/static/riwayat-kontrol.css' + V,
   PREFIX + '/static/riwayat-kontrol.js' + V,
   PREFIX + '/static/laporan.css' + V,
+  PREFIX + '/static/laporan-rekap.css' + V,
+  PREFIX + '/static/laporan-rekap.js' + V,
   PREFIX + '/static/pemeriksaan.js' + V,
   PREFIX + '/static/pengaturan.css' + V,
   PREFIX + '/static/pengaturan.js' + V,

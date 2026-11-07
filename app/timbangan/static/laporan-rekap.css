@@ -1,0 +1,26 @@
+/* Hanya tab Rekap. Nilai dan daftar tetap dirender oleh layanan laporan asli. */
+body.padiflow-ui .lr-page .lp-heading{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.lr-page .lp-heading>div:first-child{display:grid;gap:6px}
+.lr-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+body.padiflow-ui .lr-page .lr-actions>.tbl{width:auto;min-height:44px;margin:0;padding:9px 13px}
+.lr-period{padding:16px;border:1px solid var(--pd-line);border-radius:12px;background:var(--pd-sheet);min-width:0}
+.lr-period>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;list-style:none;cursor:pointer;min-height:44px;font-size:13px;color:var(--pd-muted)}
+.lr-period>summary::-webkit-details-marker{display:none}
+.lr-filter-label{padding:9px 13px;border:1px solid var(--pd-line);border-radius:9px;color:var(--pd-ink);min-height:44px;display:inline-flex;gap:8px;align-items:center}
+.lr-period[open]>summary{margin-bottom:14px}
+.lr-page .lr-dates{grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:12px}
+body.padiflow-ui .lr-page .lr-dates button{grid-column:auto;width:auto;min-height:44px;margin:0;padding:9px 13px}
+.lr-section{display:grid;gap:12px}
+.lr-section+.lr-section,.lr-page .lr-section+.lp-section{border-top:1px solid var(--pd-line);padding-top:18px}
+.lr-counts{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.lr-count{display:flex;gap:8px;align-items:center;min-height:44px}
+.lr-count strong{font-size:20px;font-variant-numeric:tabular-nums;font-weight:600}
+.lr-count span{font-size:14px}
+.lr-page .lr-weights{grid-template-columns:repeat(2,minmax(0,1fr))}
+.lr-page .lr-weights .lp-stat:first-child{grid-column:auto}
+.lr-guide-fallback{border:1px solid var(--pd-line);border-radius:9px;padding:12px;margin-top:16px}
+.lr-guide-fallback>summary{cursor:pointer;min-height:44px;align-content:center}
+.lr-guide-content{display:grid;gap:14px}
+.lr-page [hidden]{display:none!important}
+@media(max-width:650px){.lr-page .lr-dates{grid-template-columns:repeat(2,minmax(0,1fr))}body.padiflow-ui .lr-page .lr-dates button{grid-column:1/-1;justify-self:start}.lr-counts{flex-direction:column;align-items:start;gap:0}.lr-period{padding:12px}.lr-page{padding-bottom:70px}}
+@media print{.lr-actions,.lr-guide-fallback,.lr-page dialog{display:none!important}}

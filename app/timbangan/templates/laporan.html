@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% from "_panduan.html" import panel as panel_panduan %}
+{% block gaya_tambahan %}{% if tab == 'rekap' %}<link rel="stylesheet" href="{{ PREFIX }}/static/panduan.css?v={{ VERSI }}"><link rel="stylesheet" href="{{ PREFIX }}/static/laporan-rekap.css?v={{ VERSI }}">{% endif %}{% endblock %}
 {% block segar_otomatis %}data-segar-otomatis="1"{% endblock %}
 {% block lebar %}lebar{% endblock %}
 {% block judul %}Laporan & Pemeriksaan{% endblock %}
@@ -27,15 +29,28 @@
 {% endmacro %}
 
 {% block isi %}
-<div class="lp-page">
-  <div class="lp-heading"><h1>Laporan &amp; Pemeriksaan</h1><p class="lp-muted">Rekap timbang dan penelusuran selisih</p></div>
+<div class="lp-page {{ 'lr-page' if tab == 'rekap' }}" {% if tab == 'rekap' %}data-rekap-desain{% endif %}>
+  <div class="lp-heading"><div><h1>Laporan &amp; Pemeriksaan</h1><p class="lp-muted">Rekap timbang dan penelusuran selisih</p></div>
+  {% if tab == 'rekap' %}<div class="lr-actions"><button type="button" class="tbl halus" data-lr-guide hidden><span aria-hidden="true">ⓘ</span> Panduan</button>
+    <a class="tbl halus" data-unduh target="_blank" rel="noopener" download href="{{ PREFIX }}/ekspor.csv?dari={{ f.dari|iso }}&sampai={{ f.sampai|iso }}">Unduh CSV</a></div>{% endif %}</div>
   <nav class="lp-tabs" aria-label="Bagian laporan">
     {% for kode,nama in [('rekap','Rekap'),('pemeriksaan','Pemeriksaan'),('pemantauan','Pemantauan pihak')] %}
       <a href="{{ tautan[kode] }}" {% if tab == kode %}aria-current="page"{% endif %}>{{ nama }}{% if kode == 'pemeriksaan' %} <b aria-label="{{ lembar_terbuka|length }} terbuka">{{ lembar_terbuka|length }}</b>{% endif %}</a>
     {% endfor %}
   </nav>
   <section aria-label="{{ {'rekap':'Rekap','pemeriksaan':'Pemeriksaan','pemantauan':'Pemantauan pihak'}[tab] }}" class="lp-panel">
-  {% if tab != 'pemeriksaan' %}
+  {% if tab == 'rekap' %}
+    <details class="lr-period" data-lr-period open>
+      <summary><span>Periode <b>{{ f.dari|tgl(true) }} – {{ f.sampai|tgl(true) }}</b></span><span class="lr-filter-label">Filter periode <span aria-hidden="true">⌄</span></span></summary>
+    <form action="{{ PREFIX }}/laporan" method="get" class="lp-dates lr-dates">
+      <input type="hidden" name="tab" value="{{ tab }}">
+      <label>Dari<input class="fld" type="date" name="dari" value="{{ f.dari|iso }}"></label>
+      <label>Sampai<input class="fld" type="date" name="sampai" value="{{ f.sampai|iso }}"></label>
+      <button type="submit" class="tbl">Terapkan periode</button>
+    </form>
+    </details>
+  {% elif tab != 'pemeriksaan' %}
+
     <form action="{{ PREFIX }}/laporan" method="get" class="lp-dates">
       <input type="hidden" name="tab" value="{{ tab }}">
       <label>Dari<input class="fld" type="date" name="dari" value="{{ f.dari|iso }}"></label>
@@ -45,16 +60,26 @@
     <p class="lp-muted">Periode {{ f.dari|tgl(true) }} – {{ f.sampai|tgl(true) }}</p>
   {% endif %}
   {% if tab == 'rekap' %}
+    <section class="lr-section" aria-label="Tindak lanjut semua tanggal"><h2>Perlu ditindaklanjuti · semua tanggal</h2>
     {% if lembar_terbuka %}<aside class="lp-urgent">
       <div><strong>{{ lembar_terbuka|length }} lembar pemeriksaan masih terbuka</strong><p>Semua tanggal · termasuk angka yang sudah dikoreksi. Mengoreksi angkanya tidak menutup lembarnya.</p></div>
       <a class="tbl" href="{{ tautan.pemeriksaan }}">Buka pemeriksaan</a>
-    </aside>{% endif %}
-    <div class="lp-grid">
-      {% for kode,nilai,nama in [('jumlah',ringkasan.jumlah,'Transaksi'),('masuk',ringkasan.masuk_kg|ton,'Barang masuk'),('keluar',ringkasan.keluar_kg|ton,'Barang keluar'),('batas',ringkasan.perlu_periksa,'Di luar batas'),('terbuka',ringkasan.tiket_terbuka,'Tiket terbuka')] %}
-      <div class="lp-stat" data-ringkasan="{{ kode }}"><strong>{{ nilai }}</strong><span>{{ nama }}</span></div>
-      {% endfor %}
-    </div>
-    <p class="lp-muted">Masuk termasuk retur masuk; keluar termasuk retur keluar. Transfer internal dan jasa timbang tidak masuk kedua total berat.</p>
+    </aside>{% else %}<div class="lp-empty"><strong>Semua pemeriksaan sudah ditutup.</strong><p>Riwayat selisih dan hasil pemeriksaan tetap tersedia.</p></div>{% endif %}
+    </section>
+    <section class="lr-section" aria-label="Aktivitas periode terpilih">
+      <div class="lp-row"><h2>Aktivitas periode terpilih</h2><span class="lp-muted">{{ f.dari|tgl(true) }} – {{ f.sampai|tgl(true) }}</span></div>
+      <div class="lr-counts">
+        {% for kode,nilai,nama in [('jumlah',ringkasan.jumlah,'Transaksi'),('terbuka',ringkasan.tiket_terbuka,'Tiket terbuka'),('batas',ringkasan.perlu_periksa,'Di luar batas')] %}
+        <div class="lr-count" data-ringkasan="{{ kode }}"><strong>{{ nilai }}</strong><span>{{ nama }}</span></div>
+        {% endfor %}
+      </div>
+      <div class="lp-grid lr-weights">
+        {% for kode,nilai,nama in [('masuk',ringkasan.masuk_kg|ton,'Barang masuk'),('keluar',ringkasan.keluar_kg|ton,'Barang keluar')] %}
+        <div class="lp-stat" data-ringkasan="{{ kode }}"><strong>{{ nilai }}</strong><span>{{ nama }}</span></div>
+        {% endfor %}
+      </div>
+      <p class="lp-muted">Masuk termasuk retur masuk; keluar termasuk retur keluar. Transfer internal dan jasa timbang tidak masuk kedua total berat.</p>
+    </section>
     <section class="lp-section"><div class="lp-row"><h2>Selisih di luar batas</h2><span class="lencana lencana--netral">{{ ringkasan.perlu_periksa }} transaksi</span></div>
       <p class="lp-muted">Sesuai periode rekap · status kontrol tetap tercatat meski pemeriksaannya selesai. Ditampilkan hingga 20 transaksi terbaru; seluruh hasil tersedia di Riwayat Timbang.</p>
       <div class="lp-list">{% for b in perlu_periksa %}{{ catatan(b) }}{% else %}<div class="lp-empty">Tidak ada selisih di luar batas pada periode ini.</div>{% endfor %}</div>
@@ -77,10 +102,21 @@
       {{ status_pihak(r) }}{{ pola(r) }}</article>{% endfor %}</div>
     {% else %}<div class="lp-empty">Belum cukup transaksi untuk menilai pola.</div>{% endif %}
   {% endif %}
-  <div class="lp-actions"><a class="tbl halus" href="{{ PREFIX }}/transaksi?dari={{ f.dari|iso }}&sampai={{ f.sampai|iso }}">Riwayat Timbang</a>
-    <a class="tbl halus" data-unduh target="_blank" rel="noopener" download href="{{ PREFIX }}/ekspor.csv?dari={{ f.dari|iso }}&sampai={{ f.sampai|iso }}">Unduh CSV</a></div>
+  {% if tab != 'rekap' %}<div class="lp-actions"><a class="tbl halus" href="{{ PREFIX }}/transaksi?dari={{ f.dari|iso }}&sampai={{ f.sampai|iso }}">Riwayat Timbang</a>
+    <a class="tbl halus" data-unduh target="_blank" rel="noopener" download href="{{ PREFIX }}/ekspor.csv?dari={{ f.dari|iso }}&sampai={{ f.sampai|iso }}">Unduh CSV</a></div>{% endif %}
   <p class="lp-muted">CSV mengikuti periode {{ f.dari|tgl(true) }} – {{ f.sampai|tgl(true) }}; tiket dibatalkan tidak disertakan. Tab tidak mengubah cakupan ekspor.</p>
   <p data-hasil-unduh data-pesan="Unduhan belum berhasil. Coba kembali; periode dan tab tetap tersimpan." role="alert" hidden></p>
   </section>
+  {% if tab == 'rekap' %}
+  <details class="lr-guide-fallback" data-lr-guide-fallback><summary>ⓘ Panduan Rekap</summary><div class="lr-guide-content" data-lr-guide-content>
+    <p>Aktivitas dan daftar selisih mengikuti tanggal Dari–Sampai. Pemeriksaan terbuka dihitung dari semua tanggal, sehingga jumlahnya dapat berbeda dari transaksi di luar batas pada periode terpilih.</p>
+    <p>Mengoreksi angka tidak otomatis menutup lembar. Penutupan pemeriksaan mencatat temuan tanpa mengubah status kontrol atau fakta selisih.</p>
+    <p>Jumlah transaksi dan tiket terbuka mengikuti periode. Barang masuk mencakup retur masuk; barang keluar mencakup retur keluar. Transfer internal dan jasa timbang tidak masuk kedua total berat.</p>
+    <p>Daftar selisih menampilkan hingga 20 transaksi terbaru pada periode terpilih. Seluruh hasil tersedia di Riwayat Timbang melalui navigasi utama. Rincian tiket membawa konteks tab dan periode saat kembali.</p>
+    <p>CSV mengikuti periode, tidak mengikuti tab. Tiket dibatalkan tidak disertakan. Membuka laporan tidak menutup pemeriksaan atau mengubah status pihak.</p>
+  </div></details>
+  {% call panel_panduan('lr-panduan', 'Panduan Rekap', {}, {'data-lr-close':''}) %}<div data-lr-guide-slot></div>{% endcall %}
+  {% endif %}
 </div>
 {% endblock %}
+{% block skrip %}{% if tab == 'rekap' %}<script src="{{ PREFIX }}/static/laporan-rekap.js?v={{ VERSI }}" defer></script>{% endif %}{% endblock %}
