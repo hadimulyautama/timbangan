@@ -38,9 +38,9 @@ async def test_referensi_responsif_keyboard_tanpa_mutasi(klien,alamat_ui,monkeyp
         await page.screenshot(path=str(OUT/f'panel-{width}-{theme}-{role}.png'),full_page=True)
         await page.reload();assert await panel.count()==1
         lokasi=page.url
-        async with ctx.expect_event('response',predicate=lambda r:'/cetak/80mm' in r.url) as lihat:
-            await page.get_by_role('link',name='Lihat',exact=True).click()
-        assert (await lihat.value).headers['content-type']=='application/pdf'
+        await page.get_by_role('button',name='Lihat',exact=True).click()
+        await page.wait_for_function("document.querySelector('.tf-pdf-dialog [data-pdf-status]').textContent.endsWith('halaman')",timeout=15000)
+        await page.get_by_role('button',name='Tutup PDF').click()
         assert page.url==lokasi and not writes and not errors
         await b.close()
 

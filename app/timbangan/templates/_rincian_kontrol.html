@@ -7,7 +7,7 @@
     {% if panduan %}<button type="button" class="tbl halus" data-rd-guide hidden><span aria-hidden="true">ⓘ</span> Panduan</button>{% endif %}
     {% if trx.status_tiket == 'SELESAI' and trx.status_transaksi != 'VOID' %}
       <a href="{{ prefix }}/transaksi/{{ trx.id }}/cetak" class="tbl" data-cetak-langsung data-tiket="{{ trx.id }}" data-prefix="{{ prefix }}">Cetak</a>
-      <a href="{{ prefix }}/transaksi/{{ trx.id }}/cetak/80mm" class="tbl halus" target="_blank" rel="noopener">Lihat</a>
+      <button type="button" class="tbl halus" data-lihat-pdf data-pdf-url="{{ prefix }}/transaksi/{{ trx.id }}/cetak/80mm">Lihat</button>
       <a href="{{ prefix }}/transaksi/{{ trx.id }}/cetak/80mm" class="tbl halus" data-bagikan data-unduh data-dokumen="pdf" target="_blank" rel="noopener">Bagikan</a>
     {% elif trx.status_tiket == 'TERBUKA' and trx.status_transaksi != 'VOID' %}
       <a href="{{ prefix }}/{{ 'partai' if trx.partai else 'tiket' }}/{{ trx.id }}" class="tbl">{{ 'Lanjutkan partai' if trx.partai else 'Lanjutkan timbang kedua' }}</a>

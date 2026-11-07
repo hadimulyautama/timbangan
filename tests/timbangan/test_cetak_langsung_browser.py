@@ -28,11 +28,9 @@ async def test_satu_klik_cetak_dan_ulang_di_detail(klien,alamat_ui,width):
             await r.fulfill(status=200,content_type='text/xml',body=xml)
         await page.route('**/cgi-bin/epos/**',printer)
         await page.evaluate("localStorage.setItem('timbangan-printer','http://127.0.0.1:9999')")
-        async with ctx.expect_event('response',predicate=lambda r:urlsplit(r.url).path.endswith('/cetak/80mm')) as lihat:
-            await page.get_by_role('link',name='Lihat',exact=True).click()
-        assert (await lihat.value).headers['content-type']=='application/pdf'
-        for extra in ctx.pages:
-            if extra!=page:await extra.close()
+        await page.get_by_role('button',name='Lihat',exact=True).click()
+        await page.wait_for_function("document.querySelector('.tf-pdf-dialog [data-pdf-status]').textContent.endsWith('halaman')",timeout=15000)
+        await page.get_by_role('button',name='Tutup PDF').click()
         assert page.url==lokasi and await jumlah()==0
         await page.locator('[data-cetak-langsung]').evaluate('(e)=>{e.click();e.click()}')
         try:await page.wait_for_function("document.querySelector('[data-cetak-langsung-hasil]').textContent.includes('berhasil')",timeout=8000)

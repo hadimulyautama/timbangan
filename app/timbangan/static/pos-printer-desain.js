@@ -15,7 +15,8 @@
       check.disabled=changed||busy;print.setAttribute('aria-disabled',String(changed||busy));save.disabled=busy;input.readOnly=busy;
       save.classList.toggle('halus',!changed);check.classList.toggle('halus',changed);
     }
-    function show(text,help=false){summary.textContent=text;result.hidden=!text;result.querySelector('[data-pp-help]').hidden=!help;}
+    function show(text){summary.textContent=text;result.hidden=!text;result.querySelector('[data-pp-next]').hidden=true;result.querySelector('[data-pp-buka-alamat]').hidden=true;}
+    function langkah(text,buka=false){const next=result.querySelector('[data-pp-next]');next.textContent=text;next.hidden=!text;const link=result.querySelector('[data-pp-buka-alamat]');link.href=window.TeraFlowPrinter.alamat()||'#';link.hidden=!buka;}
     input.addEventListener('input',()=>{show('');details.hidden=true;sync();});
     // Mencegah pencetakan ke alamat lama ketika ketikan belum disimpan.
     root.addEventListener('click',e=>{
@@ -31,7 +32,14 @@
         busy=false;details.hidden=false;
         const rows=d.hasil||[],service=rows.find(x=>x.judul==='Layanan cetak'),error=rows.find(x=>x.nada==='err');
         if(service?.nada==='ok'){lastStatus='Sambungan berhasil';show('Sambungan berhasil. Cetak uji untuk memeriksa keluaran kertas.');}
-        else {lastStatus='Sambungan perlu diperiksa';show(error?.judul==='Alamat printer'?'Alamat printer belum disetel di browser ini.':error?.judul==='Awalan alamat'?'Gunakan alamat printer yang diawali https://.':error?.judul==='Izin jaringan lokal'?'Izin jaringan lokal ditolak. Periksa setelan situs di browser, lalu periksa lagi.':'Printer belum dapat dihubungi. Periksa jaringan pos, alamat printer, dan izin browser.',true);}
+        else {
+          lastStatus='Sambungan perlu diperiksa';
+          if(error?.judul==='Alamat printer'){show('Alamat printer belum disetel di browser ini.');langkah('Isi alamat printer di atas, simpan, lalu periksa sambungan lagi.');}
+          else if(error?.judul==='Awalan alamat'){show('Gunakan alamat printer yang diawali https://.');langkah('Perbaiki alamat di atas, simpan, lalu periksa sambungan lagi.');}
+          else if(error?.judul==='Izin jaringan lokal'){show('Izin jaringan lokal ditolak.');langkah('Izinkan akses jaringan lokal pada setelan situs di browser, lalu tekan Periksa sambungan lagi.');}
+          else if(service?.nada==='err'){show(service.kata||'Printer menolak pemeriksaan.');langkah('Tangani kondisi printer yang disebutkan, lalu tekan Periksa sambungan lagi.');}
+          else {show('Printer belum dapat dihubungi.');langkah('Pastikan printer menyala, alamat benar, dan perangkat terhubung ke jaringan pos. Bila perlu, buka alamat printer untuk memeriksa permintaan sertifikat browser, lalu kembali dan periksa lagi.',true);}
+        }
       } else if(d.jenis==='hasil'){
         if(!d.pesan)return;
         busy=false;details.hidden=false;
@@ -49,7 +57,7 @@
     if(typeof dialog.showModal==='function'){
       root.querySelector('[data-pp-help-slot]').append(content);root.querySelector('[data-pp-help-fallback]').hidden=true;
       root.querySelectorAll('[data-pp-help]').forEach(button=>{button.hidden=false;button.setAttribute('aria-controls',dialog.id);button.setAttribute('aria-haspopup','dialog');button.addEventListener('click',()=>{dialog._opener=button;dialog.showModal();});});
-      result.querySelector('[data-pp-help]').hidden=true;
+
       root.querySelector('[data-pp-close]').addEventListener('click',()=>dialog.close());dialog.addEventListener('close',()=>dialog._opener?.focus());
     }
     // Tombol asli dipindahkan ke baris judul, tidak disalin.

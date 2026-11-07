@@ -37,6 +37,6 @@ async def test_kontrol_selesai_konsisten_semua_jenis(klien,jenis):
     elif jenis=='retur_pelanggan':tid=await retur()
     else:tid=await tiket()
     r=await klien.get(f'/timbangan/transaksi/{tid}');assert r.status_code==200
-    assert 'data-cetak-langsung data-tiket' in r.text and '>Lihat</a>' in r.text and '>Bagikan</a>' in r.text
-    assert 'cetak-langsung.js?v=108' in r.text
+    assert 'data-cetak-langsung data-tiket' in r.text and '>Lihat</button>' in r.text and '>Bagikan</a>' in r.text
+    assert 'cetak-langsung.js?v=109' in r.text
     r=await klien.get(f'/timbangan/transaksi/{tid}/cetak/konteks');assert r.status_code==200

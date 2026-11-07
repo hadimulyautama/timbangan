@@ -1,0 +1,7 @@
+{
+  "package": "pdfjs-dist",
+  "version": "5.7.284",
+  "license": "Apache-2.0",
+  "integrity": "sha512-h4EdYQczmGhbOlqc3PPZwxevn7ApdWPbovAuWXOB/DjIyigSnwfy2oze7c6mRcSr9XgLp3eN3EeL4DyySTPMFw==",
+  "source": "https://registry.npmjs.org/pdfjs-dist/-/pdfjs-dist-5.7.284.tgz"
+}
