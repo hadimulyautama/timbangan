@@ -162,3 +162,30 @@ async def produk_tertaut(db: AsyncSession, trx) -> list[str]:
             if ada:
                 hasil.append('arsip penerimaan produk PadiFlow')
     return hasil
+
+
+async def retur_supplier_curah(db: AsyncSession, trx) -> bool:
+    """Karung tidak wajib hanya pada pengajuan resmi yang seluruhnya kg.
+
+    Arah/jenis tiket saja tidak membuktikan bahwa barang curah. Baca satuan
+    sumber PadiFlow, bukan checkbox/payload petugas, dan jangan menciptakan
+    karung agar timbang kedua bisa selesai. Campuran kemasan, pengajuan
+    batal/kosong, supplier berbeda, atau instalasi mandiri tetap memakai
+    penjaga jumlah karung biasa. Pembaca ini tidak memindahkan stok.
+    """
+    if (getattr(trx, 'arah', None) != 'RETUR_KELUAR'
+            or getattr(trx, 'jenis_kode', None) != 'RETUR_SUPPLIER'):
+        return False
+    tabel = await db.run_sync(lambda s: set(inspect(s.connection()).get_table_names()))
+    if not {'retur_supplier', 'retur_supplier_items'} <= tabel:
+        return False
+    rows = (await db.execute(text('''
+        SELECT i.satuan, i.jumlah, i.bobot_kg
+          FROM retur_supplier r JOIN retur_supplier_items i ON i.retur_supplier_id=r.id
+         WHERE r.timbangan_transaksi_id=:tid AND r.supplier_id=:supplier
+           AND r.status='diajukan'
+    '''), {'tid': trx.id, 'supplier': trx.supplier_id})).all()
+    from decimal import Decimal
+    return bool(rows) and all(r.satuan == 'kg' and all(
+        Decimal(str(n)).is_finite() and Decimal(str(n)) > 0
+        for n in (r.jumlah, r.bobot_kg)) for r in rows)

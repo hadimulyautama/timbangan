@@ -22,6 +22,13 @@ def test_tidak_ada_merek_lama_di_tampilan_dan_metadata():
         if path.name == 'timbang1.html':
             text = text.replace('bukan perintah pemindahan stok PadiFlow.',
                                 'bukan perintah pemindahan stok Sistem Produksi.')
+        if path.name == 'timbang2.html':
+            # Pengajuan curah menyebut aplikasi sumber; identitas halaman
+            # tetap TeraFlow. Hanya dua keterangan operasional ini diizinkan.
+            text = text.replace('Retur curah sesuai pengajuan PadiFlow memakai kg.',
+                                'Retur curah sesuai pengajuan Sistem Produksi memakai kg.')
+            text = text.replace('Retur curah mengikuti satuan kg pengajuan PadiFlow.',
+                                'Retur curah mengikuti satuan kg pengajuan Sistem Produksi.')
         assert not re.search(r'padi\s*flow', text, re.I), path.name
 
 

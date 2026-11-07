@@ -31,6 +31,7 @@ from app.timbangan.models import (
 )
 from app.timbangan.security import butuh_akun
 from app.timbangan import pengiriman
+from app.timbangan.tautan_produksi import retur_supplier_curah
 from app.timbangan.web import ARAH_LABEL, PREFIX, galat_db, redirect, render
 
 router = APIRouter(prefix=PREFIX)
@@ -915,6 +916,7 @@ async def form_timbang_kedua(
         request, "timbang2.html",
         kunci=str(uuid4()), b=baris, aturan=aturan, sekarang=jam_form,
         tara=tara, asal_tara_id=asal_id,
+        retur_curah=await retur_supplier_curah(db, baris.trx),
         integrasi_muatan=integrasi_muatan, integrasi_error=integrasi_error,
         boleh_koreksi=service.boleh_mengubah(baris.trx, akun)[0],
         kembali=f"{PREFIX}/tiket",
@@ -973,7 +975,7 @@ async def pratinjau_timbang_kedua(
             raise service.LayananError("Berat timbang harus lebih dari 0 kg.")
         aturan = service.aturan_dari_snapshot(t) or await service.aturan_untuk(db, t.jenis_kode)
         muatan = service._baris_logic(t.muatan)
-        wajib_karung = True
+        wajib_karung = not await retur_supplier_curah(db, t)
         lama = t.muatan[0] if t.muatan else None
         if t.arah == logic.KELUAR:
             data = await pengiriman.baca(db, transaksi_id)
