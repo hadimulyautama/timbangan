@@ -15,10 +15,17 @@
   <h1>Detail riwayat timbang</h1>
   {{ kontrol_detail(trx, PREFIX, kembali, cetak, panduan=true, tindakan=true) }}
   <section class="rd-result" aria-label="Hasil satu perjalanan">
-    <div class="dk-sebar"><h2>{{ trx.nomor_polisi or trx.kode }}</h2><span class="lencana">{{ 'Batal' if trx.status_transaksi == 'VOID' else ('Selesai timbang' if final else ('Menunggu timbang kedua' if trx.status_tiket == TIKET_TERBUKA else 'Ditutup tanpa timbang kedua')) }}</span></div>
+    <div class="dk-sebar"><h2>{{ trx.nomor_polisi or trx.kode }}</h2></div>
     <p class="bantu">{{ trx.kode }} · {{ trx.tanggal|tgl(true) }}<br>Pengiriman · Keluar · Sopir {{ trx.nama_sopir or 'Belum tercatat' }}</p>
     <p>{{ ringkasan_pengiriman(keluar.data) or b.pihak_tampil }} · satu perjalanan</p>
     <div class="rd-weight"><span>Berat barang seluruh truk setelah tara</span><strong>{{ trx.berat_barang_kg|kg if final and trx.berat_barang_kg is not none else 'Hasil akhir belum tersedia' }}</strong></div>
+  <section class="kartu dk-integrasi" data-status-produksi="{{ keluar.produksi.kode }}">
+    <h2 class="rd-shipping-title">Status timbang dan pengiriman</h2>
+    <dl class="rd-shipping-status" data-status-timbang-pengiriman><div><dt>Penimbangan · TeraFlow</dt><dd>{{ keluar.tahap_pengiriman.timbang }}</dd></div><div><dt>Verifikasi pengiriman · PadiFlow</dt><dd>{{ keluar.tahap_pengiriman.verifikasi }}</dd></div></dl>
+    <p class="bantu">{{ keluar.tahap_pengiriman.berikut }}</p>
+    {% if keluar.produksi.perintah %}<p>{% for p in keluar.produksi.perintah %}<a href="{{ produksi_url }}/barang-keluar/{{ p.id }}">{{ p.kode }}</a> · {{ {'perintah':'Menunggu selesai muat','dimuat':'Menunggu verifikasi pengiriman','selesai':'Terverifikasi','batal':'Dibatalkan'}.get(p.status,p.status) }}{{ ' / ' if not loop.last }}{% endfor %}</p>{% endif %}
+    {% if tautan_produksi and not keluar.produksi.perintah %}<a href="{{ tautan_produksi }}">{{ 'Hubungkan ke barang keluar Produksi' if keluar.produksi.kode == 'belum' else 'Periksa pengiriman di PadiFlow' }} →</a>{% if not keluar.produksi.perintah %}<p class="bantu">Pilih transaksi yang sesuai pada form verifikasi Produksi; tidak ada tautan yang dibuat saat membuka halaman.</p>{% endif %}{% endif %}
+  </section>
     {% if final %}<div class="dk-sebar"><span>Acuan muatan <b>{{ keluar.acuan|kg if keluar.acuan is not none else 'Belum tersedia' }}</b></span><span>{% if trx.status_kontrol != 'TANPA_KONTROL' and trx.selisih_kg is not none %}Selisih seluruh truk <b>{{ trx.selisih_kg|kg_tanda }} · {{ trx.selisih_persen|persen }}</b>{% else %}Tanpa pembanding; selisih belum tersedia.{% endif %}</span></div>{% endif %}
     {% if trx.status_transaksi == 'VOID' %}<p class="pesan pesan--err">Dibatalkan. {{ trx.void_alasan }}</p>{% elif trx.status_tiket == TIKET_DITUTUP_PAKSA %}<p class="pesan pesan--err">Tiket ditutup tanpa timbang kedua. {{ trx.tutup_paksa_alasan }}</p>{% endif %}
     <div class="rd-control-status">
@@ -26,12 +33,7 @@
       {% if trx.keterangan %}<p class="bantu">{{ trx.keterangan }}</p>{% endif %}
       {% if pemeriksaan %}<div class="dk-sebar"><span>Pemeriksaan TeraFlow {{ 'selesai' if pemeriksaan.status == 'SELESAI' else 'masih terbuka' }}</span><a class="tbl halus" href="#pemeriksaan" data-rd-exam-open>{{ 'Lihat temuan' if pemeriksaan.status == 'SELESAI' else 'Buka pemeriksaan' }}</a></div>{% endif %}
     </div>
-  <section class="kartu dk-integrasi" data-status-produksi="{{ keluar.produksi.kode }}">
-    <strong>{{ keluar.produksi.label }}</strong>
-    <p class="bantu">Status pengiriman tercatat terpisah dari hasil timbang dan pemeriksaan TeraFlow. Membuka halaman ini tidak menjalankan verifikasi.</p>
-    {% if keluar.produksi.perintah %}<p>{% for p in keluar.produksi.perintah %}<a href="{{ produksi_url }}/barang-keluar/{{ p.id }}">{{ p.kode }}</a> · {{ p.status }}{{ ' / ' if not loop.last }}{% endfor %}</p>{% endif %}
-    {% if tautan_produksi and not keluar.produksi.perintah %}<a href="{{ tautan_produksi }}">{{ 'Hubungkan ke barang keluar Produksi' if keluar.produksi.kode == 'belum' else 'Periksa pengiriman di PadiFlow' }} →</a>{% if not keluar.produksi.perintah %}<p class="bantu">Pilih transaksi yang sesuai pada form verifikasi Produksi; tidak ada tautan yang dibuat saat membuka halaman.</p>{% endif %}{% endif %}
-  </section>
+
   </section>
   <details class="rd-disclosure" id="rd-muatan"><summary id="dk-tab-muatan">Muatan pelanggan<small>{{ keluar.kelompok|length }} pelanggan</small></summary>
       <section id="dk-muatan" data-dk-panel="muatan" aria-labelledby="dk-tab-muatan">
