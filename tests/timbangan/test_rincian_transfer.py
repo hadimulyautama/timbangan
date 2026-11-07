@@ -69,7 +69,7 @@ async def test_detail_historis_tanpa_mutasi_dan_angka(klien,monkeypatch,terstruk
     for tab in ('ringkasan','perhitungan','jejak'):
         r=await klien.get(f'/timbangan/transaksi/{tid}?tab={tab}&kembali=/timbangan/transaksi%3Fhal=2')
         assert r.status_code==200
-        for text in ['Ringkasan transfer','Perhitungan','Jejak &amp; dokumen','Tidak ada transfer tertaut','TRF-UJI-123 hanya catatan','Tanpa kontrol','/pekerjaan']:
+        for text in ['Rincian transfer','Perhitungan','Jejak &amp; dokumen','Tidak ada transfer tertaut','TRF-UJI-123 hanya catatan','Tanpa kontrol','/pekerjaan']:
             assert text in r.text,text
         assert 'Belum dipetakan' not in r.text if terstruktur else 'belum dipetakan' in r.text
     async with database.SessionLocal() as db:

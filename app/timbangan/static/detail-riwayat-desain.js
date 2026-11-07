@@ -30,7 +30,7 @@
       return;
     }
     const tab=hash.startsWith('#dk-')?hash.slice(4):new URL(location.href).searchParams.get('tab');
-    const id={muatan:'rd-muatan',perhitungan:'rd-perhitungan',jejak:'rd-jejak',ringkasan:'rd-penerimaan'}[tab];
+    const id={muatan:'rd-muatan',perhitungan:'rd-perhitungan',jejak:'rd-jejak',ringkasan:akar.querySelector('#rd-ringkasan')?'rd-ringkasan':'rd-penerimaan'}[tab];
     const target=id&&akar.querySelector('#'+id);
     if(target)target.open=true;
   }

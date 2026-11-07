@@ -17,7 +17,7 @@ from app.timbangan import service
 from app.timbangan.db import sekarang
 from app.timbangan.models import TimbanganTransaksi,TimbanganAkun,TimbanganAudit,TimbanganCetak
 from hmu_identitas import peran as P
-OUT=Path(__file__).absolute().parents[3]/'output/detail-tiket-transfer-20261027'
+OUT=Path(os.environ.get('UJI_TRANSFER_OUT',str(Path(__file__).resolve().parents[3]/'gambar')))
 
 async def browser_uji(pw,klien,alamat,width=390,theme='light',browser='chromium'):
     opts={'executable_path':os.environ['UJI_WEBKIT_PATH']} if browser=='webkit' and os.environ.get('UJI_WEBKIT_PATH') else {}
@@ -51,13 +51,29 @@ async def test_tiga_tab_layar_keyboard_konteks(klien,alamat_ui,width,theme,role)
         await buka(page,alamat_ui+f'/timbangan/transaksi/{tid}?kembali=/timbangan/transaksi%3Fhal=2')
         assert await page.locator('.dk-kembali').get_attribute('href')=='/timbangan/transaksi?hal=2'
         for tab in ('ringkasan','perhitungan','jejak'):
-            await page.locator(f'[data-dk-tab={tab}]').click();assert await page.locator(f'#dk-{tab}').is_visible()
+            await page.locator(f'#dk-tab-{tab}').click();assert await page.locator(f'#dk-{tab}').is_visible()
             assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
             await page.screenshot(path=str(OUT/f'{tab}-{width}-{theme}-{role}.png'),full_page=True)
-        await page.locator('[data-dk-tab=ringkasan]').click();await page.locator('[data-dk-tab=ringkasan]').press('ArrowRight')
-        assert await page.locator('[data-dk-tab=perhitungan]').get_attribute('aria-selected')=='true'
-        await page.reload();assert await page.locator('#dk-perhitungan').is_visible()
-        assert not writes and not errors
+        # Disclosure native mendukung keyboard; alamat tab lama tetap berlaku.
+        await page.locator('#dk-tab-perhitungan').press('Enter')
+        assert await page.locator('#dk-perhitungan').is_hidden()
+        await buka(page,alamat_ui+f'/timbangan/transaksi/{tid}?tab=ringkasan')
+        assert await page.locator('#dk-ringkasan').is_visible()
+        await page.locator('[data-rd-guide]').click();await page.keyboard.press('Escape')
+        await page.locator('[data-rd-exam-open]').click()
+        assert await page.locator('#rd-exam').evaluate('e=>e.open')
+        if P.admin_keatas(role):
+            await page.get_by_label('Catatan resolusi',exact=True).fill('Temuan historis uji')
+            await page.get_by_label('Kategori hasil',exact=True).select_option('LAIN')
+            await page.route('**/periksa',lambda r:r.abort())
+            await page.get_by_role('button',name='Tutup pemeriksaan',exact=True).click()
+            await page.locator('[data-hasil-pemeriksaan]').wait_for(state='visible')
+            assert await page.get_by_label('Catatan resolusi',exact=True).input_value()=='Temuan historis uji'
+            await page.locator('#rd-exam [data-rd-close]').click()
+            await page.locator('[data-rd-exam-open]').click()
+            assert await page.get_by_label('Catatan resolusi',exact=True).input_value()=='Temuan historis uji'
+        assert len(writes)==int(P.admin_keatas(role)) and all(x.endswith("/periksa") for x in writes)
+        assert not errors
         await b.close()
     async with database.SessionLocal() as db:assert await db.scalar(select(func.count()).select_from(TimbanganAudit))==before
 
@@ -75,7 +91,7 @@ async def test_pilihan_baru_koreksi_dan_gagal_simpan(klien,alamat_ui,browser):
         await page.wait_for_url('**/transaksi/**')
         async with database.SessionLocal() as db:
             t=await db.scalar(select(TimbanganTransaksi));tid=t.id;assert t.lintasan_transfer['tujuan']['silo_id']==104
-        await page.locator('.dk-lanjutan>summary').click();await page.get_by_role('link',name='Koreksi',exact=True).click()
+        await page.locator('[data-rd-actions-open]').click();await page.get_by_role('link',name='Koreksi',exact=True).click()
         await page.locator('[name=transfer_tujuan]').select_option('gudang:102')
         await page.locator('[data-correction-form] [name=alasan]').fill('Pilihan lokasi uji')
         await page.wait_for_function("document.querySelector('[data-cf-hasil]').textContent.includes('Tumpukan')")
@@ -101,7 +117,7 @@ async def test_tindakan_dan_kunci_ui(klien,alamat_ui,role):
         t=await db.get(TimbanganTransaksi,tid);t.timbang2_waktu_sistem=sekarang()-timedelta(days=10);await db.commit()
     async with async_playwright() as pw:
         b,ctx,page=await browser_uji(pw,klien,alamat_ui)
-        await buka(page,alamat_ui+f'/timbangan/transaksi/{tid}');await page.locator('.dk-lanjutan>summary').click()
+        await buka(page,alamat_ui+f'/timbangan/transaksi/{tid}');await page.locator('[data-rd-actions-open]').click()
         assert await page.get_by_role('link',name='Koreksi',exact=True).count()==int(P.admin_keatas(role))
         form=page.locator('form[action$="/batal"]');assert await form.count()==int(P.admin_keatas(role))
         assert await page.locator('form[action$="/hapus"]').count()==int(role==P.SUPERADMIN)
@@ -122,7 +138,7 @@ async def test_riwayat_teks_panjang_tanpa_kendaraan(klien,alamat_ui):
     async with async_playwright() as pw:
         b,ctx,page=await browser_uji(pw,klien,alamat_ui,320)
         await buka(page,alamat_ui+f'/timbangan/transaksi/{tid}')
-        assert await page.locator('.dk-hero h1').inner_text()==t.kode
+        assert await page.locator('.rd-result h2').first.inner_text()==t.kode
         assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
         await page.screenshot(path=str(OUT/'historis-teks-panjang-320.png'),full_page=True)
         await b.close()
@@ -211,4 +227,26 @@ async def test_draf_formulir_lama_tidak_kehilangan_catatan_lintasan(klien,alamat
         assert await page.locator('[data-lintasan-lama]').is_visible()
         assert await page.locator('input[type=text][name=pihak_nama],textarea[name=pihak_nama]:not([readonly])').count()==0
         await page.screenshot(path=str(OUT/'draf-lintasan-lama-320.png'),full_page=True)
+        await b.close()
+
+async def test_tanpa_js_legacy_dan_bacaan_sementara(klien,alamat_ui):
+    await master();tid=await tiket(selesai=False);await login(klien,'wahid')
+    async with database.SessionLocal() as db:
+        t=await db.get(TimbanganTransaksi,tid);t.timbang2_kg=6400;await db.commit()
+    async with async_playwright() as pw:
+        b=await pw.chromium.launch()
+        for js in [False,True]:
+            ctx=await b.new_context(viewport={'width':390,'height':950},java_script_enabled=js,service_workers='block',reduced_motion='reduce')
+            await ctx.add_cookies([{'name':k,'value':v,'url':alamat_ui} for k,v in klien.cookies.items()])
+            page=await ctx.new_page();await page.goto(alamat_ui+f'/timbangan/transaksi/{tid}?tab=perhitungan')
+            if not js:await page.locator('#rd-perhitungan>summary').click()
+            assert await page.locator('#rd-perhitungan').evaluate('e=>e.open')
+            assert '6.400,00 kg · sementara' in await page.locator('#rd-perhitungan').inner_text()
+            assert 'Hasil akhir belum tersedia' in await page.locator('.rd-result').inner_text()
+            assert await page.get_by_role('link',name='Lanjutkan timbang kedua',exact=True).count()==1
+            if not js:
+                await page.locator('[data-rd-guide-fallback]>summary').evaluate('e=>e.scrollIntoView({block:"center"})')
+                await page.locator('[data-rd-guide-fallback]>summary').click()
+                assert await page.locator('[data-rd-guide-content]').is_visible()
+            await ctx.close()
         await b.close()

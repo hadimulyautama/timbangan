@@ -29,3 +29,5 @@ body.padiflow-ui .rd-control-status .tbl{width:auto;min-height:44px;padding:9px 
 @media print{.rd-controls,.rd-page dialog,[data-rd-guide-fallback],[data-rd-actions-fallback]{display:none!important}}
 
 body.padiflow-ui .rd-result>.dk-integrasi{padding:14px 0 0;border:0;border-top:1px solid var(--pd-line);border-radius:0;box-shadow:none;background:transparent}
+
+.rd-page .rd-transfer-link{display:grid;gap:12px;padding-top:14px;border-top:1px solid var(--pd-line)}
