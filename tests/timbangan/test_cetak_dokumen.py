@@ -61,7 +61,7 @@ def test_epos_nama_barang_tidak_terpotong_feed_dan_potong_akhir():
     sig=next(i for i,e in enumerate(els) if 'Petugas pencetak' in (e.text or ''))
     assert els[sig+1].attrib=={'unit':'160'}
     assert 160/203*25.4>=20
-    assert els[-1].tag.endswith('cut') and xml.count('<cut')==1
+    assert els[-1].tag.endswith('cut') and xml.count('<cut')==2
     assert 'Subtotal muat' not in text and 'Menurut dokumen' not in text
 
 @pytest.mark.parametrize('arah',['MASUK','KELUAR','TRANSFER','RETUR_MASUK','RETUR_KELUAR'])

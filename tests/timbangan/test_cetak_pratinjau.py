@@ -40,11 +40,16 @@ async def test_pekerjaan_ulang_dan_ack_satu_kali(klien):
     tid=await tiket();await login(klien,'wahid');j,data=await siapkan(klien,tid)
     url=f'/timbangan/transaksi/{tid}/cetak/pekerjaan';base=url+'/'+j['kunci']
     assert (await klien.post(url,json=data)).json()['kunci']==j['kunci']
-    assert (await klien.post(base+'/kirim',json={})).status_code==200
+    assert j['rangkap']==2
+    kiriman=await klien.post(base+'/kirim',json={})
+    assert kiriman.status_code==200 and kiriman.text.count('<cut')==2
+    assert 'RANGKAP 1/2' in kiriman.text and 'RANGKAP 2/2' in kiriman.text
     assert (await klien.post(base+'/kirim',json={})).status_code==409
     assert await jumlah()==0
     for _ in range(2):assert (await klien.post(base+'/hasil',json={'hasil':'printer_berhasil'})).json()['status']=='berhasil'
     assert await jumlah()==1
+    async with database.SessionLocal() as db:
+        job=await db.get(Job,j['kunci']);assert job.metode=='Printer mengonfirmasi (2 lbr)'
     r=await klien.get(f'/timbangan/transaksi/{tid}/cetak');cap=re.search(r'data-sidik="([^"]+)"',r.text).group(1)
     data.update(kunci=uuid.uuid4().hex,sidik=cap)
     assert (await klien.post(url,json=data)).status_code==409
@@ -165,3 +170,18 @@ async def test_akun_sebenarnya_dan_hapus_yang_sah_tetap_bekerja(klien):
         assert await db.get(Job,j['kunci']) is None
         assert await db.scalar(select(func.count()).select_from(TimbanganCetak))==0
         assert await db.scalar(select(func.count()).select_from(TimbanganAudit).where(TimbanganAudit.aksi=='HAPUS_TRANSAKSI'))>=1
+
+
+async def test_pekerjaan_lama_tidak_digandakan_atau_diubah(klien):
+    tid=await tiket();await login(klien,'wahid');j,_=await siapkan(klien,tid)
+    lama=b'<epos-print><text>Historis utuh</text><cut type="feed"/></epos-print>'
+    async with database.SessionLocal() as db:
+        job=await db.get(Job,j['kunci']);job.konten=lama;await db.commit()
+    r=await klien.get(f'/timbangan/transaksi/{tid}/cetak/konteks')
+    assert r.json()['pekerjaan']['rangkap']==1
+    base=f'/timbangan/transaksi/{tid}/cetak/pekerjaan/'+j['kunci']
+    assert (await klien.post(base+'/kirim',json={})).content==lama
+    await klien.post(base+'/hasil',json={'hasil':'printer_berhasil'})
+    async with database.SessionLocal() as db:
+        job=await db.get(Job,j['kunci']);assert job.konten==lama and job.metode=='Printer mengonfirmasi'
+    assert await jumlah()==1

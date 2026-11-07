@@ -826,6 +826,9 @@
       method: 'POST',
       headers: { 'Content-Type': 'text/xml; charset=utf-8' },
       body: perintah,
+      credentials: 'omit',
+      cache: 'no-store',
+      redirect: 'error',
       signal: henti.signal
     }).then(function (r) {
       if (!r.ok) { throw new Error('HTTP printer ' + r.status + '.'); }
@@ -846,24 +849,75 @@
     });
   }
 
-  /* Kirim satu perintah cetak. `sumber` adalah alamat di server ini yang
-   * menyusun perintahnya — perangkat tidak pernah menyusun sendiri. */
+  function tujuanPrinter(alamat, devid, tenggat) {
+    return alamat + '/cgi-bin/epos/service.cgi?devid=' +
+      encodeURIComponent(devid) + '&timeout=' + tenggat;
+  }
+
+  // XML kosong hanya membaca status: tidak ada teks, feed atau cut.
+  // HANYA pemeriksaan ini boleh diulang ketika koneksi putus.
+  var STATUS_PRINTER = '<?xml version="1.0" encoding="utf-8"?>' +
+    '<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">' +
+    '<s:Body><epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/' +
+    'epos-print"/></s:Body></s:Envelope>';
+
+  function izinJaringanPrinter() {
+    try {
+      return navigator.permissions.query({ name: 'local-network-access' })
+        .then(function (p) { return p.state; }, function () { return 'tidak dikenal'; });
+    } catch (e) { return Promise.resolve('tidak dikenal'); }
+  }
+
+  function pastikanPrinter(alamat, devid) {
+    if (!alamat) {
+      return Promise.reject(KirimGagal('Printer belum disetel di perangkat ini.', true));
+    }
+    if (location.protocol === 'https:' && !/^https:/i.test(alamat)) {
+      return Promise.reject(KirimGagal('Alamat printer harus https:// pada aplikasi ini.', true));
+    }
+    return izinJaringanPrinter().then(function (izin) {
+      if (izin === 'denied') {
+        throw KirimGagal('Izin jaringan lokal ditolak. Izinkan akses jaringan lokal ' +
+          'pada setelan situs di browser ini. Wi-Fi yang sama belum memberi izin browser.', true);
+      }
+      function periksa(ulangan) {
+        return mintaPrinter(tujuanPrinter(alamat, devid, 3000), STATUS_PRINTER, 6000, alamat)
+          .catch(function () {
+            if (!ulangan) {
+              return new Promise(function (lanjut) { setTimeout(lanjut, 500); })
+                .then(function () { return periksa(true); });
+            }
+            throw KirimGagal('Printer belum dapat dihubungi di ' + alamat + '. ' +
+              'Struk belum dikirim. Sambungan sudah dicoba kembali otomatis. ' +
+              'Periksa printer menyala dan alamatnya benar; jika browser meminta ' +
+              'sertifikat atau izin jaringan lokal, selesaikan izin tersebut. ' +
+              'Wi-Fi yang sama saja belum cukup.', true);
+          }).then(function (jawaban) {
+            if (!jawaban.berhasil) {
+              throw KirimGagal(ARTI_GAGAL[jawaban.kode] ||
+                'Layanan printer belum siap' + (jawaban.kode ? ' (' + jawaban.kode + ')' : '') +
+                '. Struk belum dikirim.', false);
+            }
+            return jawaban;
+          });
+      }
+      return periksa(false);
+    });
+  }
+
+  /* Pulihkan sambungan sebelum setiap cetakan, termasuk setelah HP tidur.
+   * Setelah XML struk dikirim, jawaban hilang tetap BELUM PASTI, tanpa retry. */
   function cetakKePrinter(sumber, perintahSiap) {
     var alamat = alamatPrinter();
-    if (!alamat) {
-      return Promise.reject(
-        KirimGagal('Printer belum disetel di perangkat ini.', true));
-    }
-    var persiapan = perintahSiap != null ? Promise.resolve(perintahSiap) : fetch(sumber, { credentials: 'same-origin' })
-      .then(function (r) {
-        if (!r.ok) { throw new Error('Gagal menyiapkan struk (' + r.status + ').'); }
-        return r.text();
-      });
-    return persiapan.then(function (perintah) {
-      var devid = document.body.dataset.printerDevid || 'local_printer';
-      var tujuan = alamat + '/cgi-bin/epos/service.cgi?devid=' +
-                   encodeURIComponent(devid) + '&timeout=10000';
-      return mintaPrinter(tujuan, perintah, TENGGAT_MS, alamat);
+    var devid = document.body.dataset.printerDevid || 'local_printer';
+    return pastikanPrinter(alamat, devid).then(function () {
+      return perintahSiap != null ? perintahSiap : fetch(sumber, { credentials: 'same-origin' })
+        .then(function (r) {
+          if (!r.ok) { throw new Error('Gagal menyiapkan struk (' + r.status + ').'); }
+          return r.text();
+        });
+    }).then(function (perintah) {
+      return mintaPrinter(tujuanPrinter(alamat, devid, 10000), perintah, TENGGAT_MS, alamat);
     }).then(function (jawaban) {
       if (jawaban.berhasil) { return true; }
       var kode = jawaban.kode;
@@ -1010,97 +1064,35 @@
   //   · sertifikat printer belum diterima di perangkat ini;
   //   · izin akses jaringan lokal belum diklik;
   //   · perangkat memang tidak satu jaringan dengan printer.
-  // Tanpa cara membedakannya, orang menebak, dan tebakan pertama biasanya
-  // "aplikasinya rusak". Pemeriksa ini memisahkan ketiganya dengan mencoba
-  // hal yang lebih kecil lebih dulu.
-
-  function _tunggu(janji, ms) {
-    var lewat = false;
-    return Promise.race([
-      janji.then(function (n) { return { ok: true, nilai: n }; },
-                 function (e) { return { ok: false, galat: e }; }),
-      new Promise(function (res) {
-        setTimeout(function () { lewat = true; res({ ok: false, lambat: true }); }, ms);
-      })
-    ]).then(function (h) { h.lambat = h.lambat || lewat; return h; });
-  }
+  // Izin yang diketahui ditampilkan terpisah. Selain itu browser tidak
+  // selalu membedakan TLS/CORS/jaringan; uji ePOS kosonglah bukti kesiapan.
 
   function periksaPrinter() {
     var alamat = alamatPrinter();
     var hasil = [];
-
-    function catat(judul, nada, kata) {
-      hasil.push({ judul: judul, nada: nada, kata: kata });
-    }
-
+    function catat(judul, nada, kata) { hasil.push({ judul: judul, nada: nada, kata: kata }); }
     if (!alamat) {
       catat('Alamat printer', 'err', 'Belum disetel di perangkat ini.');
       return Promise.resolve(hasil);
     }
     catat('Alamat printer', 'ok', alamat);
-
     if (!/^https:/i.test(alamat)) {
-      catat('Awalan alamat', 'err',
-            'Harus https://. Halaman ini HTTPS, dan browser menolak ' +
-            'menghubungi alamat http:// dari halaman HTTPS.');
+      catat('Awalan alamat', 'err', 'Gunakan alamat printer yang diawali https://.');
       return Promise.resolve(hasil);
     }
-
-    var izin = Promise.resolve('tidak dikenal');
-    try {
-      izin = navigator.permissions
-        .query({ name: 'local-network-access' })
-        .then(function (p) { return p.state; })
-        .catch(function () { return 'tidak dikenal'; });
-    } catch (e) { /* browser lama — biarkan 'tidak dikenal' */ }
-
-    return izin.then(function (keadaan) {
-      catat('Izin jaringan lokal',
-            keadaan === 'granted' ? 'ok' : (keadaan === 'denied' ? 'err' : 'netral'),
-            keadaan === 'granted' ? 'Sudah diberikan.'
-              : keadaan === 'denied' ? 'DITOLAK. Buka setelan situs di browser, ' +
-                  'izinkan akses jaringan lokal, lalu muat ulang halaman ini.'
-              : keadaan === 'prompt' ? 'Belum ditanyakan — akan muncul saat mencetak.'
-              : 'Browser ini tidak melaporkannya.');
-
-      // Uji terkecil: sekadar menyentuh printer, tanpa menuntut jawaban yang
-      // bisa dibaca (`no-cors`). Yang diuji di sini hanya TLS dan izin —
-      // bukan CORS, bukan ePOS. Memisahkannya membuat sebabnya kelihatan.
-      return _tunggu(fetch(alamat + '/', { mode: 'no-cors', cache: 'no-store' }), 9000);
-    }).then(function (h) {
-      if (h.lambat) {
-        catat('Sertifikat printer', 'err',
-              'Tidak ada jawaban dalam 9 detik. Biasanya pertanyaan izin ' +
-              'jaringan lokal belum dijawab.');
-        return null;
-      }
-      if (!h.ok) {
-        catat('Sertifikat printer', 'err',
-              'Ditolak browser ini. Buka alamat printer di tab baru, pilih ' +
-              'Lanjutkan pada peringatan, lalu kembali ke sini. Bila ' +
-              'peringatannya tidak muncul sama sekali, perangkat ini tidak ' +
-              'satu jaringan dengan printer.');
-        return null;
-      }
-      catat('Sertifikat printer', 'ok', 'Diterima di perangkat ini.');
-
-      // Perintah cetak KOSONG: printer menjawab, kertas tidak keluar.
-      var devid = document.body.dataset.printerDevid || 'local_printer';
-      return mintaPrinter(
-        alamat + '/cgi-bin/epos/service.cgi?devid=' + encodeURIComponent(devid) +
-        '&timeout=5000',
-        '<?xml version="1.0" encoding="utf-8"?><s:Envelope xmlns:s=' +
-        '"http://schemas.xmlsoap.org/soap/envelope/"><s:Body>' +
-        '<epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/' +
-        'epos-print"></epos-print></s:Body></s:Envelope>', 12000, alamat);
-    }).then(function (jawaban) {
-      if (jawaban === null) { return hasil; }
-      catat('Layanan cetak', jawaban.berhasil ? 'ok' : 'err',
-        jawaban.berhasil ? 'Menjawab berhasil. Perangkat ini siap mencetak.'
-          : (ARTI_GAGAL[jawaban.kode] || 'Printer menolak perintah pemeriksaan.'));
+    return izinJaringanPrinter().then(function (izin) {
+      catat('Izin jaringan lokal', izin === 'granted' ? 'ok' : izin === 'denied' ? 'err' : 'netral',
+        izin === 'granted' ? 'Sudah diberikan.' : izin === 'denied'
+          ? 'Ditolak. Izinkan akses jaringan lokal pada setelan situs browser ini.'
+          : 'Browser belum melaporkan izin. Jawab Izinkan bila diminta.');
+      return pastikanPrinter(alamat, document.body.dataset.printerDevid || 'local_printer');
+    }).then(function () {
+      catat('Layanan cetak', 'ok', 'Menjawab berhasil. Perangkat ini siap mencetak.');
       return hasil;
     }).catch(function (e) {
-      catat('Pemeriksaan', 'err', 'Terhenti: ' + (e && e.message));
+      // Browser menyamarkan TLS, CORS dan jaringan sebagai TypeError.
+      // Jangan menyimpulkan sertifikat ditolak atau beda Wi-Fi dari itu.
+      catat(e.penyiapan ? 'Sambungan printer' : 'Layanan cetak', 'err', e.message);
       return hasil;
     });
   }

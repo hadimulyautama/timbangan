@@ -12,7 +12,7 @@ from test_rincian_retur import tautkan
 from app import database
 from app.timbangan.models import TimbanganCetak,TimbanganPekerjaanCetak as Job
 from hmu_identitas import peran as P
-OUT=Path('/Users/wahidnurhani/Developer/Hadi Mulya Systems/output/pratinjau-cetak-20261027')
+OUT=Path(os.environ.get('UJI_CETAK_OUT','/tmp/pratinjau-cetak-uji'))
 
 @pytest.mark.parametrize('width,theme,role',[(1440,'light',P.SUPERADMIN),(390,'dark',P.ADMIN),(320,'light',P.OPERATOR)])
 async def test_ui_pratinjau_hasil_tidak_pasti_dan_cetak_ulang(klien,alamat_ui,width,theme,role):
@@ -28,6 +28,8 @@ async def test_ui_pratinjau_hasil_tidak_pasti_dan_cetak_ulang(klien,alamat_ui,wi
         await page.screenshot(path=str(OUT/f'cetak-{width}-{theme}-{os.environ.get("UJI_BROWSER","chromium")}.png'),full_page=True)
         jobs=[];mode={'value':'unknown'}
         async def printer(r):
+            if '<text' not in (r.request.post_data or ''):
+                return await r.fulfill(status=200,content_type='text/xml',body='<response success="true"/>')
             jobs.append(r.request.post_data);await asyncio.sleep(.1)
             if mode['value']=='unknown':return await r.abort()
             return await r.fulfill(status=200,content_type='text/xml',body='<response success="true"/>')

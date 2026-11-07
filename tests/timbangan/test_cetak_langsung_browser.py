@@ -22,6 +22,8 @@ async def test_satu_klik_cetak_dan_ulang_di_detail(klien,alamat_ui,width):
         lokasi=page.url;errors=[];requests=[];mode={'value':'ok'}
         page.on('pageerror',lambda e:errors.append(str(e)))
         async def printer(r):
+            if '<text' not in (r.request.post_data or ''):
+                return await r.fulfill(status=200,content_type='text/xml',body='<response success="true"/>')
             requests.append(r.request.post_data);await asyncio.sleep(.1)
             if mode['value']=='unknown':return await r.abort()
             xml='<response success="false" code="EPTR_COVER_OPEN"/>' if mode['value']=='gagal' else '<response success="true"/>'
