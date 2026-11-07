@@ -164,3 +164,16 @@ memicu CI penuh secara otomatis. Jangan memulai CI penuh hanya karena perubahan
 kecil atau deployment. Gunakan tes lokal yang relevan dan proporsional; hasil CI
 yang sudah lulus boleh dipakai untuk kode runtime yang identik tanpa mengulang
 hanya karena pemindahan ke main. Laporkan pemeriksaan yang benar-benar dijalankan.
+
+## Retur curah ke supplier (7 November 2026)
+
+Tiket `RETUR_KELUAR/RETUR_SUPPLIER` yang tertaut pengajuan PadiFlow aktif,
+sepemasok, dan seluruh itemnya bersatuan kg tidak mewajibkan karung fiktif
+saat timbang kedua. `tautan_produksi.retur_supplier_curah` adalah pembaca
+baca-saja yang sama untuk formulir, pratinjau, dan penjaga layanan simpan.
+Campuran/kemasan, pengajuan kosong/batal, supplier berbeda, dan tiket mandiri
+tetap memakai kewajiban karung lama. Tidak ada flag pengecualian dari payload.
+Bobot retur tetap selisih timbang tanpa potongan tara; pencatatan stok retur
+supplier tetap di PadiFlow. Tidak ada migrasi atau koreksi transaksi lama.
+Uji: `test_retur_curah_karung.py`, `test_retur_curah_browser.py`, serta profil
+HTTP dua aplikasi `test_retur_supplier_dua_app.py` di repo PadiFlow.

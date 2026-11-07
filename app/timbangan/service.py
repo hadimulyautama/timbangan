@@ -42,7 +42,7 @@ from hmu_identitas.model import Akun
 from app.timbangan import format as fmt, logic, setelan
 from app.timbangan.config import tsettings
 from app.timbangan.db import berzona, sekarang
-from app.timbangan.tautan_produksi import pastikan_bebas_tautan, pastikan_retur_supplier, produk_tertaut
+from app.timbangan.tautan_produksi import pastikan_bebas_tautan, pastikan_retur_supplier, produk_tertaut, retur_supplier_curah
 from app.timbangan.models import (
     CARA_DUA_KALI,
     CARA_PARTAI,
@@ -2480,8 +2480,9 @@ async def simpan_timbang_kedua(
     )
 
     # Tolak sebelum angka, tanggal, atau baris muatan tiket disentuh.
+    wajib_karung = not await retur_supplier_curah(db, trx)
     periksa_jumlah_karung(muatan if muatan is not None else trx.muatan,
-                          wajib=selesaikan and (pengiriman_snapshot is None or
+                          wajib=selesaikan and wajib_karung and (pengiriman_snapshot is None or
                                 pengiriman.perlu_jumlah_karung(pengiriman_snapshot)))
     aturan = aturan_dari_snapshot(trx) or await aturan_untuk(db, trx.jenis_kode)
     waktu = sekarang()

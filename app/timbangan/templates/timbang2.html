@@ -82,8 +82,12 @@
     <div style="display:flex;flex-direction:column;gap:14px">
       {% if trx.arah in (RETUR_MASUK, RETUR_KELUAR) %}
         <div class="bantu">Retur tanpa potongan tara. Berat barang adalah selisih berat truk bermuatan dan kosong.</div>
+        {% if retur_curah %}
+          <div class="bantu">Retur curah sesuai pengajuan PadiFlow memakai kg. Jumlah karung tidak diperlukan.</div>
+        {% else %}
         {{ isian('jumlah_karung', 'Jumlah karung', m.jumlah_karung if m and m.jumlah_karung else '', 'karung', 'text',
                  'Wajib diisi sebelum penimbangan diselesaikan.', true, false, 'inputmode="numeric" enterkeyhint="next" data-jumlah-karung') }}
+        {% endif %}
       {% elif trx.arah == KELUAR %}
         {% if integrasi_error %}
           <div class="bantu peringatan">Muatan belum dapat dimuat dari Produksi: {{ integrasi_error }}</div>
@@ -239,6 +243,8 @@
       {% if trx.arah == "KELUAR" %}
       Berat tersimpan dan tiket tetap terbuka. Nama pelanggan mengikuti perintah
       Produksi saat tiket armada dipilih; tidak perlu diisi di sini.
+      {% elif retur_curah %}
+      Angkanya tersimpan dan tiket tetap terbuka. Retur curah mengikuti satuan kg pengajuan PadiFlow.
       {% else %}
       Angkanya tersimpan dan tiket tetap terbuka. Jumlah karung wajib
       dilengkapi sebelum penimbangan diselesaikan.
