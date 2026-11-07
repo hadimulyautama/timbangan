@@ -847,13 +847,17 @@ async def test_petugas_tidak_melihat_ringkasan_di_bilah(klien):
     assert f'href="{PREFIX}/laporan"' not in teks
 
 
-async def test_sesudah_menimbang_langsung_bisa_truk_berikutnya(klien):
-    """Aksi utama sesudah selesai adalah truk berikutnya, bukan menggali menu."""
+async def test_detail_riwayat_memisahkan_navigasi_utama_dan_kontrol_tiket(klien):
+    """Detail berfokus pada tiket; penimbangan lain melalui navigasi utama."""
     await login(klien)
     trx_id = await _selesaikan(klien, "GABAH_BASAH")
     teks = (await klien.get(f"{PREFIX}/transaksi/{trx_id}")).text
     assert f'href="{PREFIX}/pilih/MASUK"' in teks
-    assert "Timbang berikutnya" in teks
+    main_html = teks.split('<main class="isi">', 1)[1].split('</main>', 1)[0]
+    assert 'data-detail-controls' in main_html
+    assert 'Timbang berikutnya' not in main_html
+    assert f'href="{PREFIX}/pilih/MASUK"' not in main_html
+    assert f'href="{PREFIX}/tiket"' not in main_html
 
 
 async def test_tanda_tiket_terbuka_terlihat_dari_halaman_lain(klien):
