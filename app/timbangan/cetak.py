@@ -51,8 +51,12 @@ async def riwayat(db,tid):
 async def tertunda(db,tid,akun):
     return await db.scalar(select(Job).where(Job.transaksi_id==tid,Job.oleh_id==akun.id,Job.status.in_(AKTIF)).order_by(Job.waktu.desc()))
 
+def rangkap(j):
+    # Baca konten beku: pekerjaan satu lembar sebelum rilis tetap satu.
+    return 2 if j.keluaran == 'printer' and j.konten.count(b'<cut type="feed"/>') == 2 else 1
+
 def ringkas(j):
-    return dict(kunci=j.kunci,status=j.status,format=j.format,keluaran=j.keluaran,revisi=j.revisi,nama=j.nama_pencetak,alasan=j.alasan or '')
+    return dict(rangkap=rangkap(j),kunci=j.kunci,status=j.status,format=j.format,keluaran=j.keluaran,revisi=j.revisi,nama=j.nama_pencetak,alasan=j.alasan or '')
 
 async def milik(db,tid,key,akun):
     # Selalu kunci tiket dahulu: urutan kunci sama dengan prepare/legacy audit.
@@ -118,5 +122,6 @@ async def hasil(db,tid,key,akun,hasil,ip=None):
         raise service.LayananError('Pekerjaan belum dikirim untuk keluaran tersebut.')
     trx=await db.get(TimbanganTransaksi,tid)
     j.metode='Printer mengonfirmasi' if hasil=='printer_berhasil' else 'Dikonfirmasi petugas'
+    if rangkap(j) == 2:j.metode += ' (2 lbr)'
     await service.catat_cetak(db,akun=akun,trx=trx,alasan=j.alasan,format=j.format,ip=ip,pekerjaan=j)
     return j

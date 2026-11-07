@@ -124,7 +124,7 @@ def struk_timbang(*, trx, aturan, pihak: str, petugas: str, muatan,
                   perusahaan: str, alamat: str, telepon: str,
                   arah_masuk: bool, tampilkan_selisih: bool,
                   cetakan_ke: int = 1) -> str:
-    """Perintah cetak untuk satu bukti timbang, siap dikirim ke printer.
+    """Satu pekerjaan bukti timbang berisi dua rangkap, masing-masing dipotong.
 
     Tandatangannya sengaja sama persis dengan `pdf.bukti_thermal`, sehingga
     rute cetak menyiapkan SATU kamus data lalu memilih jalurnya — bukan dua
@@ -231,7 +231,14 @@ def struk_timbang(*, trx, aturan, pihak: str, petugas: str, muatan,
 
     p.append("<feed line=\"1\"/>")
     p.append('<cut type="feed"/>')
-    return _bungkus(p)
+    # Dua lembar adalah rangkap operasional SATU pekerjaan, bukan cetak
+    # ulang/retry. Nomor tiket, revisi dan cetakan_ke sama pada kedua lembar.
+    rangkap: list[str] = []
+    for nomor in (1, 2):
+        rangkap.extend(p[:5])
+        rangkap.append(_teks(f"RANGKAP {nomor}/2", align="center"))
+        rangkap.extend(p[5:])
+    return _bungkus(rangkap)
 
 
 def struk_uji(*, perusahaan: str) -> str:

@@ -23,12 +23,15 @@ async def test_alasan_sebelum_kertas_dan_audit_setelah_printer(klien,alamat_ui,r
         await page.evaluate("localStorage.setItem('timbangan-printer','http://127.0.0.1:9999')")
         jobs=[];status={'gagal':False}
         async def printer(r):
+            if '<text' not in (r.request.post_data or ''):
+                return await r.fulfill(status=200,content_type='text/xml',body='<response success="true"/>')
             jobs.append(r.request.post_data)
             await asyncio.sleep(.1)
             return await r.fulfill(status=200,content_type='text/xml',body='<response success="false" code="EPTR_COVER_OPEN"/>' if status['gagal'] else '<response success="true"/>')
         await page.route('**/cgi-bin/epos/**',printer)
         await page.locator('[data-cp-jalankan]').evaluate('(a)=>{a.click();a.click()}')
         await page.wait_for_function("document.querySelector('.cp-history').textContent.includes('Cetak ke-1')");assert len(jobs)==1
+        assert jobs[0].count('<cut')==2 and 'RANGKAP 2/2' in jobs[0]
         # Tanpa alasan/sekadar spasi tidak boleh mengirim permintaan printer.
         await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
         alasan=page.locator('[name=alasan]')
@@ -61,7 +64,10 @@ async def test_tombol_tetap_terkunci_sampai_pencatatan_cetak_selesai(klien,alama
         await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
         await page.evaluate("localStorage.setItem('timbangan-printer','http://127.0.0.1:9999')")
         jobs=[];audit=[]
-        async def printer(r):jobs.append(1);await r.fulfill(status=200,content_type='text/xml',body='<response success="true"/>')
+        async def printer(r):
+            if '<text' not in (r.request.post_data or ''):
+                return await r.fulfill(status=200,content_type='text/xml',body='<response success="true"/>')
+            jobs.append(1);await r.fulfill(status=200,content_type='text/xml',body='<response success="true"/>')
         async def catat(r):
             if r.request.method=='POST':
                 audit.append(1);await asyncio.sleep(.6)
@@ -83,4 +89,32 @@ async def test_tombol_tetap_terkunci_sampai_pencatatan_cetak_selesai(klien,alama
         assert await page.evaluate("sessionStorage.getItem('uji-kunci-audit')")=='1'
         assert len(jobs)==len(audit)==1
         async with database.SessionLocal() as db:assert await db.scalar(select(func.count()).select_from(TimbanganCetak))==1
+        await b.close()
+
+async def test_koneksi_gagal_sebelum_struk_tidak_membuat_cetak_sukses(klien,alamat_ui):
+    await master();tid=await tiket();await login(klien,'wahid')
+    async with async_playwright() as pw:
+        b,ctx,page=await browser_uji(pw,klien,alamat_ui)
+        await buka(page,alamat_ui+f'/timbangan/transaksi/{tid}/cetak')
+        await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
+        await page.evaluate("localStorage.setItem('timbangan-printer','http://127.0.0.1:9999')")
+        status=[];struk=[];pulih={'ya':False}
+        async def printer(r):
+            if '<text' not in (r.request.post_data or ''):
+                status.append(1)
+                if not pulih['ya']:return await r.abort()
+            else:struk.append(r.request.post_data)
+            await r.fulfill(content_type='text/xml',body='<response success="true"/>')
+        await page.route('**/cgi-bin/epos/**',printer)
+        await page.locator('[data-cp-jalankan]').click()
+        await page.wait_for_function("document.querySelector('[data-cp-status]').textContent.includes('Tidak dicatat sebagai cetak berhasil')")
+        assert len(status)==2 and not struk
+        async with database.SessionLocal() as db:
+            assert await db.scalar(select(func.count()).select_from(TimbanganCetak))==0
+        pulih['ya']=True
+        await page.locator('[data-cp-jalankan]').click()
+        await page.wait_for_function("document.querySelector('.cp-history').textContent.includes('Cetak ke-1')")
+        assert len(struk)==1 and struk[0].count('<cut')==2
+        async with database.SessionLocal() as db:
+            assert await db.scalar(select(func.count()).select_from(TimbanganCetak))==1
         await b.close()

@@ -196,7 +196,7 @@ def test_perintah_selalu_diakhiri_pemotongan_kertas():
 def test_isian_bebas_tidak_bisa_menyuntikkan_perintah_cetak():
     """Nama pihak diketik petugas; ia tidak boleh menjadi perintah alat."""
     xml = _cetak(pihak='</text><cut type="reserve"/><text>')
-    assert xml.count("<cut") == 1
+    assert xml.count("<cut") == 2
     assert "&lt;/text&gt;" in xml
     ElementTree.fromstring(xml)   # tetap XML yang sah
 
@@ -239,4 +239,25 @@ def test_hanya_nama_perusahaan_yang_dicetak_lebar():
     akar = ElementTree.fromstring(_cetak())
     lebar = [(el.text or "").strip()
              for el in akar.iter(_RUANG + "text") if el.get("dw") == "true"]
-    assert lebar == ["PT Hadi Mulya Utama"]
+    assert lebar == ["PT Hadi Mulya Utama", "PT Hadi Mulya Utama"]
+
+
+def test_dua_rangkap_utuh_angka_dan_revisi_sama_bukan_cetak_ulang():
+    xml = _cetak(trx=_trx(jumlah_revisi=3), cetakan_ke=2)
+    perintah = ElementTree.fromstring(xml).find('.//' + _RUANG + 'epos-print')
+    lembar, isi = [], []
+    for el in perintah:
+        isi.append(el)
+        if el.tag == _RUANG + 'cut':
+            lembar.append(isi)
+            isi = []
+    assert len(lembar) == 2 and not isi
+    for n, baris in enumerate(lembar, 1):
+        teks = ''.join(el.text or '' for el in baris)
+        assert f'RANGKAP {n}/2' in teks
+        assert 'CETAKAN ULANG ke-2' in teks and 'Revisi 3' in teks
+        assert _trx().kode in teks and '8.240 kg' in teks
+    # Hanya penanda rangkap yang boleh berbeda.
+    bersih = lambda baris: [ElementTree.tostring(el) for el in baris if 'RANGKAP' not in (el.text or '')]
+    assert bersih(lembar[0]) == bersih(lembar[1])
+    assert epos.struk_uji(perusahaan='Uji').count('<cut') == 1

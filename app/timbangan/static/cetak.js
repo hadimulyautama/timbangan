@@ -4,6 +4,7 @@
 function pasang(root,opsi){
 if(!root||root.dataset.aktif)return;root.dataset.aktif='1';opsi=opsi||{};
 var $=function(s){return root.querySelector(s);};
+function rangkap(){return job&&job.rangkap||2;}
 var job=JSON.parse($('[data-cp-job]').textContent),busy=false;
 var storage='tf-cetak:'+root.dataset.identitas,key='';
 try{key=sessionStorage.getItem(storage+':kunci')||'';$('[name=alasan]').value=sessionStorage.getItem(storage+':alasan')||'';}catch(e){}
@@ -16,8 +17,8 @@ function pilihan(){
  var f=format(),pdf=keluaran()==='pdf';
  root.querySelectorAll('[data-paper]').forEach(function(x){x.hidden=x.dataset.paper!==f;});
  $('[data-keluaran]').hidden=f==='NCR';$('[data-ncr-note]').hidden=f!=='NCR';$('[data-printer-info]').hidden=pdf;
- $('[data-cp-jalankan]').textContent=pdf?'Siapkan cetak melalui PDF':'Cetak langsung';
- $('[data-cp-keterangan]').textContent=pdf?'Untuk mencetak ke kertas melalui PDF. Jika hanya membuka, mengunduh, atau berbagi, gunakan area Dokumen PDF di atas.':'Cetak fisik dicatat setelah jawaban printer berhasil atau dikonfirmasi petugas.';
+ $('[data-cp-jalankan]').textContent=pdf?'Siapkan cetak melalui PDF':'Cetak langsung · '+rangkap()+' rangkap';
+ $('[data-cp-keterangan]').textContent=pdf?'Untuk mencetak ke kertas melalui PDF. Jika hanya membuka, mengunduh, atau berbagi, gunakan area Dokumen PDF di atas.':rangkap()+' rangkap dikirim dalam satu pekerjaan. Periksa seluruh lembar sebelum mengonfirmasi hasil fisik.';
  var p=window.TeraFlowPrinter;$('[data-alamat-printer]').textContent=(p&&p.alamat())||'Belum disetel di perangkat ini';
  $('[data-cp-label]').textContent=(f==='NCR'?'Setengah NCR · 215 × 165 mm':'Struk 80 mm')+' · pratinjau revisi tiket saat halaman dibuka';
 }
@@ -30,7 +31,7 @@ function tampilJob(){
   $('[name=cp-keluaran][value="'+job.keluaran+'"]').checked=true;
   $('[name=alasan]').value=job.alasan;
   $('[data-pending-judul]').textContent=job.status==='pdf_siap'?'Cetak melalui PDF · konfirmasi hasil fisik':job.status==='siap'?'Pekerjaan belum dikirim':'Hasil cetak perlu dipastikan';
-  $('[data-pending-teks]').textContent=job.nama+' · '+job.format+' · revisi '+job.revisi+'. Periksa pekerjaan ini sebelum membuat cetakan lain.';
+  $('[data-pending-teks]').textContent=job.nama+' · '+job.format+' · revisi '+job.revisi+'. Periksa seluruh '+(job.rangkap||1)+' rangkap pekerjaan ini sebelum membuat cetakan lain.';
   $('[data-cp-ya]').hidden=job.status==='siap';
   if(job.status==='pdf_siap'){
    $('[data-cp-pdf]').href=root.dataset.tujuan+'/'+encodeURIComponent(job.kunci)+'/berkas';$('[data-cp-pdf]').hidden=false;
@@ -88,10 +89,10 @@ $('[data-cp-jalankan]').addEventListener('click',async function(){
    pesan('PDF untuk cetak fisik siap. Buka dokumen dan cetak ke kertas; konfirmasikan setelah hasil fisik diperiksa.');
   }else{
    if(!/text\/xml/i.test(data.headers.get('Content-Type')||''))throw new Error('Perintah printer belum terkonfirmasi.');
-   var xml=await data.text();pesan('Mengirim perintah ke printer…');
+   var xml=await data.text();pesan('Mencetak '+rangkap()+' rangkap…');
    try{await window.TeraFlowPrinter.kirim(null,xml);}
    catch(e){
-    if(e.belumPasti){pesan(e.message+' Jangan kirim ulang otomatis; periksa kertas di printer.');return;}
+    if(e.belumPasti){pesan(e.message+' Jangan kirim ulang otomatis; periksa kedua rangkap di printer.');return;}
     var gagal=await minta(root.dataset.tujuan+'/'+frozen.kunci+'/hasil',{hasil:'gagal'});await gagal.json();job=null;key='';simpan('kunci','');pesan(e.message+' Tidak dicatat sebagai cetak berhasil.');return;
    }
    pesan('Printer mengonfirmasi berhasil. Menyimpan riwayat…');

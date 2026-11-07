@@ -15,7 +15,10 @@ async def test_petunjuk_dirty_hasil_dan_cetak_tidak_pasti(klien,alamat_ui,width)
         await page.goto(alamat_ui+'/timbangan/printer?asal=cetak');await page.locator('[data-pos-printer][data-pp-ready]').wait_for();await page.locator('#pembuka').wait_for(state='hidden')
         calls=[];mode={'kind':'ok'}
         async def printer(route):
-            req=route.request;calls.append((req.method,req.post_data or ''))
+            req=route.request
+            if '<text' not in (req.post_data or ''):
+                return await route.fulfill(status=200,content_type='text/xml',body='<response success="true"/>')
+            calls.append((req.method,req.post_data or ''))
             if req.method=='POST' and mode['kind']=='unknown':return await route.abort()
             body='<response success="true"/>' if mode['kind']=='ok' else '<response success="false" code="EPTR_COVER_OPEN"/>'
             await route.fulfill(status=200,content_type='text/xml',body=body)
@@ -54,3 +57,32 @@ async def test_petunjuk_tanpa_javascript(klien,alamat_ui):
         await page.locator('[data-pp-help-fallback]>summary').evaluate('e=>e.scrollIntoView({block:"center"})')
         await page.locator('[data-pp-help-fallback]>summary').click();assert await page.locator('[data-pp-help-content]').is_visible()
         assert 'Kode perangkat akun' in await page.locator('[data-pp-help-content]').text_content();await b.close()
+
+async def test_kembali_dari_printer_diperiksa_otomatis_tanpa_membuang_ketikan(klien,alamat_ui):
+    await login(klien)
+    async with async_playwright() as pw:
+        b,ctx,page=await browser_uji(pw,klien,alamat_ui)
+        await page.goto(alamat_ui+'/timbangan/printer')
+        await page.locator('[data-pos-printer][data-pp-ready]').wait_for()
+        await page.locator('#pembuka').wait_for(state='hidden')
+        calls=[]
+        async def status(r):
+            calls.append(r.request.post_data)
+            assert not any(k in r.request.post_data for k in ('<text','<feed','<cut'))
+            await r.fulfill(content_type='text/xml',body='<response success="true"/>')
+        await page.route('https://printer.invalid/**',status)
+        await page.locator('[name=printer_url]').fill('https://printer.invalid')
+        await page.locator('[data-simpan-printer]').click()
+        await page.evaluate("window.dispatchEvent(new Event('online'))")
+        await page.wait_for_function("document.querySelector('[data-pp-status]').textContent==='Sambungan berhasil'")
+        assert len(calls)==1
+        await page.evaluate("Object.defineProperty(document,'visibilityState',{value:'hidden',configurable:true});document.dispatchEvent(new Event('visibilitychange'));Object.defineProperty(document,'visibilityState',{value:'visible',configurable:true});document.dispatchEvent(new Event('visibilitychange'))")
+        await page.wait_for_timeout(400)
+        assert len(calls)==2
+        await page.locator('[name=printer_url]').fill('https://alamat-baru.invalid')
+        await page.evaluate("window.dispatchEvent(new Event('online'))")
+        await page.wait_for_timeout(400)
+        assert len(calls)==2
+        assert await page.locator('[name=printer_url]').input_value()=='https://alamat-baru.invalid'
+        assert await page.evaluate("localStorage.getItem('timbangan-printer')")=='https://printer.invalid'
+        await b.close()

@@ -63,6 +63,20 @@
     // Tombol asli dipindahkan ke baris judul, tidak disalin.
     const title=root.closest('[data-pengaturan]')?.querySelector(':scope>h1'),help=root.querySelector('.pp-heading [data-pp-help]');
     if(title&&help&&!help.hidden){const row=document.createElement('div');row.className='pp-title';title.before(row);row.append(title,help);}
+    // Saat kembali dari tab printer (sertifikat/izin), baca ulang status
+    // tanpa meminta operator menekan Periksa sambungan. Jangan menimpa ketikan.
+    let kembali=false,jadwal;
+    document.addEventListener('visibilitychange',()=>{
+      if(document.visibilityState==='hidden')kembali=true;
+      else if(kembali){kembali=false;periksaKembali();}
+    });
+    function periksaKembali(){
+      clearTimeout(jadwal);jadwal=setTimeout(()=>{
+        if(document.visibilityState==='visible'&&!busy&&!dirty()&&window.TeraFlowPrinter.alamat())check.click();
+      },200);
+    }
+    window.addEventListener('online',periksaKembali);
+    window.addEventListener('pageshow',e=>{if(e.persisted)periksaKembali();});
     sync();
   }
   if(document.readyState==='complete')init();else document.addEventListener('DOMContentLoaded',init,{once:true});
