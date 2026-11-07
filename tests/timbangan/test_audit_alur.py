@@ -74,6 +74,11 @@ async def test_tiket_sumber_stok_produk_padiflow_tidak_boleh_void(db,admin,suppl
     await db.commit()
     with pytest.raises(service.LayananError):
         await service.void_transaksi(db,akun=admin,trx=t,alasan='Uji konsistensi aplikasi')
+    with pytest.raises(service.LayananError,match='stok PadiFlow'):
+        await service.koreksi_transaksi(db,akun=admin,trx=t,perubahan={'timbang2_kg':4998},alasan='Uji konsistensi bobot')
+    await service.koreksi_transaksi(db,akun=admin,trx=t,perubahan={'catatan':'Keterangan tetap boleh dibetulkan'},alasan='Uji catatan')
+    assert float(t.timbang2_kg)==5000
+
 
 @pytest.mark.usefixtures('jenis_tersemai')
 async def test_replay_partai_tidak_menukar_operator_awal(db,petugas,petugas2,supplier):
@@ -188,5 +193,19 @@ async def test_replay_pertama_setelah_karung_dilengkapi_timbang_kedua(db,petugas
     assert ulang.id==t.id and ulang.selesai and float(ulang.berat_barang_kg)==hasil
     assert ulang.muatan[0].jumlah_karung==200 and ulang.catatan=='Jumlah karung nyata'
     d.muatan[0].jumlah_karung=99
+    with pytest.raises(service.LayananError):
+        await service.simpan_timbang_pertama(db,akun=petugas,data=d)
+
+@pytest.mark.usefixtures('jenis_tersemai')
+async def test_replay_jasa_tetap_sah_setelah_padiflow_menautkan_pesanan(db,petugas,pelanggan_kledo):
+    from test_jasa_masuk import tiket_jasa
+    from uuid import uuid4
+    d=tiket_jasa(pelanggan_id=pelanggan_kledo.id);d.kunci=uuid4().hex
+    t=await service.simpan_timbang_pertama(db,akun=petugas,data=d)
+    t.jasa_id=876  # simulasi penautan penerimaan PadiFlow, bukan bobot baru
+    await db.commit()
+    ulang=await service.simpan_timbang_pertama(db,akun=petugas,data=d)
+    assert ulang.id==t.id and ulang.jasa_id==876
+    d.jasa_id=999
     with pytest.raises(service.LayananError):
         await service.simpan_timbang_pertama(db,akun=petugas,data=d)

@@ -65,7 +65,7 @@ async def test_tab_akses_pemeriksaan_dan_layout(klien,alamat_ui,width,theme,role
         assert await page.locator('[data-tutup-pemeriksaan]').count()==(0 if role=='operator' else 1)
         await page.locator('#rd-exam [data-rd-close]').click()
         await page.locator('[data-tindakan-trigger]').click()
-        assert await page.get_by_text('Hapus permanen',exact=True).count()==(2 if role=='super' else 0)
+        assert await page.locator('[data-tindakan-menu]').get_by_role('button',name='Hapus permanen',exact=True).count()==int(role=='super')
         await page.keyboard.press('Escape')
         await page.locator('[data-rd-exam-open]').click()
         if role!='operator':
@@ -133,7 +133,7 @@ async def test_tindakan_lama_gagal_tetap_utuh_dan_kirim_ganda_ditahan(klien,alam
         await page.goto(alamat_ui+f'/timbangan/transaksi/{tid}');await page.locator('#pembuka').wait_for(state='hidden')
         await page.locator('[data-tindakan-trigger]').click()
         aksi='hapus' if role=='super' else 'batal'
-        await page.locator('[data-tindakan-menu]').get_by_role('button',name='Hapus permanen' if role=='super' else 'Hapus tiket ini',exact=True).click()
+        await page.locator('[data-tindakan-menu]').get_by_role('button',name='Hapus permanen' if role=='super' else 'Hapus tiket ini' if role=='operator' else 'Batalkan transaksi',exact=True).click()
         form=page.locator(f'.tf-actions-dialog form[action$="/{aksi}"]')
         await form.locator('[name=alasan]').fill('Alasan sintetis untuk uji aman')
         if role=='super':await form.locator('[name=ketik_kode]').fill('SALAH-UJI')

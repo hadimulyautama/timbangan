@@ -89,7 +89,7 @@ async def test_hak_akses_dan_pembatalan_asli(klien,alamat_ui,role):
             await menu.get_by_role('button',name='Batalkan transaksi',exact=True).click()
             await page.locator('.tf-actions-dialog form[action$="/batal"] [name=alasan]').fill('Pembatalan uji dropdown')
             await page.locator('.tf-actions-dialog form[action$="/batal"] button[type=submit]').click()
-            await page.wait_for_url('**?ok=**')
+            await page.wait_for_url(lambda u:'ok=' in str(u))
             async with database.SessionLocal() as db:assert (await db.get(TimbanganTransaksi,tid)).status_transaksi=='VOID'
         await b.close()
 

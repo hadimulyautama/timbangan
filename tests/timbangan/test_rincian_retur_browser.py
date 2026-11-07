@@ -85,10 +85,10 @@ async def test_tindakan_retur_gagal_dan_kirim_ganda_ditahan(klien,alamat_ui,monk
         await ctx.add_cookies([{'name':k,'value':v,'url':alamat_ui} for k,v in klien.cookies.items()])
         page=await ctx.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
         await page.goto(alamat_ui+f'/timbangan/transaksi/{tid}');await page.locator('#pembuka').wait_for(state='hidden')
-        await page.locator('.dk-lanjutan>summary').click()
+        await page.locator('[data-tindakan-trigger]').click()
         aksi='hapus' if role=='super' else 'batal'
-        form=page.locator(f'.dk-lanjutan form[action$="/{aksi}"]')
-        await form.locator('..').locator('summary').click()
+        await page.locator('[data-tindakan-menu]').get_by_role('button',name='Hapus permanen' if role=='super' else 'Hapus tiket ini' if role=='operator' else 'Batalkan transaksi',exact=True).click()
+        form=page.locator(f'.tf-actions-dialog form[action$="/{aksi}"]')
         await form.locator('[name=alasan]').fill('Alasan sintetis untuk uji aman')
         if role=='super':await form.locator('[name=ketik_kode]').fill('SALAH-UJI')
         else:await form.locator('[name=alasan]').fill(' ')
@@ -104,7 +104,7 @@ async def test_tindakan_retur_gagal_dan_kirim_ganda_ditahan(klien,alamat_ui,monk
         # Putus jaringan tetap mempertahankan isian dan belum mengubah tiket.
         await page.route(f'**/transaksi/{tid}/{aksi}',lambda r:r.abort())
         await form.locator('button[type=submit]').click()
-        await page.wait_for_function("document.querySelector('.dk-lanjutan [role=alert]:not([hidden])')?.textContent.includes('belum terkonfirmasi')")
+        await page.wait_for_function("document.querySelector('.tf-actions-dialog [role=alert]:not([hidden])')?.textContent.includes('belum terkonfirmasi')")
         assert await form.locator('[name=alasan]').input_value()=='Alasan sintetis untuk uji aman'
         await page.unroute(f'**/transaksi/{tid}/{aksi}')
         terkirim=[]
