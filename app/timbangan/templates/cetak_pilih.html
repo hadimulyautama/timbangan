@@ -12,25 +12,31 @@
   {% if aturan.rahasia %}<p class="bantu">Aturan cetak rahasia: acuan bobot, subtotal acuan pelanggan, dan selisih internal tidak ditampilkan pada dokumen.</p>{% endif %}
   <div class="cp-grid">
     <div class="cp-controls">
-      <section class="kartu"><h2>Format dokumen</h2>
+      <section class="kartu cp-pdf" data-pdf-digital aria-labelledby="cp-pdf-judul">
+        <h2 id="cp-pdf-judul">Dokumen PDF</h2>
+        <p class="bantu">Buka, unduh, atau bagikan PDF tanpa alasan cetak ulang. Tidak menambah hitungan cetak fisik.</p>
+        <a class="tbl blok" href="{{ PREFIX }}/transaksi/{{ trx.id }}/cetak/80mm" data-pdf-digital-link data-unduh data-dokumen="pdf" target="_blank" rel="noopener">PDF struk 80 mm</a>
+        <a class="tbl halus blok" href="{{ PREFIX }}/transaksi/{{ trx.id }}/cetak/ncr" data-pdf-digital-link data-unduh data-dokumen="pdf" target="_blank" rel="noopener">PDF setengah NCR</a>
+        <div class="pesan" data-hasil-unduh data-pesan="PDF belum dapat dibuka atau dibagikan. Periksa jaringan dan sesi, lalu coba lagi. Tidak ada cetak fisik yang dicatat." role="status" hidden></div>
+      </section>
+      <details class="kartu cp-fisik" data-cetak-fisik {% if pekerjaan %}open{% endif %}><summary>Cetak fisik</summary><div class="cp-fisik-isi">
         <fieldset class="cp-options"><legend class="sr-only">Format bukti timbang</legend>
           <label><input type="radio" name="cp-format" value="80MM" checked> Struk 80 mm</label>
           <label><input type="radio" name="cp-format" value="NCR"> Setengah NCR</label>
         </fieldset>
         <fieldset class="cp-options" data-keluaran><legend>Keluaran</legend>
           <label><input type="radio" name="cp-keluaran" value="printer" checked> Printer pos</label>
-          <label><input type="radio" name="cp-keluaran" value="pdf"> PDF</label>
+          <label><input type="radio" name="cp-keluaran" value="pdf"> Cetak melalui PDF</label>
         </fieldset>
-        <p class="bantu" data-ncr-note hidden>Setengah NCR tersedia sebagai PDF · 215 × 165 mm.</p>
+        <p class="bantu" data-ncr-note hidden>Cetak setengah NCR melalui PDF · 215 × 165 mm. Konfirmasikan hanya setelah kertas benar-benar tercetak.</p>
         <div data-printer-info><b>Printer pos</b><p data-alamat-printer></p><a href="{{ PREFIX }}/printer">Siapkan printer</a></div>
         <label class="grup" {% if not riwayat %}hidden{% endif %}>Alasan cetak ulang
           <input class="fld" name="alasan" maxlength="2000" {% if riwayat %}required{% endif %} autocomplete="off" placeholder="Jelaskan alasan cetak ulang">
         </label>
         <button class="tbl blok" type="button" data-cp-jalankan>Cetak langsung</button>
         <p class="bantu" data-cp-keterangan>Cetak fisik dicatat setelah hasil printer berhasil atau dikonfirmasi petugas.</p>
-        <div class="pesan" data-hasil-unduh data-pesan="PDF belum dapat dibuka atau dibagikan. Periksa jaringan, sesi, dan revisi tiket; pekerjaan belum dicatat sebagai cetak fisik." hidden></div>
         <div class="pesan" data-cp-status role="status" aria-live="polite" hidden></div>
-        <a href="" class="tbl halus" data-cp-pdf data-unduh data-dokumen="pdf" target="_blank" rel="noopener" hidden>Buka / unduh PDF</a>
+        <a href="" class="tbl halus" data-cp-pdf target="_blank" rel="noopener" hidden>Buka PDF untuk dicetak</a>
         <section class="cp-pending" data-cp-pending hidden>
           <h3 data-pending-judul>Periksa hasil pekerjaan</h3><p data-pending-teks></p>
           <button class="tbl" type="button" data-cp-ya>Sudah tercetak</button>
@@ -38,7 +44,7 @@
           <p class="bantu">Konfirmasi memakai pencetak, alasan, format, dan revisi saat pekerjaan disiapkan. Jangan mengirim ulang sebelum memeriksa kertas.</p>
         </section>
         <button class="tbl halus blok" data-cp-segar type="button" hidden>Perbarui pratinjau</button>
-      </section>
+      </div></details>
       <section class="kartu cp-history"><h2>Riwayat cetak fisik · {{ riwayat|length }}</h2>
         {% for row in riwayat %}{% set c=row.c %}<article><b>Cetak ke-{{ c.urutan }} · {{ c.format }} · revisi {{ c.revisi }}</b><p>{{ c.waktu|tgl_jam }} · {{ row.nama }}</p><p>{{ row.metode }}</p>{% if c.alasan %}<p>Alasan: {{ c.alasan }}</p>{% endif %}</article>{% else %}<p>Belum ada cetakan fisik yang tercatat.</p>{% endfor %}
         <p class="bantu">Pratinjau dan PDF siap bukan bukti kertas sudah tercetak. Riwayat lama tidak menjamin salinan dokumen historis persis tersedia.</p>

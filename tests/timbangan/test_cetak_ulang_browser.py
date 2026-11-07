@@ -19,6 +19,7 @@ async def test_alasan_sebelum_kertas_dan_audit_setelah_printer(klien,alamat_ui,r
     async with async_playwright() as pw:
         b,ctx,page=await browser_uji(pw,klien,alamat_ui)
         await buka(page,alamat_ui+f'/timbangan/transaksi/{tid}/cetak')
+        await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
         await page.evaluate("localStorage.setItem('timbangan-printer','http://127.0.0.1:9999')")
         jobs=[];status={'gagal':False}
         async def printer(r):
@@ -29,6 +30,7 @@ async def test_alasan_sebelum_kertas_dan_audit_setelah_printer(klien,alamat_ui,r
         await page.locator('[data-cp-jalankan]').evaluate('(a)=>{a.click();a.click()}')
         await page.wait_for_function("document.querySelector('.cp-history').textContent.includes('Cetak ke-1')");assert len(jobs)==1
         # Tanpa alasan/sekadar spasi tidak boleh mengirim permintaan printer.
+        await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
         alasan=page.locator('[name=alasan]')
         for nilai in ['', '   ']:
             await alasan.fill(nilai);await page.locator('[data-cp-jalankan]').click()
@@ -56,6 +58,7 @@ async def test_tombol_tetap_terkunci_sampai_pencatatan_cetak_selesai(klien,alama
     async with async_playwright() as pw:
         b,ctx,page=await browser_uji(pw,klien,alamat_ui)
         await buka(page,alamat_ui+f'/timbangan/transaksi/{tid}/cetak')
+        await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
         await page.evaluate("localStorage.setItem('timbangan-printer','http://127.0.0.1:9999')")
         jobs=[];audit=[]
         async def printer(r):jobs.append(1);await r.fulfill(status=200,content_type='text/xml',body='<response success="true"/>')

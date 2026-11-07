@@ -558,6 +558,9 @@ async def _isi_bukti(db, transaksi_id, akun):
 
 async def _pdf(db, transaksi_id, request, ncr: bool, akun):
     b, aturan, umum = await _isi_bukti(db, transaksi_id, akun)
+    # PDF digital bukan persiapan cetakan fisik berikutnya. Nomor cetak
+    # hanya dibekukan oleh pekerjaan cetak fisik, bukan unduhan/bagikan.
+    umum = dict(umum, cetakan_ke=1)
     if ncr:
         return b.trx, pdf.bukti_ncr(**umum)
     # Selisih hanya dicetak bila ada yang benar-benar dibandingkan; syaratnya

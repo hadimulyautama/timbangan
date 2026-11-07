@@ -33,9 +33,11 @@ async def test_ui_pratinjau_hasil_tidak_pasti_dan_cetak_ulang(klien,alamat_ui,wi
             if mode['value']=='unknown':return await r.abort()
             return await r.fulfill(status=200,content_type='text/xml',body='<response success="true"/>')
         await page.route('**/cgi-bin/epos/**',printer)
+        await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
         await page.locator('[data-cp-jalankan]').evaluate('(e)=>{e.click();e.click()}')
         await page.wait_for_function("document.querySelector('[data-cp-status]').textContent.includes('Jangan kirim ulang')")
         assert len(jobs)==1
+        await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
         assert await page.locator('[data-cp-jalankan]').is_disabled()
         async with database.SessionLocal() as db:assert await db.scalar(select(func.count()).select_from(TimbanganCetak))==0
         await page.reload();await page.locator('[data-cp-ya]').wait_for(state='visible')
@@ -43,15 +45,21 @@ async def test_ui_pratinjau_hasil_tidak_pasti_dan_cetak_ulang(klien,alamat_ui,wi
         await page.wait_for_function("document.querySelector('.cp-history').textContent.includes('Cetak ke-1')")
         assert len(jobs)==1
         mode['value']='success'
+        await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
         await page.locator('[data-cp-jalankan]').click()
         assert len(jobs)==1
+        await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
         await page.locator('[name=alasan]').fill('UJI salinan printer simulasi')
+        await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
         await page.locator('[data-cp-jalankan]').evaluate('(e)=>{e.click();e.click()}')
         await page.wait_for_function("document.querySelector('.cp-history').textContent.includes('Cetak ke-2')")
         assert len(jobs)==2
+        await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
         await page.locator('[name=cp-format][value=NCR]').check()
+        await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
         await page.locator('[name=alasan]').fill('UJI PDF NCR')
         assert await page.locator('[data-keluaran]').is_hidden()
+        await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
         await page.locator('[data-cp-jalankan]').click();await page.locator('[data-cp-pdf]').wait_for(state='visible')
         async with database.SessionLocal() as db:assert await db.scalar(select(func.count()).select_from(TimbanganCetak))==2
         await page.screenshot(path=str(OUT/f'ncr-{width}-{theme}-{os.environ.get("UJI_BROWSER","chromium")}.png'),full_page=True)
@@ -66,22 +74,25 @@ async def test_printer_belum_ada_pdf_keyboard_dan_versi_berubah(klien,alamat_ui)
         b,ctx,page=await browser_uji(pw,klien,alamat_ui,768,browser=os.environ.get('UJI_BROWSER','chromium'))
         await buka(page,alamat_ui+f'/timbangan/transaksi/{tid}/cetak')
         await page.evaluate("window.TeraFlowPrinter.alamat=()=>''")
+        await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
         await page.locator('[data-cp-jalankan]').press('Enter')
         assert 'Printer belum disetel' in await page.locator('[data-cp-status]').text_content()
         async with database.SessionLocal() as db:assert await db.scalar(select(func.count()).select_from(Job))==0
+        await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
         await page.locator('[name=cp-keluaran][value=pdf]').check()
+        await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
         await page.locator('[data-cp-jalankan]').press('Enter')
         await page.locator('[data-cp-pdf]').wait_for(state='visible')
         # Jalur Bagikan iOS disimulasikan: berkas PDF asli, bukan cetak fisik.
         await page.evaluate("() => {Object.defineProperty(navigator,'userAgent',{value:'iPhone'});navigator.canShare=()=>true;navigator.share=async d=>{window.__dibagikan=d.files[0].type};}")
         # URL dokumen sebenarnya mengembalikan PDF tanpa menambah audit cetak.
-        async with page.expect_response(lambda r:r.url.endswith('/berkas')) as resp:
-            await page.locator('[data-cp-pdf]').click()
+        async with page.expect_response(lambda r:r.url.endswith('/cetak/80mm')) as resp:
+            await page.locator('[data-pdf-digital-link]').first.click()
         response=await resp.value
         assert response.status==200 and response.headers['content-type']=='application/pdf'
         await page.wait_for_function("window.__dibagikan==='application/pdf'")
-        await page.route('**/pekerjaan/*/berkas',lambda r:r.fulfill(status=200,content_type='text/html',body='Halaman masuk sintetis'))
-        await page.locator('[data-cp-pdf]').click()
+        await page.route('**/cetak/80mm',lambda r:r.fulfill(status=200,content_type='text/html',body='Halaman masuk sintetis'))
+        await page.locator('[data-pdf-digital-link]').first.click()
         await page.locator('[data-hasil-unduh]').wait_for(state='visible')
         assert 'belum dapat dibuka' in await page.locator('[data-hasil-unduh]').text_content()
         async with database.SessionLocal() as db:assert await db.scalar(select(func.count()).select_from(TimbanganCetak))==0
@@ -89,6 +100,7 @@ async def test_printer_belum_ada_pdf_keyboard_dan_versi_berubah(klien,alamat_ui)
         async with database.SessionLocal() as db:
             t=await db.get(TimbanganTransaksi,tid);t.jumlah_revisi+=1;await db.commit()
         async with database.SessionLocal() as db:assert (await db.get(TimbanganTransaksi,tid)).jumlah_revisi==1
+        await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
         await page.locator('[name=cp-keluaran][value=pdf]').check();await page.locator('[data-cp-jalankan]').click()
         await page.wait_for_function("document.querySelector('[data-cp-status]').textContent.includes('berubah')",timeout=5000)
         assert await page.locator('[data-cp-segar]').is_visible()
