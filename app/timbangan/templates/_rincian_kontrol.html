@@ -5,6 +5,7 @@
   <a class="dk-kembali" href="{{ kembali }}" aria-label="Kembali">← {{ 'Kembali ke riwayat' if '/transaksi' in kembali else 'Kembali' }}</a>
   <div class="tf-detail-controls__actions rd-buttons">
     {% if panduan %}<button type="button" class="tbl halus" data-rd-guide hidden><span aria-hidden="true">ⓘ</span> Panduan</button>{% endif %}
+    <details class="tf-actions" data-tindakan-dropdown hidden><summary class="tbl halus">Tindakan lainnya <span aria-hidden="true">▾</span></summary><div class="tf-actions-menu" data-tindakan-menu role="group" aria-label="Pilihan tindakan"></div></details>
     {% if trx.status_tiket == 'SELESAI' and trx.status_transaksi != 'VOID' %}
       <a href="{{ prefix }}/transaksi/{{ trx.id }}/cetak" class="tbl" data-cetak-langsung data-tiket="{{ trx.id }}" data-prefix="{{ prefix }}">Cetak</a>
       <button type="button" class="tbl halus" data-lihat-pdf data-pdf-url="{{ prefix }}/transaksi/{{ trx.id }}/cetak/80mm">Lihat</button>
@@ -12,7 +13,6 @@
     {% elif trx.status_tiket == 'TERBUKA' and trx.status_transaksi != 'VOID' %}
       <a href="{{ prefix }}/{{ 'partai' if trx.partai else 'tiket' }}/{{ trx.id }}" class="tbl">{{ 'Lanjutkan partai' if trx.partai else 'Lanjutkan timbang kedua' }}</a>
     {% endif %}
-    {% if tindakan %}<button type="button" class="tbl halus" data-rd-actions-open hidden aria-label="Tindakan lainnya">⋯</button>{% endif %}
   </div>
 </div>
 <p class="pesan" data-hasil-unduh data-pesan="PDF belum dapat dibuka atau dibagikan. Periksa jaringan dan sesi, lalu coba lagi." role="status" hidden></p>

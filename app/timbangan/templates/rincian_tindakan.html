@@ -1,3 +1,4 @@
+<div data-tindakan-sumber data-kode="{{ trx.kode }}">
     {% if boleh_ubah and trx.status_transaksi != 'VOID' %}
       <a href="{{ PREFIX }}/transaksi/{{ trx.id }}/koreksi" class="tbl halus blok">
         Koreksi
@@ -62,3 +63,5 @@
         </form>
       </details>
     {% endif %}
+
+</div>

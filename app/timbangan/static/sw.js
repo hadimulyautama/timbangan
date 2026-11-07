@@ -40,6 +40,7 @@ var RANGKA = [
   PREFIX + '/static/cetak.js' + V,
   PREFIX + '/static/cetak-langsung.js' + V,
   PREFIX + '/static/lihat-pdf-dialog.js' + V,
+  PREFIX + '/static/tindakan-dropdown.js' + V,
   PREFIX + '/static/lihat-pdf-dialog.css' + V,
   PREFIX + '/static/rincian-keluar.css' + V,
   PREFIX + '/static/rincian-kontrol.css' + V,
