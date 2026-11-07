@@ -26,7 +26,8 @@ async def test_webkit_panel_dan_printer_gagal_klik_ganda(klien,alamat_ui,monkeyp
         assert await page.locator('[data-retur-supplier]').count()==1
         assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
         OUT.mkdir(parents=True,exist_ok=True);await page.screenshot(path=str(OUT/f'webkit-supplier-{role}-320.png'),full_page=True)
-        await page.get_by_role('link',name='Cetak bukti timbang').click()
+        await buka(page,alamat_ui+f'/timbangan/transaksi/{tid}/cetak')
+        await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
         await page.evaluate("localStorage.setItem('timbangan-printer','http://127.0.0.1:9999')")
         jobs=[];fail={'yes':True}
         async def printer(r):
@@ -36,19 +37,20 @@ async def test_webkit_panel_dan_printer_gagal_klik_ganda(klien,alamat_ui,monkeyp
             await asyncio.sleep(.1)
             await r.fulfill(status=200,content_type='text/xml',body='<response success="false" code="EPTR_COVER_OPEN"/>' if fail['yes'] else '<response success="true"/>')
         await page.route('**/cgi-bin/epos/**',printer)
-        await page.locator('[data-cetak]').evaluate('(e)=>{e.click();e.click()}')
-        await page.wait_for_function("document.querySelector('[data-hasil-cetak]').textContent.includes('Penutup printer terbuka')")
+        await page.locator('[data-cp-jalankan]').evaluate('(e)=>{e.click();e.click()}')
+        await page.wait_for_function("document.querySelector('[data-cp-status]').textContent.includes('Penutup printer terbuka')")
         assert len(jobs)==1
         async with database.SessionLocal() as db:assert await db.scalar(select(func.count()).select_from(TimbanganCetak))==0
         fail['yes']=False
-        await page.locator('[data-cetak]').evaluate('(e)=>{e.click();e.click()}')
-        await page.wait_for_url(lambda u:'ok=' in str(u));assert len(jobs)==2
-        await page.locator('[data-cetak]').click()
+        await page.locator('[data-cp-jalankan]').evaluate('(e)=>{e.click();e.click()}')
+        await page.wait_for_function("document.querySelector('.cp-history').textContent.includes('Cetak ke-1')");assert len(jobs)==2
+        await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
+        await page.locator('[data-cp-jalankan]').click()
         assert await page.evaluate("document.activeElement.name==='alasan'")
         assert len(jobs)==2
-        await page.locator('form[data-catat-cetak] [name=alasan]').fill('UJI cetak ulang supplier, kertas simulasi')
-        await page.locator('[data-cetak]').evaluate('(e)=>{e.click();e.click()}')
-        await page.wait_for_function("document.querySelector('form[data-catat-cetak] [name=alasan]').value===''")
+        await page.locator('[name=alasan]').fill('UJI cetak ulang supplier, kertas simulasi')
+        await page.locator('[data-cp-jalankan]').evaluate('(e)=>{e.click();e.click()}')
+        await page.wait_for_function("document.querySelector('.cp-history').textContent.includes('Cetak ke-2')")
         async with database.SessionLocal() as db:
             rows=(await db.scalars(select(TimbanganCetak).order_by(TimbanganCetak.urutan))).all()
             assert len(rows)==2 and rows[1].alasan=='UJI cetak ulang supplier, kertas simulasi'

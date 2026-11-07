@@ -73,7 +73,7 @@ async def test_printer_lokal_simpan_gagal_bawaan_periksa_tanpa_kertas(klien,alam
         await page.wait_for_function("document.querySelector('[data-laporan-printer]').textContent.includes('Belum disetel')")
         await page.locator('[name=printer_url]').fill('http://printer.invalid');await page.locator('[data-simpan-printer]').click()
         await page.locator('[data-periksa-printer]').click()
-        await page.wait_for_function("document.querySelector('[data-laporan-printer]').textContent.includes('Harus https://')")
+        await page.wait_for_function("document.querySelector('[data-laporan-printer]').textContent.includes('diawali https://')")
         async with database.SessionLocal() as db:
             for model in (TimbanganConfig,TimbanganTransaksi,TimbanganCetak):assert await db.scalar(select(func.count()).select_from(model))==0
         await b.close()
@@ -104,6 +104,8 @@ async def test_uji_printer_sukses_gagal_tidak_pasti_tanpa_transaksi(klien,alamat
         calls=[];mode={'value':'success'}
         async def printer(r):
             calls.append(r.request.post_data);await asyncio.sleep(.15)
+            if '<text' not in (r.request.post_data or ''):
+                return await r.fulfill(status=200,content_type='text/xml',body='<response success="true"/>')
             if mode['value']=='unknown':return await r.abort()
             xml='<response success="true"/>' if mode['value']=='success' else '<response success="false" code="EPTR_COVER_OPEN"/>'
             return await r.fulfill(status=200,content_type='text/xml',body=xml)
@@ -114,7 +116,7 @@ async def test_uji_printer_sukses_gagal_tidak_pasti_tanpa_transaksi(klien,alamat
             await page.wait_for_function("document.querySelector('[data-cetak]').dataset.sibuk!=='1'")
             text=await page.locator('[data-hasil-cetak]').text_content()
             assert pesan.lower() in text.lower(),text
-            assert len(calls)==before+1
+            assert len(calls)==before+2  # status kosong lalu satu struk; bukan cetak ganda
             assert 'perintah' not in page.url
         async with database.SessionLocal() as db:
             for model in (TimbanganTransaksi,TimbanganCetak,TimbanganConfig):assert await db.scalar(select(func.count()).select_from(model))==0
