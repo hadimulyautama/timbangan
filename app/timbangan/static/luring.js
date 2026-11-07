@@ -128,6 +128,15 @@
     var u = new URL(url || PREFIX + '/', location.origin);
     return u.origin === location.origin && u.pathname.startsWith(PREFIX + '/') ? u.pathname + u.search : PREFIX + '/';
   }
+  function tautanSegar(a, baru) {
+    a.addEventListener('click', function (e) {
+      if (baru) { try { sessionStorage.setItem('tf.luring.tab', uuid()); } catch (_) {} }
+      var u = new URL(a.href);
+      if (u.pathname === location.pathname && u.search === location.search) {
+        e.preventDefault(); history.replaceState(history.state, '', u.href); location.reload();
+      }
+    });
+  }
   function tombol(text, fn) {
     var e = elemen('button', text, 'tbl halus kecil'); e.type = 'button'; e.addEventListener('click', fn); return e;
   }
@@ -137,6 +146,50 @@
     daftarForm.forEach(function (f) { f.inert = false; f._luringSiap = true; });
     pesanGlobal = 'Penyimpanan perangkat gagal atau penuh. Isian masih di layar dan belum dikirim. Jangan tutup halaman; kosongkan ruang lalu coba simpan lagi.';
     if (panel) { panel.hidden = false; panel.textContent = pesanGlobal; }
+  }
+  var dialogDraf, pilihanDraf, hapusSibuk = false;
+  function drafDihapus(form) {
+    form.inert = true; form._luringSiap = false;
+    statusForm(form, 'Draf ini sudah dihapus. Buka formulir baru untuk melanjutkan.', form.action, 'Buka formulir baru');
+  }
+  function bukaHapusDraf(draft) {
+    if (!dialogDraf) {
+      dialogDraf = elemen('dialog', '', 'luring-draf-dialog');
+      dialogDraf.setAttribute('aria-labelledby', 'hapus-draf-judul');
+      dialogDraf.innerHTML = '<h2 id="hapus-draf-judul">Hapus draf ini?</h2><p data-draf-nama></p><p>Isian ini hanya tersimpan di perangkat. Setelah dihapus, draf tidak dapat dipulihkan.</p><p data-draf-galat role="alert" hidden></p><div class="luring-draf-dialog__aksi"><button type="button" class="tbl halus" data-draf-batal>Batal</button><button type="button" class="tbl bahaya" data-draf-ya>Hapus draf</button></div>';
+      document.body.append(dialogDraf);
+      dialogDraf.querySelector('[data-draf-batal]').addEventListener('click', function () { if (!hapusSibuk) dialogDraf.close(); });
+      dialogDraf.addEventListener('cancel', function (e) { if (hapusSibuk) e.preventDefault(); });
+      dialogDraf.querySelector('[data-draf-ya]').addEventListener('click', hapusPilihanDraf);
+    }
+    pilihanDraf = draft; dialogDraf.querySelector('[data-draf-nama]').textContent = draft.label;
+    dialogDraf.querySelector('[data-draf-galat]').hidden = true; dialogDraf.showModal();
+  }
+  function hapusPilihanDraf() {
+    if (hapusSibuk || !pilihanDraf) return;
+    var dipilih = pilihanDraf, galat = dialogDraf.querySelector('[data-draf-galat]');
+    hapusSibuk = true; dialogDraf.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
+    transaksi(['draf', 'kiriman'], 'readwrite', function (tx, done) {
+      var store = tx.objectStore('draf'), req = store.get(dipilih.id);
+      req.onsuccess = function () {
+        var terbaru = req.result;
+        if (!terbaru) { done({ hilang: true }); return; }
+        if (terbaru.akun !== akun || terbaru.jalur !== dipilih.jalur || terbaru.kunci !== dipilih.kunci || JSON.stringify(terbaru.data) !== JSON.stringify(dipilih.data)) { done({ galat: 'Draf sudah berubah. Tutup dialog dan periksa isian terbaru sebelum menghapus.' }); return; }
+        var kiriman = tx.objectStore('kiriman').getAll();
+        kiriman.onsuccess = function () {
+          if (kiriman.result.some(function (r) { return r.akun === akun && r.status !== 'terkirim' && (r.drafId === dipilih.id || r.kunci === dipilih.kunci); })) { done({ galat: 'Draf terkait kiriman yang belum dikonfirmasi server. Periksa kiriman itu terlebih dahulu.' }); return; }
+          store.delete(dipilih.id); done({ dihapus: true });
+        };
+      };
+    }).then(function (hasil) {
+      if (hasil.galat) { galat.textContent = hasil.galat; galat.hidden = false; return gambar(); }
+      var aktif = daftarForm.find(function (f) { return snapshot(f).id === dipilih.id; });
+      if (aktif) { aktif._luringSiap = false; aktif.inert = true; }
+      dialogDraf.close();
+      if (aktif) { try { sessionStorage.setItem('tf.luring.tab', uuid()); } catch (_) {} location.replace(tujuanAman(aktif.action)); return; }
+      return gambar();
+    }).catch(function () { galat.textContent = 'Draf belum dihapus. Penyimpanan perangkat belum berhasil; coba lagi.'; galat.hidden = false; })
+      .finally(function () { hapusSibuk = false; dialogDraf.querySelectorAll('button').forEach(function (b) { b.disabled = false; }); });
   }
   function gambar() {
     return bersihkanTerkirim().then(function () { return Promise.all([baca('kiriman'), baca('draf')]); }).then(function (data) {
@@ -167,8 +220,12 @@
       });
       drafts.forEach(function (r) {
         if (pending.some(function (p) { return p.kunci === r.kunci; })) return;
-        var a = elemen('a', 'Pulihkan draf: ' + r.label, 'tf-link');
-        a.href = tujuanAman(r.jalur) + '#draf=' + encodeURIComponent(r.id); panel.append(a);
+        var row = elemen('div', '', 'luring-draf'); row.dataset.drafId = r.id;
+        var a = elemen('a', '', 'tf-link luring-draf__buka');
+        a.append(elemen('strong', 'Pulihkan draf'), elemen('span', r.label, 'luring-draf__label'));
+        a.href = tujuanAman(r.jalur) + '#draf=' + encodeURIComponent(r.id); tautanSegar(a);
+        var hapus = tombol('Hapus draf', function () { bukaHapusDraf(r); }); hapus.dataset.hapusDraf = '';
+        row.append(a, hapus); panel.append(row);
       });
       // Antrean generasi lama tidak mempunyai identitas akun/isi yang dapat
       // diverifikasi. Jangan mengirim sebagai orang lain atau membuangnya.
@@ -206,27 +263,36 @@
     });
     form.dispatchEvent(new Event('draf-dipulihkan', { bubbles: true }));
   }
-  function statusForm(form, text, tujuan) {
+  function statusForm(form, text, tujuan, labelTautan) {
     var box = form.previousElementSibling;
     if (!box || !box.hasAttribute('data-status-draf')) {
       box = elemen('p', '', 'bantu'); box.dataset.statusDraf = '1'; box.setAttribute('role', 'status'); form.before(box);
     }
     box.textContent = text;
     if (tujuan) {
-      var a = elemen('a', 'Buka hasil', 'tf-link'); a.href = tujuanAman(tujuan);
+      var a = elemen('a', labelTautan || 'Buka hasil', 'tf-link'); a.href = tujuanAman(tujuan); tautanSegar(a, labelTautan === 'Buka formulir baru');
       box.append(document.createTextNode(' '), a);
     }
   }
   function snapshot(form) {
     var pairs = dataForm(form), key = pairs.find(function (p) { return p[0] === 'kunci'; });
-    return { id: akun + ':' + tab + ':' + new URL(form.action).pathname,
+    return { id: form._luringDrafId || akun + ':' + tab + ':' + new URL(form.action).pathname,
       akun: akun, kunci: key && key[1], jalur: new URL(form.action).pathname,
       label: document.title.split('·').slice(1).join('·').trim(), data: pairs, updated: Date.now() };
   }
   function simpanDraf(form) {
     if (!form._luringSiap || form.inert) return Promise.resolve();
     var draft = snapshot(form); belumTersimpan++;
-    return tulis('draf', draft).then(function () {
+    return transaksi(['draf'], 'readwrite', function (tx, done) {
+      var store = tx.objectStore('draf'), req = store.get(draft.id);
+      req.onsuccess = function () {
+        if (form._luringDrafAda && !req.result) { done({ dihapus: true }); return; }
+        if (req.result && req.result.akun !== akun) { tx.abort(); return; }
+        store.put(draft); done({ tersimpan: true });
+      };
+    }).then(function (hasil) {
+      if (hasil.dihapus) { drafDihapus(form); return gambar(); }
+      form._luringDrafAda = true;
       gagalSimpan = false;
       statusForm(form, 'Draf tersimpan di perangkat · belum disimpan di server.'); return gambar();
     }).catch(function (e) { gagalLokal(); throw e; }).finally(function () { belumTersimpan--; });
@@ -242,9 +308,12 @@
         form.inert = true; statusForm(form, saved.pesan || 'Kiriman sudah dikonfirmasi tersimpan di server.', saved.tujuan); return;
       }
       if (saved && saved.data && saved.akun === akun && saved.jalur === new URL(form.action).pathname) {
+        if (saved.id) { form._luringDrafId = saved.id; form._luringDrafAda = true; }
+        else if (saved.drafId) { form._luringDrafId = saved.drafId; form._luringDrafAda = true; }
         pulihkan(form, saved.data); statusForm(form, 'Isian dipulihkan dari perangkat.');
         if (saved.status === 'menunggu' || saved.status === 'sesi') form.inert = true;
       }
+      if (match && (!saved || saved.akun !== akun || saved.jalur !== new URL(form.action).pathname)) statusForm(form, 'Draf tidak ditemukan atau sudah dihapus. Formulir baru dapat diisi.');
       var key = form.querySelector('[name=kunci]');
       if (!key) throw new Error('Kunci formulir tidak tersedia.');
       return baca('kiriman', key.value).then(function (q) {
@@ -265,17 +334,23 @@
       status: 'menunggu', drafId: draft.id, halaman: halaman, pesan: '' };
     // Kiriman dan draf disahkan dalam satu transaksi lokal. Quota/error tidak
     // boleh menghasilkan pesan tersimpan, mengosongkan layar atau mengirim.
-    transaksi(['kiriman', 'draf'], 'readwrite', function (tx) {
+    transaksi(['kiriman', 'draf'], 'readwrite', function (tx, done) {
       var store = tx.objectStore('kiriman'), r = store.get(item.kunci);
       r.onsuccess = function () {
         try {
           var lama = r.result;
-          if (lama && lama.status !== 'periksa') return;
-          if (lama) item.created = lama.created;
-          store.put(item); tx.objectStore('draf').put(draft);
+          if (lama && lama.status !== 'periksa') { done({ lama: lama }); return; }
+          var reqDraf = tx.objectStore('draf').get(draft.id);
+          reqDraf.onsuccess = function () {
+            if (form._luringDrafAda && !reqDraf.result) { done({ dihapus: true }); return; }
+            if (lama) item.created = lama.created;
+            store.put(item); tx.objectStore('draf').put(draft); done({ tersimpan: true });
+          };
         } catch (_) { tx.abort(); }
       };
-    }).then(function () {
+    }).then(function (hasil) {
+      if (hasil && hasil.dihapus) { drafDihapus(form); return gambar(); }
+      if (hasil && hasil.lama && hasil.lama.status === 'terkirim') { statusForm(form, hasil.lama.pesan || 'Kiriman sudah dikonfirmasi tersimpan di server.', hasil.lama.tujuan); return gambar(); }
       statusForm(form, 'Tersimpan di perangkat · menunggu konfirmasi server.');
       tampilkanPesan(navigator.onLine ? 'Mengirim kiriman yang tersimpan di perangkat…' : 'Tanpa jaringan. Kiriman aman di perangkat dan akan dicoba setelah jaringan kembali.');
       sinkronkan(item.kunci);
