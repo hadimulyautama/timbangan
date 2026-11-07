@@ -30,6 +30,8 @@ async def test_webkit_panel_dan_printer_gagal_klik_ganda(klien,alamat_ui,monkeyp
         await page.evaluate("localStorage.setItem('timbangan-printer','http://127.0.0.1:9999')")
         jobs=[];fail={'yes':True}
         async def printer(r):
+            if '<text' not in (r.request.post_data or ''):
+                return await r.fulfill(content_type='text/xml',body='<response success="true"/>')
             jobs.append(r.request.post_data)
             await asyncio.sleep(.1)
             await r.fulfill(status=200,content_type='text/xml',body='<response success="false" code="EPTR_COVER_OPEN"/>' if fail['yes'] else '<response success="true"/>')

@@ -84,6 +84,8 @@ async def test_cetak_lihat_bagikan_tanpa_navigasi(klien,alamat_ui,jenis,width):
         assert page.url==lokasi and not navigasi
         # Cetak pertama otomatis sesudah satu klik, termasuk penekanan ganda.
         async def alat(route):
+            if '<text' not in (route.request.post_data or ''):
+                return await route.fulfill(content_type='text/xml',body='<response success="true"/>')
             printer.append(route.request.post_data);await asyncio.sleep(.05)
             await route.fulfill(status=200,content_type='text/xml',body='<response success="true"/>')
         await page.route('**/cgi-bin/epos/**',alat)
