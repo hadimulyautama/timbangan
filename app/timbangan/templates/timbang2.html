@@ -62,8 +62,8 @@
     <summary><span>Waktu timbang · <time data-tk-time-label>{{ sekarang.strftime('%d/%m/%Y %H:%M') }}</time></span><span>Ubah</span></summary>
   <div class="grup">
     <div class="lbl">Jam timbang</div>
-    <input class="fld" type="datetime-local" name="waktu"
-           value="{{ sekarang.strftime('%Y-%m-%dT%H:%M') }}">
+    <input class="fld" type="datetime-local" name="waktu" step="0.001"
+           value="{{ sekarang.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] }}">
   </div>
   </details>
   </section>
