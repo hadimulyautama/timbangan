@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_rincian_kontrol.html" import kontrol as kontrol_detail %}
 {% from "pengiriman_muatan.html" import rincian_kiriman %}
 {% from "macros.html" import kartu_hasil, lencana, konteks_jenis %}
 
@@ -11,6 +12,7 @@
 {% block konteks %}{{ konteks_jenis(aturan) }}{% endblock %}
 
 {% block isi %}
+  {{ kontrol_detail(trx, PREFIX, kembali, cetak) }}
 
   {% if trx.status_transaksi == 'VOID' %}
     <div class="pesan pesan--err">
@@ -25,9 +27,7 @@
       Menunggu timbang kedua.
       <a href="{{ PREFIX }}/tiket/{{ trx.id }}">Lanjutkan sekarang</a>.
     </div>
-    <a href="{{ PREFIX }}/pilih/{{ trx.arah }}" class="tbl blok tanpa-cetak">
-      Timbang truk berikutnya
-    </a>
+
   {% else %}
     {{ kartu_hasil(trx) }}
   {% endif %}
@@ -170,35 +170,15 @@
 
   {% include "rincian_pemeriksaan.html" %}
 
-  {# ── Aksi ──
-     Urutannya mengikuti apa yang sebenarnya dilakukan petugas: cetak bila
-     perlu, lalu LANGSUNG truk berikutnya. Tanpa jalan pintas ini ia harus
-     mundur tiga layar untuk memulai penimbangan baru. #}
+  {# Tindakan tiket dan tautan Produksi tetap mengikuti izin masing-masing. #}
   <div class="tanpa-cetak" style="display:flex;flex-direction:column;gap:10px">
-    {# Urutannya mengikuti kenyataan di pos: cetak lebih dulu selagi sopir
-       masih di tempat untuk menandatangani sebagai saksi, baru truk
-       berikutnya. #}
     {% if trx.status_tiket == TIKET_SELESAI and trx.status_transaksi != 'VOID' %}
-      <a href="{{ PREFIX }}/transaksi/{{ trx.id }}/cetak" class="tbl blok">
-        Pratinjau & cetak
-        {% if cetak %}({{ cetak|length }}× tercetak){% endif %}
-      </a>
+
       {% if tautan_produksi %}
         <a href="{{ tautan_produksi }}" class="tbl blok">
           Hubungkan ke barang keluar Produksi
         </a>
         <div class="bantu">Tiket ini akan dibawa ke form verifikasi Produksi. Pilih transaksi barang keluar yang sesuai; tiket baru tertaut setelah verifikasi disimpan.</div>
-      {% endif %}
-    {% endif %}
-
-    {% if trx.selesai %}
-      <a href="{{ PREFIX }}/pilih/{{ trx.arah }}" class="tbl halus blok">
-        Timbang berikutnya
-      </a>
-      {% if JUMLAH_TIKET %}
-        <a href="{{ PREFIX }}/tiket" class="tbl halus blok">
-          {{ JUMLAH_TIKET }} truk menunggu timbang kedua
-        </a>
       {% endif %}
     {% endif %}
 

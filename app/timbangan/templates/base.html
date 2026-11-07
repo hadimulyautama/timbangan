@@ -99,6 +99,7 @@
 <link rel="stylesheet" href="{{ PREFIX }}/static/pengaturan.css?v={{ VERSI }}">
 <script src="{{ PREFIX }}/static/pengaturan.js?v={{ VERSI }}"></script>
 {% endif %}
+{% if layar == 'rincian' %}<link rel="stylesheet" href="{{ PREFIX }}/static/rincian-kontrol.css?v={{ VERSI }}">{% endif %}
 {% block gaya_tambahan %}{% endblock %}
 </head>
 {# `segar_otomatis` sengaja OPT-IN per halaman, bukan berlaku di mana-mana.

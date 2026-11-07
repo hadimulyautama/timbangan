@@ -1,0 +1,16 @@
+{# Satu area kontrol detail. Navigasi pekerjaan lain hanya ada di kerangka aplikasi.
+   Semua URL tetap ke tiket yang sama; keadaan/izin dihitung pemanggil. #}
+{% macro kontrol(trx, prefix, kembali, cetak, panduan=false, tindakan=false) -%}
+<div class="tf-detail-controls rd-controls tanpa-cetak" data-detail-controls>
+  <a class="dk-kembali" href="{{ kembali }}" aria-label="Kembali">← {{ 'Kembali ke riwayat' if '/transaksi' in kembali else 'Kembali' }}</a>
+  <div class="tf-detail-controls__actions rd-buttons">
+    {% if panduan %}<button type="button" class="tbl halus" data-rd-guide hidden><span aria-hidden="true">ⓘ</span> Panduan</button>{% endif %}
+    {% if trx.status_tiket == 'SELESAI' and trx.status_transaksi != 'VOID' %}
+      <a href="{{ prefix }}/transaksi/{{ trx.id }}/cetak" class="tbl">Pratinjau & cetak{% if cetak %} · {{ cetak|length }}×{% endif %}</a>
+    {% elif trx.status_tiket == 'TERBUKA' and trx.status_transaksi != 'VOID' %}
+      <a href="{{ prefix }}/{{ 'partai' if trx.partai else 'tiket' }}/{{ trx.id }}" class="tbl">{{ 'Lanjutkan partai' if trx.partai else 'Lanjutkan timbang kedua' }}</a>
+    {% endif %}
+    {% if tindakan %}<button type="button" class="tbl halus" data-rd-actions-open hidden aria-label="Tindakan lainnya">⋯</button>{% endif %}
+  </div>
+</div>
+{%- endmacro %}

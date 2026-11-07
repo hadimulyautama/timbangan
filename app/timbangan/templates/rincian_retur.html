@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_rincian_kontrol.html" import kontrol as kontrol_detail %}
 {% from "macros.html" import lencana %}
 {% set trx = b.trx %}
 {% set hasil_tersimpan = trx.status_tiket == TIKET_SELESAI %}
@@ -10,7 +11,7 @@
 {% block lebar %}dk-bingkai{% endblock %}
 {% block isi %}
 <div class="dk" data-detail-retur data-kode="{{ trx.kode }}">
-  <a class="dk-kembali" href="{{ kembali }}">← Kembali</a>
+  {{ kontrol_detail(trx, PREFIX, kembali, cetak) }}
   <section class="dk-hero" aria-label="Hasil timbang retur">
     <div class="dk-sebar"><span class="lencana">{{ 'Batal' if trx.status_transaksi == 'VOID' else ('Selesai timbang' if final else ('Menunggu timbang kedua' if trx.status_tiket == TIKET_TERBUKA else 'Ditutup tanpa timbang kedua')) }}</span><span>Retur dari Pelanggan · Masuk</span></div>
     <h1>{{ trx.nomor_polisi or trx.kode }}</h1><h2>{{ b.pihak_tampil }}</h2>
@@ -27,11 +28,7 @@
     {% if data and data.pengajuan_id and data.asal %}<a href="{{ produksi_url }}/retur/pengajuan/{{ data.pengajuan_id }}">Lihat pengajuan retur di PadiFlow →</a>{% elif data and data.penerimaan %}<a href="{{ produksi_url }}/retur/{{ data.penerimaan.id }}">Lihat penerimaan retur di PadiFlow →</a>{% endif %}
     <p class="bantu">Membuka atau menyegarkan halaman tidak memverifikasi retur maupun menambah stok.</p>
   </section>
-  <div class="dk-aksi tanpa-cetak">
-    {% if final %}<a href="{{ PREFIX }}/transaksi/{{ trx.id }}/cetak" class="tbl">Pratinjau & cetak{% if cetak %} · {{ cetak|length }}×{% endif %}</a>{% elif trx.status_tiket == TIKET_TERBUKA and trx.status_transaksi != 'VOID' %}<a href="{{ PREFIX }}/tiket/{{ trx.id }}" class="tbl">Lanjutkan timbang kedua</a>{% endif %}
-    <a href="{{ PREFIX }}/pilih/{{ trx.arah }}" class="tbl halus">Timbang berikutnya</a>
-    <a href="{{ PREFIX }}/tiket" class="tbl halus">Tiket Aktif{% if JUMLAH_TIKET %} · {{ JUMLAH_TIKET }}{% endif %}</a>
-  </div>
+
   {% if pemeriksaan %}<section class="pesan {{ 'pesan--ok' if pemeriksaan.status == 'SELESAI' else 'pesan--err' }}"><b>Pemeriksaan TeraFlow {{ 'selesai' if pemeriksaan.status == 'SELESAI' else 'masih terbuka' }}.</b><p class="bantu">Penutupan pemeriksaan tidak mengubah angka, status kontrol, atau penerimaan retur di PadiFlow.</p><a href="#pemeriksaan" data-buka-jejak>Lihat pemeriksaan →</a></section>{% endif %}
   <nav class="dk-tabs" aria-label="Rincian tiket retur">
     {% for id,label in [('ringkasan','Ringkasan retur'),('perhitungan','Perhitungan'),('jejak','Jejak & dokumen')] %}<a id="dk-tab-{{ id }}" href="#dk-{{ id }}" data-dk-tab="{{ id }}">{{ label }}</a>{% endfor %}

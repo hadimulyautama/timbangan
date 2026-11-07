@@ -35,6 +35,7 @@ var RANGKA = [
   PREFIX + '/static/cetak.css' + V,
   PREFIX + '/static/cetak.js' + V,
   PREFIX + '/static/rincian-keluar.css' + V,
+  PREFIX + '/static/rincian-kontrol.css' + V,
   PREFIX + '/static/rincian-keluar.js' + V,
   PREFIX + '/static/formulir.css' + V,
   PREFIX + '/static/formulir.js' + V,

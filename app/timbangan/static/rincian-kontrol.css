@@ -1,0 +1,7 @@
+/* Kontrak kontrol untuk seluruh detail timbang. Isi dan izin tidak diatur CSS. */
+body.padiflow-ui .tf-detail-controls{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;width:100%;min-width:0}
+body.padiflow-ui .tf-detail-controls__actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+body.padiflow-ui .tf-detail-controls .tbl{display:inline-flex;align-items:center;justify-content:center;width:auto;min-height:44px;margin:0;padding:9px 13px;white-space:normal}
+body.padiflow-ui .tf-detail-controls [hidden]{display:none!important}
+@media(max-width:650px){body.padiflow-ui .tf-detail-controls{align-items:start}body.padiflow-ui .tf-detail-controls__actions{justify-content:start}}
+@media print{body.padiflow-ui .tf-detail-controls{display:none!important}}

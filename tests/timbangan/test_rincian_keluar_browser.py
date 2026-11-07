@@ -1,5 +1,6 @@
 """UI detail asli, HTTP loopback dan DB SQLite sementara; tanpa layanan operasional."""
 import json
+import os
 from pathlib import Path
 from urllib.parse import urlsplit
 import pytest
@@ -10,7 +11,7 @@ from test_pengiriman_gabungan_browser import alamat_ui
 from test_rincian_keluar import buat_tiket
 from app import database
 from app.timbangan.models import TimbanganAkun,TimbanganAudit,TimbanganTransaksi
-OUT=Path(__file__).resolve().parents[3]/'output/detail-tiket-keluar-20261027'
+OUT=Path(os.environ.get('UJI_DETAIL_OUT',str(Path(__file__).resolve().parents[3]/'gambar-detail')))
 
 @pytest.mark.parametrize('width,theme,role,engine',[(320,'light','operator','chromium'),(390,'dark','admin','webkit'),(390,'dark','admin','chromium'),(768,'light','super','chromium'),(1440,'light','admin','chromium'),(1440,'dark','operator','chromium')])
 async def test_tab_akses_pemeriksaan_dan_layout(klien,alamat_ui,width,theme,role,engine):
@@ -39,6 +40,7 @@ async def test_tab_akses_pemeriksaan_dan_layout(klien,alamat_ui,width,theme,role
         kembali='/timbangan/transaksi?q=uji&halaman=2'
         await page.goto(alamat_ui+f'/timbangan/transaksi/{tid}?kembali='+__import__('urllib.parse',fromlist=['quote']).quote(kembali,safe=''))
         await page.locator('#pembuka').wait_for(state='hidden')
+        await page.locator('#rd-muatan>summary').click()
         assert await page.locator('.dk-pelanggan').count()==2
         assert await page.locator('.dk-barang.kg-barang').count()==4
         barang=await page.locator('.dk-barang.kg-barang').first.bounding_box()
@@ -47,28 +49,32 @@ async def test_tab_akses_pemeriksaan_dan_layout(klien,alamat_ui,width,theme,role
         assert await page.locator('.dk-kembali').get_attribute('href')==kembali
         assert await page.locator('#dk-perhitungan').is_hidden()
         for tab in ('muatan','perhitungan','jejak'):
-            await page.locator(f'[data-dk-tab={tab}]').click()
+            if not await page.locator(f'#rd-{tab}').evaluate('e=>e.open'):
+                await page.locator(f'#dk-tab-{tab}').click()
             assert await page.locator(f'#dk-{tab}').is_visible()
             assert await page.evaluate('document.documentElement.scrollWidth <= innerWidth')
             await page.screenshot(path=str(OUT/f'{tab}-{width}-{theme}-{role}-{engine}.png'),full_page=True)
         if width==1440:
             assert (await page.locator('.dk').bounding_box())['width']>850
-        await page.locator('[data-dk-tab=muatan]').click()
-        await page.locator('[data-dk-tab=muatan]').press('ArrowRight')
-        assert await page.locator('[data-dk-tab=perhitungan]').get_attribute('aria-selected')=='true'
-        await page.reload();await page.locator('#pembuka').wait_for(state='hidden')
+        # URL lama tetap membuka bagian yang sama tanpa tab khusus.
+        await page.goto(alamat_ui+f'/timbangan/transaksi/{tid}?tab=perhitungan')
+        await page.locator('#pembuka').wait_for(state='hidden')
         assert await page.locator('#dk-perhitungan').is_visible()
-        await page.locator('[data-buka-jejak]').click()
-        assert await page.locator('#dk-jejak').is_visible()
+        await page.locator('[data-rd-exam-open]').click()
+        assert await page.locator('#rd-exam').evaluate('e=>e.open')
         assert await page.locator('[data-tutup-pemeriksaan]').count()==(0 if role=='operator' else 1)
-        await page.locator('.dk-lanjutan>summary').click()
+        await page.locator('#rd-exam [data-rd-close]').click()
+        await page.locator('[data-rd-actions-open]').click()
         assert await page.get_by_text('Hapus permanen',exact=True).count()==(2 if role=='super' else 0)
+        await page.locator('#rd-actions [data-rd-close]').click()
+        await page.locator('[data-rd-exam-open]').click()
         if role!='operator':
             await page.get_by_label('Catatan resolusi',exact=True).fill('Isian sintetis harus tetap tersimpan di formulir')
             await page.get_by_label('Kategori hasil',exact=True).select_option('LAIN')
             await page.get_by_label('Timbang ulang',exact=True).fill('Uji baca ulang')
-            await page.locator('[data-dk-tab=muatan]').click()
-            await page.locator('[data-dk-tab=jejak]').click()
+            await page.locator('#rd-exam [data-rd-close]').click()
+            await page.locator('#rd-muatan>summary').click()
+            await page.locator('[data-rd-exam-open]').click()
             assert await page.get_by_label('Catatan resolusi',exact=True).input_value()=='Isian sintetis harus tetap tersimpan di formulir'
             # Putus permintaan: server tidak menerima, formulir tetap utuh.
             await page.route('**/periksa',lambda r:r.abort())
@@ -101,9 +107,10 @@ async def test_satu_pelanggan_banyak_barang_nama_panjang(klien,alamat_ui):
         await ctx.add_cookies([{'name':k,'value':v,'url':alamat_ui} for k,v in klien.cookies.items()])
         page=await ctx.new_page()
         await page.goto(alamat_ui+f'/timbangan/transaksi/{tid}');await page.locator('#pembuka').wait_for(state='hidden')
+        await page.locator('#rd-muatan>summary').click()
         assert await page.locator('.dk-pelanggan').count()==1
         assert await page.locator('.kg-barang').count()==12
-        assert '1 pelanggan · 12 baris barang' in await page.locator('.dk-hero').inner_text()
+        assert '1 pelanggan · 12 baris barang' in await page.locator('.rd-result').inner_text()
         assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
         await page.screenshot(path=str(OUT/'satu-pelanggan-12-barang-320.png'),full_page=True)
         await browser.close()
@@ -124,9 +131,9 @@ async def test_tindakan_lama_gagal_tetap_utuh_dan_kirim_ganda_ditahan(klien,alam
         await ctx.add_cookies([{'name':k,'value':v,'url':alamat_ui} for k,v in klien.cookies.items()])
         page=await ctx.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
         await page.goto(alamat_ui+f'/timbangan/transaksi/{tid}');await page.locator('#pembuka').wait_for(state='hidden')
-        await page.locator('.dk-lanjutan>summary').click()
+        await page.locator('[data-rd-actions-open]').click()
         aksi='hapus' if role=='super' else 'batal'
-        form=page.locator(f'.dk-lanjutan form[action$="/{aksi}"]')
+        form=page.locator(f'[data-rd-actions-content] form[action$="/{aksi}"]')
         await form.locator('..').locator('summary').click()
         await form.locator('[name=alasan]').fill('Alasan sintetis untuk uji aman')
         if role=='super':await form.locator('[name=ketik_kode]').fill('SALAH-UJI')
@@ -143,7 +150,7 @@ async def test_tindakan_lama_gagal_tetap_utuh_dan_kirim_ganda_ditahan(klien,alam
         # Putus jaringan tetap mempertahankan isian dan belum mengubah tiket.
         await page.route(f'**/transaksi/{tid}/{aksi}',lambda r:r.abort())
         await form.locator('button[type=submit]').click()
-        await page.wait_for_function("document.querySelector('.dk-lanjutan [role=alert]:not([hidden])')?.textContent.includes('belum terkonfirmasi')")
+        await page.wait_for_function("document.querySelector('[data-rd-actions-content] [role=alert]:not([hidden])')?.textContent.includes('belum terkonfirmasi')")
         assert await form.locator('[name=alasan]').input_value()=='Alasan sintetis untuk uji aman'
         await page.unroute(f'**/transaksi/{tid}/{aksi}')
         terkirim=[]
@@ -155,4 +162,28 @@ async def test_tindakan_lama_gagal_tetap_utuh_dan_kirim_ganda_ditahan(klien,alam
             trx=await db.get(TimbanganTransaksi,tid)
             assert trx is None if role=='super' else trx.status_transaksi=='VOID'
         assert not errors
+        await browser.close()
+
+async def test_disclosure_tanpa_js_dan_url_lama(klien,alamat_ui):
+    tid=await buat_tiket(beda=1000);await login(klien,'wahid')
+    async with async_playwright() as pw:
+        browser=await pw.chromium.launch()
+        for js in [False,True]:
+            ctx=await browser.new_context(viewport={'width':390,'height':950},java_script_enabled=js,service_workers='block',reduced_motion='reduce')
+            await ctx.add_cookies([{'name':k,'value':v,'url':alamat_ui} for k,v in klien.cookies.items()])
+            page=await ctx.new_page()
+            await page.goto(alamat_ui+f'/timbangan/transaksi/{tid}?tab=muatan')
+            if js:
+                assert await page.locator('#rd-muatan').evaluate('e=>e.open')
+                await page.goto(alamat_ui+f'/timbangan/transaksi/{tid}#pemeriksaan')
+                assert await page.locator('#rd-exam').evaluate('e=>e.open')
+            else:
+                await page.locator('#rd-muatan>summary').click()
+                assert await page.locator('.kg-barang').first.is_visible()
+                await page.locator('[data-rd-exam-fallback]>summary').click()
+                assert await page.locator('[data-tutup-pemeriksaan]').is_visible()
+                await page.locator('[data-rd-guide-fallback]>summary').evaluate('e=>e.scrollIntoView({block:"center"})')
+                await page.locator('[data-rd-guide-fallback]>summary').click()
+                assert await page.locator('[data-rd-guide-content]').is_visible()
+            await ctx.close()
         await browser.close()

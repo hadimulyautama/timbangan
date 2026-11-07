@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% from "_rincian_kontrol.html" import kontrol as kontrol_detail %}
+{% from "_panduan.html" import panel as panel_panduan %}
 {% from "macros.html" import lencana %}
 {% set trx = b.trx %}
 {% set hasil_tersimpan = trx.status_tiket == TIKET_SELESAI %}
@@ -6,36 +8,32 @@
 {% block judul %}Detail tiket keluar · {{ trx.kode }}{% endblock %}
 {% block bar_judul %}Detail tiket keluar{% endblock %}
 {% block bar_sub %}{{ trx.kode }}{% endblock %}
+{% block gaya_tambahan %}<link rel="stylesheet" href="{{ PREFIX }}/static/panduan.css?v={{ VERSI }}"><link rel="stylesheet" href="{{ PREFIX }}/static/detail-riwayat-desain.css?v={{ VERSI }}">{% endblock %}
 {% block lebar %}dk-bingkai{% endblock %}
 {% block isi %}
-<div class="dk" data-detail-keluar data-kode="{{ trx.kode }}">
-  <a class="dk-kembali" href="{{ kembali }}">← Kembali</a>
-  <section class="dk-hero" aria-label="Hasil satu perjalanan">
-    <div class="dk-sebar"><span class="lencana">{{ 'Batal' if trx.status_transaksi == 'VOID' else ('Selesai timbang' if final else ('Menunggu timbang kedua' if trx.status_tiket == TIKET_TERBUKA else 'Ditutup tanpa timbang kedua')) }}</span><span>Pengiriman · Keluar</span></div>
-    <h1>{{ trx.nomor_polisi or trx.kode }}</h1>
-    <p>{{ trx.kode }} · {{ trx.tanggal|tgl(true) }}</p>
-    <div class="dk-hasil"><span>Berat barang seluruh truk</span><strong>{{ trx.berat_barang_kg|kg if final and trx.berat_barang_kg is not none else 'Hasil akhir belum tersedia' }}</strong></div>
-    <div class="dk-sebar"><span>{{ lencana(trx.status_kontrol) if hasil_tersimpan else 'Kontrol akhir belum tersedia' }}</span><span>Kontrol TeraFlow · internal</span></div>
+<div class="dk rd-page" data-detail-keluar data-riwayat-desain data-kode="{{ trx.kode }}">
+  <h1>Detail riwayat timbang</h1>
+  {{ kontrol_detail(trx, PREFIX, kembali, cetak, panduan=true, tindakan=true) }}
+  <section class="rd-result" aria-label="Hasil satu perjalanan">
+    <div class="dk-sebar"><h2>{{ trx.nomor_polisi or trx.kode }}</h2><span class="lencana">{{ 'Batal' if trx.status_transaksi == 'VOID' else ('Selesai timbang' if final else ('Menunggu timbang kedua' if trx.status_tiket == TIKET_TERBUKA else 'Ditutup tanpa timbang kedua')) }}</span></div>
+    <p class="bantu">{{ trx.kode }} · {{ trx.tanggal|tgl(true) }}<br>Pengiriman · Keluar · Sopir {{ trx.nama_sopir or 'Belum tercatat' }}</p>
     <p>{{ ringkasan_pengiriman(keluar.data) or b.pihak_tampil }} · satu perjalanan</p>
-  </section>
-  {% if trx.status_transaksi == 'VOID' %}<p class="pesan pesan--err">Dibatalkan. {{ trx.void_alasan }}</p>{% elif trx.status_tiket == TIKET_DITUTUP_PAKSA %}<p class="pesan pesan--err">Tiket ditutup tanpa timbang kedua. {{ trx.tutup_paksa_alasan }}</p>{% endif %}
+    <div class="rd-weight"><span>Berat barang seluruh truk setelah tara</span><strong>{{ trx.berat_barang_kg|kg if final and trx.berat_barang_kg is not none else 'Hasil akhir belum tersedia' }}</strong></div>
+    {% if final %}<div class="dk-sebar"><span>Acuan muatan <b>{{ keluar.acuan|kg if keluar.acuan is not none else 'Belum tersedia' }}</b></span><span>{% if trx.status_kontrol != 'TANPA_KONTROL' and trx.selisih_kg is not none %}Selisih seluruh truk <b>{{ trx.selisih_kg|kg_tanda }} · {{ trx.selisih_persen|persen }}</b>{% else %}Tanpa pembanding; selisih belum tersedia.{% endif %}</span></div>{% endif %}
+    {% if trx.status_transaksi == 'VOID' %}<p class="pesan pesan--err">Dibatalkan. {{ trx.void_alasan }}</p>{% elif trx.status_tiket == TIKET_DITUTUP_PAKSA %}<p class="pesan pesan--err">Tiket ditutup tanpa timbang kedua. {{ trx.tutup_paksa_alasan }}</p>{% endif %}
+    <div class="rd-control-status">
+      <div>Kontrol berat · {{ lencana(trx.status_kontrol) if hasil_tersimpan else 'Kontrol akhir belum tersedia' }} <small>· TeraFlow · internal</small></div>
+      {% if trx.keterangan %}<p class="bantu">{{ trx.keterangan }}</p>{% endif %}
+      {% if pemeriksaan %}<div class="dk-sebar"><span>Pemeriksaan TeraFlow {{ 'selesai' if pemeriksaan.status == 'SELESAI' else 'masih terbuka' }}</span><a class="tbl halus" href="#pemeriksaan" data-rd-exam-open>{{ 'Lihat temuan' if pemeriksaan.status == 'SELESAI' else 'Buka pemeriksaan' }}</a></div>{% endif %}
+    </div>
   <section class="kartu dk-integrasi" data-status-produksi="{{ keluar.produksi.kode }}">
     <strong>{{ keluar.produksi.label }}</strong>
     <p class="bantu">Status pengiriman tercatat terpisah dari hasil timbang dan pemeriksaan TeraFlow. Membuka halaman ini tidak menjalankan verifikasi.</p>
     {% if keluar.produksi.perintah %}<p>{% for p in keluar.produksi.perintah %}<a href="{{ produksi_url }}/barang-keluar/{{ p.id }}">{{ p.kode }}</a> · {{ p.status }}{{ ' / ' if not loop.last }}{% endfor %}</p>{% endif %}
     {% if tautan_produksi and not keluar.produksi.perintah %}<a href="{{ tautan_produksi }}">{{ 'Hubungkan ke barang keluar Produksi' if keluar.produksi.kode == 'belum' else 'Periksa pengiriman di PadiFlow' }} →</a>{% if not keluar.produksi.perintah %}<p class="bantu">Pilih transaksi yang sesuai pada form verifikasi Produksi; tidak ada tautan yang dibuat saat membuka halaman.</p>{% endif %}{% endif %}
   </section>
-  <div class="dk-aksi tanpa-cetak">
-    {% if final %}<a href="{{ PREFIX }}/transaksi/{{ trx.id }}/cetak" class="tbl">Pratinjau & cetak{% if cetak %} · {{ cetak|length }}×{% endif %}</a>{% elif trx.status_tiket == TIKET_TERBUKA and trx.status_transaksi != 'VOID' %}<a href="{{ PREFIX }}/tiket/{{ trx.id }}" class="tbl">Lanjutkan timbang kedua</a>{% endif %}
-    <a href="{{ PREFIX }}/pilih/{{ trx.arah }}" class="tbl halus">Timbang berikutnya</a>
-    <a href="{{ PREFIX }}/tiket" class="tbl halus">Tiket Aktif{% if JUMLAH_TIKET %} · {{ JUMLAH_TIKET }}{% endif %}</a>
-  </div>
-  {% if pemeriksaan %}<section class="pesan {{ 'pesan--ok' if pemeriksaan.status == 'SELESAI' else 'pesan--err' }}"><b>Pemeriksaan TeraFlow {{ 'selesai' if pemeriksaan.status == 'SELESAI' else 'masih terbuka' }}.</b><p class="bantu">Penutupan pemeriksaan tidak mengubah status kontrol atau verifikasi PadiFlow.</p><a href="#pemeriksaan" data-buka-jejak>Lihat pemeriksaan →</a></section>{% endif %}
-  <nav class="dk-tabs" aria-label="Rincian tiket">
-    {% for id,label in [('muatan','Muatan pelanggan'),('perhitungan','Perhitungan'),('jejak','Jejak & dokumen')] %}<a id="dk-tab-{{ id }}" href="#dk-{{ id }}" data-dk-tab="{{ id }}">{{ label }}</a>{% endfor %}
-  </nav>
-  <div class="dk-kolom">
-    <div class="dk-utama">
+  </section>
+  <details class="rd-disclosure" id="rd-muatan"><summary id="dk-tab-muatan">Muatan pelanggan<small>{{ keluar.kelompok|length }} pelanggan</small></summary>
       <section id="dk-muatan" data-dk-panel="muatan" aria-labelledby="dk-tab-muatan">
         <h2>Muatan per pelanggan</h2>
         <p class="bantu">{% if keluar.sumber == 'snapshot' %}Snapshot tersimpan saat penyelesaian atau koreksi sah{% elif keluar.sumber == 'langsung' %}Muatan aktual langsung dari PadiFlow · belum menjadi snapshot final{% else %}Data historis yang tersedia · identitas sumber tidak ditambahkan{% endif %}{% if keluar.data and keluar.data.kiriman_id %} · Kiriman #{{ keluar.data.kiriman_id }}{% endif %}</p>
@@ -59,6 +57,9 @@
         </section>{% endfor %}
         {% if keluar.total_acuan is not none %}<section class="kartu"><div class="baris total"><span>Total acuan seluruh pelanggan</span><b>{{ keluar.total_acuan|angka(3) }} kg</b></div><p class="bantu">Acuan muatan satu perjalanan, bukan hasil timbang terpisah per pelanggan.</p></section>{% endif %}
       </section>
+
+  </details>
+  <details class="rd-disclosure" id="rd-perhitungan"><summary id="dk-tab-perhitungan">Rincian perhitungan</summary>
       <section id="dk-perhitungan" data-dk-panel="perhitungan" aria-labelledby="dk-tab-perhitungan">
         <h2>Perhitungan satu perjalanan</h2>
         <section class="kartu">
@@ -74,6 +75,9 @@
         </section>
         <section class="kartu"><h3>Tara setiap barang / kemasan</h3>{% for m in trx.muatan %}<div class="dk-barang"><b>{{ NAMA_JENIS.get(m.jenis_kode,m.jenis_kode) }} · {{ m.nomor_acuan or 'Tanpa nomor dokumen' }}</b><p>{{ m.jumlah_karung }} karung × {{ m.tara_per_karung_kg|angka(4) }} kg = {{ (m.jumlah_karung * m.tara_per_karung_kg)|angka(3) }} kg</p>{% if m.catatan %}<p class="bantu">{{ m.catatan }}</p>{% endif %}</div>{% else %}<p>Belum ada rincian tara tersimpan.</p>{% endfor %}<p class="bantu">Hasil resmi dibaca dari tiket tersimpan. Total tara sudah termasuk tara lain; tidak dipotong dua kali.</p></section>
       </section>
+
+  </details>
+  <details class="rd-disclosure" id="rd-jejak"><summary id="dk-tab-jejak">Jejak & dokumen</summary>
       <section id="dk-jejak" data-dk-panel="jejak" aria-labelledby="dk-tab-jejak">
         <h2>Jejak & dokumen</h2>
         <section class="kartu"><h3>Identitas perjalanan</h3>
@@ -82,14 +86,26 @@
         <p>Timbang kedua · {{ trx.timbang2_waktu|tgl_jam }} · {{ keluar.orang.get(trx.timbang2_petugas_id,'Petugas belum tercatat') }}</p>
         <h3>Catatan</h3><p class="dk-catatan">{{ trx.catatan or 'Tidak ada catatan.' }}</p>
         {% if akun.is_super %}<a href="{{ PREFIX }}/audit">Buka jejak audit →</a>{% endif %}</section>
-        {% include "rincian_pemeriksaan.html" %}
-        {% if pemeriksaan and pemeriksaan.status == 'SELESAI' %}<section class="kartu"><h3>Langkah pemeriksaan tercatat</h3>{% for nama,label in [('langkah_ulang_timbang','Timbang ulang'),('langkah_hitung_karung','Hitung ulang karung'),('langkah_periksa_tara','Periksa tara karung'),('langkah_periksa_dokumen','Periksa dokumen'),('langkah_periksa_muatan','Periksa muatan'),('langkah_lapor','Laporkan')] %}<div class="baris"><span>{{ label }}</span><b>{{ pemeriksaan[nama] or 'Tidak diisi' }}</b></div>{% endfor %}<p class="bantu">Ditutup oleh {{ keluar.orang.get(pemeriksaan.ditutup_oleh_id,'Petugas belum tercatat') }} · {{ pemeriksaan.ditutup_pada|tgl_jam }}</p></section>{% endif %}
         <section class="kartu"><h3>Riwayat cetak</h3>{% for c in cetak %}<article class="dk-barang"><b>Cetak {{ c.urutan }} · {{ c.format }} · revisi {{ c.revisi }}</b><p>{{ c.waktu|tgl_jam }} · {{ keluar.orang.get(c.oleh_id,'Petugas belum tercatat') }}</p><p>{{ c.alasan or 'Cetak pertama' }}</p></article>{% else %}<p>Belum ada catatan cetak.</p>{% endfor %}<p class="bantu">Pratinjau dokumen tidak menyatakan printer berhasil mencetak.</p></section>
       </section>
-    </div>
-    <aside class="kartu dk-ringkas"><h2>Ringkasan perjalanan</h2><div class="baris"><span>Sopir</span><b>{{ trx.nama_sopir or '—' }}</b></div><div class="baris"><span>Nomor polisi</span><b>{{ trx.nomor_polisi or '—' }}</b></div><p>Timbang pertama<br><b>{{ trx.timbang1_waktu|tgl_jam }}</b><br>{{ keluar.orang.get(trx.timbang1_petugas_id,'Petugas belum tercatat') }}</p><p>Timbang kedua<br><b>{{ trx.timbang2_waktu|tgl_jam }}</b><br>{{ keluar.orang.get(trx.timbang2_petugas_id,'Petugas belum tercatat') }}</p><p class="bantu">Snapshot muatan tersimpan bersama tiket. Membuka halaman tidak mengganti data historis.</p></aside>
-  </div>
-  <details class="dk-lanjutan tanpa-cetak"><summary>Tindakan lain</summary>{% include "rincian_tindakan.html" %}</details>
+  </details>
+  {% if pemeriksaan %}<details class="rd-disclosure" data-rd-exam-fallback><summary>Pemeriksaan TeraFlow</summary><div data-rd-exam-content>
+        {% include "rincian_pemeriksaan.html" %}
+        {% if pemeriksaan and pemeriksaan.status == 'SELESAI' %}<section class="kartu"><h3>Langkah pemeriksaan tercatat</h3>{% for nama,label in [('langkah_ulang_timbang','Timbang ulang'),('langkah_hitung_karung','Hitung ulang karung'),('langkah_periksa_tara','Periksa tara karung'),('langkah_periksa_dokumen','Periksa dokumen'),('langkah_periksa_muatan','Periksa muatan'),('langkah_lapor','Laporkan')] %}<div class="baris"><span>{{ label }}</span><b>{{ pemeriksaan[nama] or 'Tidak diisi' }}</b></div>{% endfor %}<p class="bantu">Ditutup oleh {{ keluar.orang.get(pemeriksaan.ditutup_oleh_id,'Petugas belum tercatat') }} · {{ pemeriksaan.ditutup_pada|tgl_jam }}</p></section>{% endif %}
+  </div></details>{% endif %}
+  <details class="rd-disclosure dk-lanjutan tanpa-cetak" data-rd-actions-fallback><summary>Tindakan lain</summary><div data-rd-actions-content>{% include "rincian_tindakan.html" %}</div></details>
+  <details class="rd-disclosure" data-rd-guide-fallback><summary>ⓘ Panduan detail riwayat barang keluar</summary><div class="rd-guide-content" data-rd-guide-content>
+    <p>Halaman ini membaca satu perjalanan tersimpan. Berat barang setelah tara adalah hasil seluruh truk; subtotal pelanggan berasal dari catatan muat PadiFlow, bukan penimbangan terpisah.</p>
+    <p>Selisih terhadap acuan berlaku untuk seluruh truk. Selisih tidak dibagi ke pelanggan atau barang.</p>
+    <p>Snapshot menyimpan identitas pelanggan, perintah, item, komoditas, mutu, merek dan kemasan. Rincian historis tetap tersedia ketika snapshot tidak ada; identitas yang belum diketahui tidak ditambahkan.</p>
+    <p>Selesai timbang, kontrol berat, pemeriksaan TeraFlow dan verifikasi pengiriman PadiFlow merupakan keadaan yang berbeda. Membuka detail tidak menjalankan verifikasi atau membuat tautan.</p>
+    <p>Total tara sudah termasuk tara lain, tidak dipotong dua kali. Nilai resmi mengikuti tiket tersimpan; membuka halaman tidak mengganti data historis.</p>
+    <p>Penutupan pemeriksaan mencatat temuan tanpa mengubah angka, status kontrol, verifikasi atau stok PadiFlow. Pratinjau dokumen tidak menyatakan printer berhasil mencetak.</p>
+    <p>Koreksi, pembatalan, hapus permanen dan audit mengikuti izin serta keadaan tiket. Penimbangan baru dan Tiket Aktif tersedia lewat navigasi utama.</p>
+  </div></details>
+  {% call panel_panduan('rd-panduan', 'Panduan detail riwayat barang keluar', {}, {'data-rd-close':''}) %}<div data-rd-guide-slot></div>{% endcall %}
+  {% call panel_panduan('rd-actions', 'Tindakan tiket', {}, {'data-rd-close':''}) %}<div data-rd-actions-slot></div>{% endcall %}
+  {% if pemeriksaan %}{% call panel_panduan('rd-exam', 'Pemeriksaan TeraFlow', {}, {'data-rd-close':''}) %}<div data-rd-exam-slot></div>{% endcall %}{% endif %}
 </div>
 {% endblock %}
-{% block skrip %}<script src="{{ PREFIX }}/static/rincian-keluar.js?v={{ VERSI }}" defer></script>{% endblock %}
+{% block skrip %}<script src="{{ PREFIX }}/static/detail-riwayat-desain.js?v={{ VERSI }}" defer></script>{% endblock %}

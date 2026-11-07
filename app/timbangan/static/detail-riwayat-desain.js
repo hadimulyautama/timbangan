@@ -1,4 +1,4 @@
-/* Detail barang masuk: progressive disclosure, bukan pengambilan data baru.
+/* Detail riwayat timbang bersama: progressive disclosure, bukan pengambilan data baru.
  * Form pemeriksaan dan endpoint tetap asli; listener pemeriksaan.js hidup
  * pada node yang dipindahkan ke dialog, bukan pada salinannya. */
 (() => {
@@ -30,8 +30,9 @@
       return;
     }
     const tab=hash.startsWith('#dk-')?hash.slice(4):new URL(location.href).searchParams.get('tab');
-    const id={perhitungan:'rd-perhitungan',jejak:'rd-jejak',ringkasan:'rd-penerimaan'}[tab];
-    if(id)akar.querySelector('#'+id).open=true;
+    const id={muatan:'rd-muatan',perhitungan:'rd-perhitungan',jejak:'rd-jejak',ringkasan:'rd-penerimaan'}[tab];
+    const target=id&&akar.querySelector('#'+id);
+    if(target)target.open=true;
   }
   addEventListener('hashchange',fromURL);addEventListener('popstate',fromURL);fromURL();
   akar.addEventListener('invalid',event=>{

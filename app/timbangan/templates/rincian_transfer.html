@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_rincian_kontrol.html" import kontrol as kontrol_detail %}
 {% from "macros.html" import lencana %}
 {% from "pengiriman_muatan.html" import rincian_kiriman %}
 {% set trx = b.trx %}
@@ -10,7 +11,7 @@
 {% block lebar %}dk-bingkai{% endblock %}
 {% block isi %}
 <div class="dk" data-detail-transfer data-kode="{{ trx.kode }}">
-  <a class="dk-kembali" href="{{ kembali }}">← Kembali</a>
+  {{ kontrol_detail(trx, PREFIX, kembali, cetak) }}
   <section class="dk-hero" aria-label="Hasil timbang Transfer Internal">
     <div class="dk-sebar"><span class="lencana">{{ 'Batal' if trx.status_transaksi == 'VOID' else ('Selesai timbang' if final else ('Menunggu timbang kedua' if trx.status_tiket == TIKET_TERBUKA else 'Ditutup tanpa timbang kedua')) }}</span><span>Transfer Internal</span></div>
     <h1>{{ trx.nomor_polisi or trx.kode }}</h1>
@@ -19,11 +20,7 @@
     <div class="dk-sebar"><span>{{ lencana('TANPA_KONTROL') }}</span><span>Tidak ada dokumen pembanding</span></div>
   </section>
   {% if trx.status_transaksi == 'VOID' %}<p class="pesan pesan--err">Dibatalkan. {{ trx.void_alasan }}</p>{% elif trx.status_tiket == TIKET_DITUTUP_PAKSA %}<p class="pesan pesan--err">Tiket ditutup tanpa timbang kedua. {{ trx.tutup_paksa_alasan }}</p>{% endif %}
-  <div class="dk-aksi tanpa-cetak">
-    {% if final %}<a href="{{ PREFIX }}/transaksi/{{ trx.id }}/cetak" class="tbl">Pratinjau & cetak{% if cetak %} · {{ cetak|length }}×{% endif %}</a>{% elif trx.status_tiket == TIKET_TERBUKA and trx.status_transaksi != 'VOID' %}<a href="{{ PREFIX }}/tiket/{{ trx.id }}" class="tbl">Lanjutkan timbang kedua</a>{% endif %}
-    <a href="{{ PREFIX }}/pilih/{{ trx.arah }}" class="tbl halus">Timbang berikutnya</a>
-    <a href="{{ PREFIX }}/tiket" class="tbl halus">Tiket Aktif{% if JUMLAH_TIKET %} · {{ JUMLAH_TIKET }}{% endif %}</a>
-  </div>
+
   {% if pemeriksaan %}<section class="pesan {{ 'pesan--ok' if pemeriksaan.status == 'SELESAI' else 'pesan--err' }}"><b>Pemeriksaan historis {{ 'selesai' if pemeriksaan.status == 'SELESAI' else 'masih terbuka' }}.</b><p class="bantu">Penutupan pemeriksaan tidak mengubah angka, perlakuan kontrol transfer, atau stok.</p><a href="#pemeriksaan" data-buka-jejak>Lihat pemeriksaan →</a></section>{% endif %}
   <nav class="dk-tabs" aria-label="Rincian tiket transfer">
     {% for id,label in [('ringkasan','Ringkasan transfer'),('perhitungan','Perhitungan'),('jejak','Jejak & dokumen')] %}<a id="dk-tab-{{ id }}" href="#dk-{{ id }}" data-dk-tab="{{ id }}">{{ label }}</a>{% endfor %}

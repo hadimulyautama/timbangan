@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_rincian_kontrol.html" import kontrol as kontrol_detail %}
 {% from "macros.html" import lencana %}
 {% from '_panduan.html' import panel as panel_panduan %}
 {% set trx = b.trx %}
@@ -13,12 +14,7 @@
 {% block isi %}
 <div class="dk rd-page" data-detail-masuk data-riwayat-desain data-kode="{{ trx.kode }}">
   <h1>Detail riwayat timbang</h1>
-  <div class="rd-controls">
-    <a class="dk-kembali" href="{{ kembali }}" aria-label="Kembali">← {{ 'Kembali ke riwayat' if '/transaksi' in kembali else 'Kembali' }}</a>
-    <div class="rd-buttons"><button type="button" class="tbl halus" data-rd-guide hidden><span aria-hidden="true">ⓘ</span> Panduan</button>
-    {% if final %}<a href="{{ PREFIX }}/transaksi/{{ trx.id }}/cetak" class="tbl">Pratinjau &amp; cetak</a>{% elif trx.status_tiket == TIKET_TERBUKA and trx.status_transaksi != 'VOID' %}<a href="{{ PREFIX }}/tiket/{{ trx.id }}" class="tbl">Lanjutkan timbang kedua</a>{% endif %}
-    <button type="button" class="tbl halus" data-rd-actions-open hidden aria-label="Tindakan lainnya">⋯</button></div>
-  </div>
+  {{ kontrol_detail(trx, PREFIX, kembali, cetak, panduan=true, tindakan=true) }}
   <section class="rd-result" aria-label="Hasil timbang Barang Masuk">
     <div class="dk-sebar"><h2>{{ trx.nomor_polisi or trx.kode }} · {{ b.pihak_tampil }}</h2><span class="lencana">{{ 'Batal' if trx.status_transaksi == 'VOID' else ('Selesai timbang' if final else ('Menunggu timbang kedua' if trx.status_tiket == TIKET_TERBUKA else 'Ditutup tanpa timbang kedua')) }}</span></div>
     <p class="bantu">{{ trx.kode }} · {{ trx.tanggal|tgl(true) }} · {{ NAMA_JENIS.get(trx.jenis_kode,trx.jenis_kode) }}<br>{{ 'Titipan jasa · barang pelanggan' if trx.jasa else 'Pembelian · milik pabrik' }} · Sopir {{ trx.nama_sopir or 'Belum tercatat' }}</p>

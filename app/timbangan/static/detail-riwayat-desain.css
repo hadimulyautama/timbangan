@@ -27,3 +27,5 @@ body.padiflow-ui .rd-control-status .tbl{width:auto;min-height:44px;padding:9px 
 .rd-page{padding-bottom:80px}
 @media(max-width:650px){.rd-result{padding:16px}.rd-weight>strong{font-size:32px}.rd-result h2{font-size:20px}.rd-controls{align-items:start}.rd-buttons{justify-content:start}.rd-page .baris{flex-wrap:wrap;gap:8px}.rd-page .baris b{max-width:100%;overflow-wrap:anywhere}.rd-disclosure{padding:12px}}
 @media print{.rd-controls,.rd-page dialog,[data-rd-guide-fallback],[data-rd-actions-fallback]{display:none!important}}
+
+body.padiflow-ui .rd-result>.dk-integrasi{padding:14px 0 0;border:0;border-top:1px solid var(--pd-line);border-radius:0;box-shadow:none;background:transparent}
