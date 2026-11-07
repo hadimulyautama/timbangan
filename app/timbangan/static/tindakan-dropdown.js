@@ -30,9 +30,16 @@ function init(){
  const fallback=sumber.closest('[data-rd-actions-fallback]')||sumber.closest('details');
  if(fallback)fallback.hidden=true;sumber.hidden=true;dropdown.hidden=false;
  function posisi(){if(!dropdown.open)return;const rect=dropdown.getBoundingClientRect(),lebar=Math.min(280,innerWidth-32),kiri=Math.min(Math.max(rect.left,16),innerWidth-lebar-16);menu.style.left=(kiri-rect.left)+'px';menu.style.right='auto';}
- dropdown.addEventListener('toggle',posisi);window.addEventListener('resize',posisi);
- document.addEventListener('click',e=>{if(!dropdown.contains(e.target))dropdown.open=false;});
- dropdown.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();dropdown.open=false;pemicu.focus();}});
+ function tutupMenu(fokus=false){dropdown.open=false;pemicu.setAttribute('aria-expanded','false');if(fokus)pemicu.focus();}
+ pemicu.setAttribute('aria-expanded','false');
+ pemicu.addEventListener('click',e=>{e.preventDefault();dropdown.open=!dropdown.open;pemicu.setAttribute('aria-expanded',String(dropdown.open));posisi();});
+ dropdown.addEventListener('toggle',()=>{pemicu.setAttribute('aria-expanded',String(dropdown.open));posisi();});window.addEventListener('resize',posisi);
+ // Capture menangani klik/sentuh luar meski komponen lain menghentikan bubbling.
+ function luar(e){if(dropdown.open&&!dropdown.contains(e.target))tutupMenu();}
+ document.addEventListener('pointerdown',luar,true);document.addEventListener('click',luar,true);
+ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&dropdown.open){e.preventDefault();tutupMenu(true);}},true);
+ dropdown.addEventListener('focusout',e=>{if(e.relatedTarget&&!dropdown.contains(e.relatedTarget))tutupMenu();});
+ window.addEventListener('pagehide',()=>tutupMenu());
  slot.querySelectorAll('form').forEach(form=>{
   let menunggu=false;const pesan=document.createElement('p');pesan.className='pesan pesan--err';pesan.setAttribute('role','alert');pesan.hidden=true;form.append(pesan);
   form.addEventListener('submit',async e=>{
