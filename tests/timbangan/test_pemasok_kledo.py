@@ -110,6 +110,15 @@ async def test_nama_bebas_historis_tetap_bisa_dikirim_ulang(db, petugas, supplie
     t = await service.simpan_timbang_pertama(db, akun=petugas, data=data)
     t.supplier_id = None
     t.pihak_nama = "Nama Saat Dicatat Dulu"
+    # Simulasikan arsip sebelum snapshot isian awal diperkenalkan, bukan
+    # mengubah identitas tiket baru sementara audit aslinya masih berbeda.
+    import json
+    from app.timbangan.models import TimbanganAudit
+    audit = await db.scalar(select(TimbanganAudit).where(
+        TimbanganAudit.entitas_id == t.kode, TimbanganAudit.aksi == 'SIMPAN_TIMBANG_1'))
+    nilai = json.loads(audit.nilai_sesudah)
+    nilai.pop('isian_awal', None)
+    audit.nilai_sesudah = json.dumps(nilai)
     await db.commit()
     data.supplier_id = None
     data.pihak_nama = t.pihak_nama
