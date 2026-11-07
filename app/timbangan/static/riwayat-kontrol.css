@@ -1,0 +1,22 @@
+/* Hanya area kontrol; tabel, kartu, paginasi dan aksi tetap memakai kelas lama. */
+body.tf-riwayat .rh-heading{align-items:center}
+.rh-heading-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+body.tf-riwayat .rh-heading-actions>.tbl{width:auto;min-height:44px;padding:9px 13px}
+body.tf-riwayat form.rh-form{grid-template-columns:minmax(0,1fr) auto auto;align-items:end;padding:16px;background:var(--pd-sheet);border:1px solid var(--pd-line);border-radius:13px}
+body.tf-riwayat .rh-search-submit{width:auto;min-height:46px;margin:0}
+body.tf-riwayat .rh-more{grid-column:1/-1}
+body.tf-riwayat .rh-filter-trigger{width:auto;min-height:46px;margin:0}
+body.tf-riwayat .rh-more>summary[hidden]{display:none}
+body.tf-riwayat .rh-more>summary{min-height:46px;box-sizing:border-box;justify-content:center;margin:0}
+body.tf-riwayat .rh-more[open]>summary{margin:0}
+body.tf-riwayat .rh-filter-panel{grid-column:1/-1;display:grid;gap:14px;border-top:1px solid var(--pd-line);padding-top:14px}
+body.tf-riwayat .rh-more:not([open])>.rh-filter-panel{display:none}
+body.tf-riwayat .rh-period{max-width:520px}
+body.tf-riwayat .rh-form .rh-form-actions .tbl{width:auto;min-height:44px}
+.rh-guide-fallback{padding:12px;border:1px solid var(--pd-line);border-radius:9px}
+.rh-guide-fallback>summary{cursor:pointer;min-height:44px;align-content:center}
+[data-rh-guide-content]{display:grid;gap:14px}
+[data-rh-guide-content] p{margin:0}
+@media(max-width:650px){body.tf-riwayat form.rh-form{gap:8px;padding:12px;grid-template-columns:minmax(0,1fr) auto}body.tf-riwayat form.rh-form>label{grid-column:1/-1}body.tf-riwayat .rh-search-submit{grid-column:1;justify-self:start;min-width:88px}body.tf-riwayat .rh-filter-trigger{grid-column:2;grid-row:2}body.tf-riwayat .rh-advanced{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+@media(max-width:399px){body.tf-riwayat .rh-advanced{grid-template-columns:minmax(0,1fr)}}

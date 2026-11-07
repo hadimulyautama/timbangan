@@ -1,0 +1,29 @@
+body.padiflow-ui .rd-page{max-width:1160px;margin-inline:auto;width:100%;gap:18px}
+.rd-page h1{font-size:25px;font-weight:600;line-height:1.35}
+.rd-controls,.rd-buttons{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+body.padiflow-ui .rd-page .rd-buttons>.tbl{width:auto;min-height:44px;flex:0 0 auto;padding:9px 13px;white-space:normal}
+.rd-result{display:grid;gap:20px;padding:22px;border:1px solid var(--pd-line);border-radius:13px;background:var(--pd-sheet)}
+.rd-result h2{font-size:22px}
+.rd-weight{display:grid;gap:6px}
+.rd-weight>span{color:var(--pd-muted);font-size:13px}
+.rd-weight>strong{font-size:36px;line-height:1.35;font-weight:600;font-variant-numeric:tabular-nums}
+.rd-control-status{display:grid;gap:10px;padding:14px;border-left:3px solid var(--tf-accent);background:var(--pd-soft)}
+body.padiflow-ui .rd-control-status .tbl{width:auto;min-height:44px;padding:9px 13px}
+.rd-disclosure{border:1px solid var(--pd-line);border-radius:13px;background:var(--pd-sheet);padding:14px 16px;min-width:0}
+.rd-disclosure>summary{display:flex;align-items:center;gap:12px;justify-content:space-between;min-height:44px;cursor:pointer;font-size:14px;font-weight:600;list-style:none}
+.rd-disclosure>summary::after{content:'⌄';color:var(--pd-muted)}
+.rd-disclosure>summary::-webkit-details-marker{display:none}
+.rd-disclosure>summary small{flex:1;text-align:right;font-weight:400}
+.rd-disclosure[open]>summary{margin-bottom:14px}
+.rd-page .rd-disclosure .kartu{box-shadow:none;padding:14px;border-radius:9px;margin-block:10px}
+.rd-page .rd-disclosure [data-dk-panel]{scroll-margin-top:90px}
+.rd-page dialog .kartu{padding:12px;box-shadow:none}
+.rd-page dialog form{min-width:0}
+.rd-page dialog :is(input,select,textarea){box-sizing:border-box;width:100%;max-width:100%;font-size:16px;min-width:0}
+.rd-page dialog label:has(input[type=checkbox]){display:flex;gap:8px}
+.rd-page dialog input[type=checkbox]{width:20px;min-width:20px}
+.rd-guide-content{display:grid;gap:14px}
+.rd-page [hidden]{display:none!important}
+.rd-page{padding-bottom:80px}
+@media(max-width:650px){.rd-result{padding:16px}.rd-weight>strong{font-size:32px}.rd-result h2{font-size:20px}.rd-controls{align-items:start}.rd-buttons{justify-content:start}.rd-page .baris{flex-wrap:wrap;gap:8px}.rd-page .baris b{max-width:100%;overflow-wrap:anywhere}.rd-disclosure{padding:12px}}
+@media print{.rd-controls,.rd-page dialog,[data-rd-guide-fallback],[data-rd-actions-fallback]{display:none!important}}

@@ -123,7 +123,7 @@ async def test_cache_rilis_dan_kedua_formulir_luring(lokal):
         await page.wait_for_function('navigator.serviceWorker.controller')
         await page.reload()
         await page.goto(f'{url}/timbangan/tiket/{tid}')
-        cached=await page.evaluate('async()=>Array.from(await (await caches.open("timbangan-v101")).keys()).map(r=>new URL(r.url).pathname)')
+        cached=await page.evaluate('async()=>Array.from(await (await caches.open("timbangan-v"+document.documentElement.dataset.versi)).keys()).map(r=>new URL(r.url).pathname)')
         for name in ['panduan.css','timbang-pertama-desain.css','timbang-pertama-desain.js','timbang-kedua-desain.css','timbang-kedua-desain.js']:
             assert '/timbangan/static/'+name in cached
         await context.set_offline(True)

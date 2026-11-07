@@ -2,60 +2,15 @@
 {% from "pengiriman_muatan.html" import rincian_kiriman %}
 {% from "macros.html" import isian, berat, konteks_jenis, pilihan_sopir, pilihan_kendaraan %}
 
+{% from '_panduan.html' import panel as panel_panduan %}
 {% set trx = b.trx %}
+{% set koreksi_terbuka = trx.status_tiket == TIKET_TERBUKA %}
 {% set m = trx.muatan[0] if trx.muatan else None %}
 
 {% macro angka_isian(v) -%}{{ ((v|string).rstrip('0').rstrip('.') if '.' in (v|string) else (v|string))|replace('.', ',') if v is not none else '' }}{%- endmacro %}
 
-{% block judul %}Koreksi tiket timbang · {{ trx.kode }}{% endblock %}
-{% block bar_judul %}Koreksi{% endblock %}
-{% block bar_sub %}{{ trx.kode }}{% endblock %}
-{% block lebar %}lebar{% endblock %}
-
-{% block isi %}
-<div class="cf-page">
-  <h1>Koreksi tiket timbang</h1>
-  <section class="cf-panel cf-identity">
-    <div class="cf-row"><strong>{{ trx.kode }}</strong><span class="lencana">{{ 'Batal' if trx.status_transaksi == 'VOID' else ('Selesai' if trx.status_tiket == TIKET_SELESAI else ('Ditutup tanpa timbang kedua' if trx.status_tiket == TIKET_DITUTUP_PAKSA else 'Tiket terbuka')) }}</span></div>
-    <div>{{ aturan.nama }} · {{ ARAH_LABEL.get(trx.arah, trx.arah) }}{{ ' · Titipan pelanggan' if trx.jasa }}</div>
-    <div class="cf-row"><b>{{ trx.nomor_polisi or 'Tanpa kendaraan' }}</b><span>{{ b.pihak_tampil }}</span></div>
-    <small class="redup">Revisi {{ trx.jumlah_revisi or 0 }} · versi tiket diperiksa saat menyimpan.</small>
-  </section>
-
-  <div class="pesan pesan--ok">
-    Angka lama tidak hilang. Setiap koreksi menulis baris baru di jejak audit
-    berisi nilai sebelum dan sesudah.
-  </div>
-
-  {% if batas_tautan %}<p class="pesan" data-cf-batas>{{ batas_tautan }}</p>{% endif %}
-  <div class="bantu">Kosongkan kolom yang tidak perlu diubah.</div>
-
-  <form method="post" action="{{ PREFIX }}/transaksi/{{ trx.id }}/koreksi" class="cf-form" data-correction-form data-cf-preview="{{ PREFIX }}/transaksi/{{ trx.id }}/koreksi/pratinjau">
-  {# Versi tiket saat halaman ini DIBUKA. Tanpa ini, formulir yang terbuka
-     sebelum orang lain mengoreksi akan menimpa koreksi itu saat disimpan —
-     diam-diam, dan yang kehilangan tak pernah tahu. Temuan QA T-04. #}
-  <input type="hidden" name="versi" value="{{ versi }}">
-
-  {# ── Nilai ASLI, apa adanya, tanpa pembulatan ──
-     Borang ini mengisi ulang tiap kolom dengan nilai yang SUDAH DIBULATKAN
-     (|angka 0 desimal; tara 3 desimal padahal disimpan 4), dan rutenya
-     memperlakukan tiap kolom terisi sebagai perubahan. Akibatnya memperbaiki
-     NAMA SOPIR ikut mengubah tara 0,0858 → 0,086 dan nota 13.990,5 → 13.990.
-     Temuan QA T-06.
-
-     Nilai asli dikirim di sini supaya rutenya bisa membandingkan dan hanya
-     menerapkan yang benar-benar berbeda. #}
-  <input type="hidden" name="asli_timbang1_kg" value="{{ angka_isian(trx.timbang1_kg) }}">
-  <input type="hidden" name="asli_timbang2_kg" value="{{ angka_isian(trx.timbang2_kg) }}">
-  <input type="hidden" name="asli_nomor_polisi" value="{{ trx.nomor_polisi or '' }}">
-  <input type="hidden" name="asli_nama_sopir" value="{{ trx.nama_sopir or '' }}">
-  <input type="hidden" name="asli_nomor_acuan" value="{{ m.nomor_acuan if m else '' }}">
-  <input type="hidden" name="asli_berat_acuan_kg" value="{{ angka_isian(m.berat_acuan_kg) if m else '' }}">
-  <input type="hidden" name="asli_jumlah_karung" value="{{ m.jumlah_karung if m else '' }}">
-  <input type="hidden" name="asli_tara_per_karung_kg" value="{{ angka_isian(m.tara_per_karung_kg) if m else '' }}">
-
-    <div class="cf-columns"><div class="cf-main">
-    <section class="cf-panel"><h2>Angka timbang</h2>
+{% macro panel_angka() %}
+    <section class="cf-panel kc-weights"><h2>Angka timbang</h2>
     <p class="bantu">{% if trx.partai %}Partai kecil: hasil dihitung dari seluruh baris penimbangan. Mengoreksi kolom ini tidak mengganti rincian tiap penimbangan.{% elif trx.cara_timbang == 'SEKALI' %}Sekali timbang: bacaan ini langsung menjadi dasar berat barang.{% elif timbang_pertama_bermuatan(trx.arah) %}Bermuatan dahulu, kemudian kosong setelah bongkar.{% else %}Kosong dahulu, kemudian bermuatan setelah muat.{% endif %}</p>
     <div class="cf-paired">
     {{ berat('timbang1_kg', 'Timbang pertama', angka_isian(trx.timbang1_kg), '', false) }}
@@ -64,7 +19,10 @@
     {% endif %}
 
     </div></section>
-    <section class="cf-panel"><h2>Identitas kendaraan &amp; pihak</h2><div class="cf-paired">
+
+{% endmacro %}
+{% macro panel_identitas() %}
+    <section class="cf-panel kc-identity"><h2>Identitas kendaraan &amp; pihak</h2><div class="cf-paired">
     {# Wajib pada arah yang memang mewajibkannya — koreksi tidak boleh jadi
        jalan memutar untuk mengosongkannya. #}
     {{ pilihan_kendaraan(kendaraan, trx.nomor_polisi or '', trx.arah in (MASUK, KELUAR),
@@ -95,8 +53,54 @@
       </select>{% endif %}
     </div>
 
-    </section><section class="cf-panel">
-      <h2>Dokumen &amp; muatan</h2>
+    </section>
+{% endmacro %}
+{% block judul %}Koreksi tiket timbang · {{ trx.kode }}{% endblock %}
+{% block bar_judul %}Koreksi{% endblock %}
+{% block bar_sub %}{{ trx.kode }}{% endblock %}
+{% block gaya_tambahan %}<link rel="stylesheet" href="{{ PREFIX }}/static/panduan.css?v={{ VERSI }}"><link rel="stylesheet" href="{{ PREFIX }}/static/koreksi-desain.css?v={{ VERSI }}">{% endblock %}
+{% block lebar %}lebar{% endblock %}
+
+{% block isi %}
+<div class="cf-page kc-page" data-kc-open="{{ 'true' if koreksi_terbuka else 'false' }}">
+  <div class="kc-heading"><h1>{{ 'Koreksi tiket terbuka' if koreksi_terbuka else 'Koreksi riwayat timbang' }}</h1><button type="button" class="tbl halus" data-kc-guide hidden><span aria-hidden="true">ⓘ</span> Panduan</button></div>
+  <section class="cf-panel cf-identity">
+    <div class="cf-row"><strong>{{ trx.kode }}</strong><span class="lencana">{{ 'Batal' if trx.status_transaksi == 'VOID' else ('Selesai' if trx.status_tiket == TIKET_SELESAI else ('Ditutup tanpa timbang kedua' if trx.status_tiket == TIKET_DITUTUP_PAKSA else 'Tiket terbuka')) }}</span></div>
+    <div>{{ aturan.nama }} · {{ ARAH_LABEL.get(trx.arah, trx.arah) }}{{ ' · Titipan pelanggan' if trx.jasa }}</div>
+    <div class="cf-row"><b>{{ trx.nomor_polisi or 'Tanpa kendaraan' }}</b><span>{{ b.pihak_tampil }}</span></div>
+    <small class="redup">Revisi {{ trx.jumlah_revisi or 0 }}</small>
+  </section>
+
+  {% if batas_tautan %}<p class="pesan" data-cf-batas>{{ batas_tautan }}</p>{% endif %}
+  <div class="bantu">Ubah hanya data yang salah. Data lainnya tetap.</div>
+
+  <form method="post" action="{{ PREFIX }}/transaksi/{{ trx.id }}/koreksi" class="cf-form" data-correction-form data-cf-preview="{{ PREFIX }}/transaksi/{{ trx.id }}/koreksi/pratinjau">
+  {# Versi tiket saat halaman ini DIBUKA. Tanpa ini, formulir yang terbuka
+     sebelum orang lain mengoreksi akan menimpa koreksi itu saat disimpan —
+     diam-diam, dan yang kehilangan tak pernah tahu. Temuan QA T-04. #}
+  <input type="hidden" name="versi" value="{{ versi }}">
+
+  {# ── Nilai ASLI, apa adanya, tanpa pembulatan ──
+     Borang ini mengisi ulang tiap kolom dengan nilai yang SUDAH DIBULATKAN
+     (|angka 0 desimal; tara 3 desimal padahal disimpan 4), dan rutenya
+     memperlakukan tiap kolom terisi sebagai perubahan. Akibatnya memperbaiki
+     NAMA SOPIR ikut mengubah tara 0,0858 → 0,086 dan nota 13.990,5 → 13.990.
+     Temuan QA T-06.
+
+     Nilai asli dikirim di sini supaya rutenya bisa membandingkan dan hanya
+     menerapkan yang benar-benar berbeda. #}
+  <input type="hidden" name="asli_timbang1_kg" value="{{ angka_isian(trx.timbang1_kg) }}">
+  <input type="hidden" name="asli_timbang2_kg" value="{{ angka_isian(trx.timbang2_kg) }}">
+  <input type="hidden" name="asli_nomor_polisi" value="{{ trx.nomor_polisi or '' }}">
+  <input type="hidden" name="asli_nama_sopir" value="{{ trx.nama_sopir or '' }}">
+  <input type="hidden" name="asli_nomor_acuan" value="{{ m.nomor_acuan if m else '' }}">
+  <input type="hidden" name="asli_berat_acuan_kg" value="{{ angka_isian(m.berat_acuan_kg) if m else '' }}">
+  <input type="hidden" name="asli_jumlah_karung" value="{{ m.jumlah_karung if m else '' }}">
+  <input type="hidden" name="asli_tara_per_karung_kg" value="{{ angka_isian(m.tara_per_karung_kg) if m else '' }}">
+
+    <div class="cf-columns"><div class="cf-main">
+    {% if koreksi_terbuka %}{{ panel_identitas() }}{{ panel_angka() }}{% else %}{{ panel_angka() }}{{ panel_identitas() }}{% endif %}<details class="cf-panel kc-documents">
+      <summary>Dokumen &amp; muatan</summary>
       {% if trx.pengiriman_snapshot %}
       <p class="bantu">Koreksi muatan dan pelanggan melalui PadiFlow. Cuplikan bukti ini dipertahankan; koreksi bacaan jembatan tetap memakai alur dan izin lama.</p>
       {{ rincian_kiriman(trx.pengiriman_snapshot, true) }}
@@ -117,7 +121,8 @@
       </div>
 
       {% endif %}
-    </section></div><aside class="cf-panel cf-review">
+    </details></div><aside class="cf-panel cf-review">
+    {% if koreksi_terbuka %}<p class="kc-open-note">Tiket tetap terbuka. Koreksi ini tidak menyelesaikan penimbangan.</p>{% endif %}
     <section data-cf-hasil aria-live="polite"><h2>Perubahan yang akan disimpan</h2><p>Memeriksa isian…</p></section>
     <div class="grup">
       <div class="lbl">Alasan koreksi</div>
@@ -125,7 +130,7 @@
                 placeholder="Contoh: salah ketik berat nota"></textarea>
     </div>
 
-    <small class="bantu">Wajib diisi. Nilai sebelum dan sesudah, alasan, pelaku, perangkat serta revisi tetap tercatat sesuai audit lama.</small>
+
     </aside></div>
     <p class="pesan pesan--err" data-cf-error role="alert" hidden></p>
     <div class="cf-actions"><a class="tbl halus" data-cf-cancel href="{{ PREFIX }}/transaksi/{{ trx.id }}">Batal</a>
@@ -145,7 +150,7 @@
   {% if akun.is_admin %}
     <details class="cf-panel cf-admin tanpa-cetak" style="margin-top:16px">
       <summary style="cursor:pointer;font-weight:700;font-size:14px">
-        Salah pilih jenis atau arah barang?
+        Ubah jenis &amp; arah · Admin
       </summary>
       <div class="bantu" style="margin-top:10px">
         Angka timbangnya tidak perlu diketik ulang. Petugas menimbang apa yang
@@ -200,6 +205,16 @@
       </form>
     </details>
   {% endif %}
+  <details class="kc-guide-fallback" data-kc-guide-fallback><summary><span aria-hidden="true">ⓘ</span> Panduan koreksi</summary><div class="kc-guide-content" data-kc-guide-content>
+    <section><h3>Mengubah data</h3><p>Ubah hanya data yang salah. Kolom kosong mempertahankan nilai lama, dengan isian wajib tetap mengikuti aturan. Kontak pihak wajib dipilih dari daftar yang disediakan. Nilai asli dan presisi tersimpan tetap dipertahankan.</p></section>
+    <section><h3>{{ 'Tiket terbuka' if koreksi_terbuka else 'Riwayat selesai' }}</h3><p>{% if koreksi_terbuka %}Tiket tetap terbuka. Hasil akhir belum tersedia sampai timbang kedua diselesaikan. Bacaan kedua hanya dapat dikoreksi bila sudah tercatat; halaman koreksi tidak menambahkan bacaan kedua baru.{% else %}Hasil resmi dan status kontrol dihitung ulang oleh server berdasarkan jenis, cara timbang, rincian muatan dan aturan tiket. Koreksi partai kecil tidak mengganti rincian tiap penimbangan.{% endif %}</p></section>
+    <section><h3>Pratinjau &amp; audit</h3><p>Angka lama tidak hilang. Setiap koreksi menulis baris baru di jejak audit berisi nilai sebelum dan sesudah. Alasan wajib diisi. Nilai sebelum dan sesudah, alasan, pelaku, perangkat serta revisi tetap tercatat sesuai audit lama.</p><p>Pratinjau belum disimpan. Hasil resmi, izin, versi dan integrasi diperiksa kembali oleh server. Versi tiket diperiksa saat menyimpan agar perubahan orang lain tidak tertimpa.</p></section>
+    <section><h3>Pembatasan &amp; jaringan</h3><p>Tiket tertaut PadiFlow mengikuti pembatasan yang ditampilkan. Muatan dan pelanggan pengiriman berasal dari PadiFlow. Bobot dan kemasan retur tertaut dilindungi lebih ketat. Koreksi memerlukan jaringan dan tidak masuk antrean kiriman ulang otomatis. Jika belum terkonfirmasi, isian tetap tersedia; periksa tiket terbaru sebelum mencoba kembali.</p></section>
+    {% if akun.is_admin %}<section><h3>Jenis &amp; arah</h3><p>Perubahan jenis dan arah memakai tindakan terpisah dengan alasan. Angka tetap dipakai; opsi tukar urutan muncul hanya bila bacaan kedua sudah ada.</p></section>{% endif %}
+  </div></details>
+  {% call panel_panduan('kc-panduan', 'Panduan koreksi', {}, {'data-kc-guide-close':''}) %}<div data-kc-guide-slot></div>{% endcall %}
   <dialog class="cf-panel" data-cf-discard><h2>Isian belum disimpan</h2><p>Buang perubahan dan kembali ke rincian?</p><div class="cf-actions"><button type="button" class="tbl halus" data-cf-keep>Tetap isi</button><button type="button" class="tbl bahaya" data-cf-leave>Buang &amp; kembali</button></div></dialog>
 </div>
 {% endblock %}
+
+{% block skrip %}<script src="{{ PREFIX }}/static/koreksi-desain.js?v={{ VERSI }}" defer></script>{% endblock %}
