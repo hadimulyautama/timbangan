@@ -22,8 +22,8 @@ function pesan(t){$('[data-cp-status]').hidden=!t;$('[data-cp-status]').textCont
 function pilihan(){
  var f=format(),pdf=keluaran()==='pdf';
  root.querySelectorAll('[data-paper]').forEach(function(x){x.hidden=x.dataset.paper!==f;});
- $('[data-keluaran]').hidden=f==='NCR';$('[data-ncr-note]').hidden=f!=='NCR';$('[data-printer-info]').hidden=pdf;
- $('[data-cp-jalankan]').textContent=pdf?'Siapkan cetak melalui PDF':'Cetak langsung · '+rangkap()+' rangkap';
+ $('[data-keluaran]').hidden=true;$('[data-ncr-note]').hidden=f!=='NCR';$('[data-printer-info]').hidden=pdf;
+ $('[data-cp-jalankan]').textContent=pdf?'Siapkan cetak melalui PDF':'Cetak struk · '+rangkap()+' rangkap';
  $('[data-cp-keterangan]').textContent=pdf?'Untuk mencetak ke kertas melalui PDF. Jika hanya membuka, mengunduh, atau berbagi, gunakan area Dokumen PDF di atas.':rangkap()+' rangkap dikirim dalam satu pekerjaan. Periksa seluruh lembar sebelum mengonfirmasi hasil fisik.';
  var p=window.TeraFlowPrinter;$('[data-alamat-printer]').textContent=(p&&p.alamat())||'Belum disetel di perangkat ini';
  $('[data-cp-label]').textContent=(f==='NCR'?'Setengah NCR · 215 × 165 mm':'Struk 80 mm')+' · pratinjau revisi tiket saat halaman dibuka';

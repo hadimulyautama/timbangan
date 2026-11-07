@@ -15,10 +15,10 @@
       <section class="kartu cp-pdf" data-pdf-digital aria-labelledby="cp-pdf-judul">
         <h2 id="cp-pdf-judul">Dokumen PDF</h2>
         <p class="bantu">Buka, unduh, atau bagikan PDF tanpa alasan cetak ulang. Tidak menambah hitungan cetak fisik.</p>
-        <a class="tbl blok" href="{{ PREFIX }}/transaksi/{{ trx.id }}/cetak/80mm" data-pdf-digital-link data-unduh data-dokumen="pdf" target="_blank" rel="noopener">PDF struk 80 mm</a>
+        <a class="tbl blok" href="{{ PREFIX }}/transaksi/{{ trx.id }}/cetak/80mm" data-pdf-digital-link data-unduh data-dokumen="pdf" target="_blank" rel="noopener">Unduh / bagikan PDF</a>
         <div class="pesan" data-hasil-unduh data-pesan="PDF belum dapat dibuka atau dibagikan. Periksa jaringan dan sesi, lalu coba lagi. Tidak ada cetak fisik yang dicatat." role="status" hidden></div>
       </section>
-      <details class="kartu cp-fisik" data-cetak-fisik {% if pekerjaan %}open{% endif %}><summary>Cetak fisik</summary><div class="cp-fisik-isi">
+      <section class="kartu cp-fisik" data-cetak-fisik><h2>Cetak struk</h2><div class="cp-fisik-isi">
         <fieldset class="cp-options" hidden><legend class="sr-only">Format bukti timbang</legend>
           <label><input type="radio" name="cp-format" value="80MM" checked> Struk 80 mm</label>
         </fieldset>
@@ -28,7 +28,7 @@
         {% if pekerjaan and pekerjaan.format == 'NCR' %}<input type="radio" name="cp-format" value="NCR" hidden>{% endif %}
         {% if pekerjaan and pekerjaan.keluaran == 'pdf' %}<input type="radio" name="cp-keluaran" value="pdf" hidden>{% endif %}
         <p class="bantu" data-ncr-note hidden>Cetak setengah NCR melalui PDF · 215 × 165 mm. Konfirmasikan hanya setelah kertas benar-benar tercetak.</p>
-        <div data-printer-info><b>Printer pos</b><p data-alamat-printer></p><a href="{{ PREFIX }}/printer">Siapkan printer</a></div>
+        <div data-printer-info><b>Printer pos</b><p data-alamat-printer></p><a href="{{ PREFIX }}/printer?kembali={{ (request.url.path ~ ('?' ~ request.url.query if request.url.query else ''))|urlencode }}">Atur printer</a></div>
         <label class="grup" {% if not riwayat %}hidden{% endif %}>Alasan cetak ulang
           <input class="fld" name="alasan" maxlength="2000" {% if riwayat %}required{% endif %} autocomplete="off" placeholder="Jelaskan alasan cetak ulang">
         </label>
@@ -43,13 +43,13 @@
           <p class="bantu">Konfirmasi memakai pencetak, alasan, format, dan revisi saat pekerjaan disiapkan. Jangan mengirim ulang sebelum memeriksa kertas.</p>
         </section>
         <button class="tbl halus blok" data-cp-segar type="button" hidden>Perbarui pratinjau</button>
-      </div></details>
-      <section class="kartu cp-history"><h2>Riwayat cetak fisik · {{ riwayat|length }}</h2>
+      </div></section>
+      <details class="kartu cp-history"><summary>Riwayat cetak fisik · {{ riwayat|length }}</summary>
         {% for row in riwayat %}{% set c=row.c %}<article><b>Cetak ke-{{ c.urutan }} · {{ c.format }} · revisi {{ c.revisi }}</b><p>{{ c.waktu|tgl_jam }} · {{ row.nama }}</p><p>{{ row.metode }}</p>{% if c.alasan %}<p>Alasan: {{ c.alasan }}</p>{% endif %}</article>{% else %}<p>Belum ada cetakan fisik yang tercatat.</p>{% endfor %}
         <p class="bantu">Pratinjau dan PDF siap bukan bukti kertas sudah tercetak. Riwayat lama tidak menjamin salinan dokumen historis persis tersedia.</p>
-      </section>
+      </details>
     </div>
-    <section class="cp-preview" aria-label="Pratinjau dokumen"><p data-cp-label>Struk 80 mm · revisi {{ trx.jumlah_revisi or 0 }}</p>
+    <details class="cp-preview" aria-label="Pratinjau dokumen"><summary>Pratinjau dokumen</summary><p data-cp-label>Struk 80 mm · revisi {{ trx.jumlah_revisi or 0 }}</p>
       {% for f in (['80MM','NCR'] if pekerjaan and pekerjaan.format == 'NCR' else ['80MM']) %}<article class="cp-paper {{ 'cp-paper--ncr' if f == 'NCR' }}" data-paper="{{ f }}" {% if f == 'NCR' %}hidden{% endif %}>
         <header><b>{{ umum.perusahaan }}</b><div>{{ umum.alamat }}</div><div>{{ umum.telepon }}</div><h2>BUKTI TIMBANG</h2>{% if umum.cetakan_ke > 1 %}<b>CETAKAN ULANG ke-{{ umum.cetakan_ke }}</b>{% endif %}{% if trx.jumlah_revisi %}<div>Revisi {{ trx.jumlah_revisi }}</div>{% endif %}</header>
         <dl><dt>Nomor tiket</dt><dd>{{ trx.kode }}</dd><dt>Tanggal</dt><dd>{{ trx.tanggal|tgl }}</dd><dt>{{ 'Pengirim' if umum.arah_masuk else 'Pihak' }}</dt><dd>{{ umum.pihak }}</dd><dt>Kegiatan</dt><dd>{{ aturan.nama }}</dd>{% if not trx.partai %}<dt>Nomor polisi</dt><dd>{{ trx.nomor_polisi or '—' }}</dd><dt>Sopir</dt><dd>{{ trx.nama_sopir or '—' }}</dd>{% endif %}{% if umum.muatan and umum.muatan[0].nomor_acuan %}<dt>{{ 'Nota' if umum.arah_masuk else 'Surat jalan' }}</dt><dd>{{ umum.muatan[0].nomor_acuan }}</dd>{% endif %}</dl>
@@ -61,9 +61,9 @@
         <p class="cp-foot">Ditandatangani kedua pihak sebagai bukti</p>
       </article>{% endfor %}
       <p class="bantu">Pratinjau menyesuaikan layar · ukuran dokumen cetak tetap. Dokumen panjang dapat terdiri dari beberapa halaman.</p>
-    </section>
+    </details>
   </div>
-  <noscript><p>Aktifkan JavaScript untuk pratinjau interaktif dan konfirmasi printer.</p><a href="{{ PREFIX }}/transaksi/{{ trx.id }}/cetak/80mm" target="_blank">PDF struk 80 mm</a></noscript>
+  <noscript><p>Aktifkan JavaScript untuk pratinjau interaktif dan konfirmasi printer.</p><a href="{{ PREFIX }}/transaksi/{{ trx.id }}/cetak/80mm" target="_blank">Unduh / bagikan PDF</a></noscript>
   <script type="application/json" data-cp-job>{{ pekerjaan|tojson }}</script>
 </section>
 {% endblock %}

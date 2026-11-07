@@ -5,7 +5,7 @@ from playwright.async_api import async_playwright
 from test_web import app_uji,klien,login  # noqa: F401
 from test_pengiriman_gabungan_browser import alamat_ui  # noqa: F401
 from test_rincian_transfer_browser import browser_uji
-OUT=Path(__file__).resolve().parents[3]/'gambar'
+OUT=Path('/private/tmp/teraflow-printer-ringkas-bukti')
 
 @pytest.mark.parametrize('width',[320,390,1440])
 async def test_petunjuk_dirty_hasil_dan_cetak_tidak_pasti(klien,alamat_ui,width):
@@ -29,21 +29,25 @@ async def test_petunjuk_dirty_hasil_dan_cetak_tidak_pasti(klien,alamat_ui,width)
         text=await page.locator('[data-pp-help-content]').text_content();assert '48 kolom' in text and 'PDF' in text and 'Kode perangkat akun' in text
         await page.keyboard.press('Escape');assert await page.evaluate("localStorage.getItem('timbangan-printer')")==storage
         OUT.mkdir(parents=True,exist_ok=True);await page.screenshot(path=str(OUT/f'printer-{width}.png'),full_page=True)
+        await page.locator('[data-pp-edit]').click()
         await page.locator('[name=printer_url]').fill('https://printer.invalid')
         assert await page.locator('[data-periksa-printer]').is_disabled()
         assert await page.locator('[data-cetak]').get_attribute('aria-disabled')=='true'
         await page.locator('[data-cetak]').evaluate('e=>e.click()');assert not calls
-        await page.locator('[data-simpan-printer]').click();assert 'belum diperiksa' in await page.locator('[data-pp-summary]').inner_text()
-        await page.locator('[data-periksa-printer]').click();await page.wait_for_function("document.querySelector('[data-pp-status]').textContent==='Sambungan berhasil'")
+        await page.locator('[data-simpan-printer]').click();await page.wait_for_function("document.querySelector('[data-pp-status]').textContent==='Sambungan berhasil'")
         assert all('<text' not in body and '<feed' not in body and '<cut' not in body for method,body in calls)
         assert 'Alamat disimpan' not in await page.locator('[data-pp-result]').inner_text()
+        assert not await page.locator('[data-pp-editor]').is_visible()
+        await page.screenshot(path=str(OUT/f'printer-siap-{width}.png'),full_page=True)
         await page.locator('[data-pp-details]>summary').click();assert 'Layanan cetak' in await page.locator('[data-laporan-printer]').inner_text()
+        await page.locator('[data-pp-test]>summary').click()
         mode['kind']='cover';await page.locator('[data-cetak]').click();await page.wait_for_function("document.querySelector('[data-pp-summary]').textContent.includes('Penutup printer terbuka')")
         mode['kind']='unknown';before=len(calls)
         await page.locator('[data-cetak]').evaluate('e=>{e.click();e.click()}')
         await page.wait_for_function("document.querySelector('[data-pp-status]').textContent==='Hasil cetak belum pasti'")
         assert len(calls)==before+1
         assert 'sebelum mengulang' in await page.locator('[data-pp-summary]').inner_text()
+        await page.locator('[data-pp-edit]').click()
         assert not await page.locator('[name=printer_url]').evaluate('e=>e.readOnly')
         assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
         assert not errors,errors;await b.close()
@@ -71,6 +75,7 @@ async def test_kembali_dari_printer_diperiksa_otomatis_tanpa_membuang_ketikan(kl
             assert not any(k in r.request.post_data for k in ('<text','<feed','<cut'))
             await r.fulfill(content_type='text/xml',body='<response success="true"/>')
         await page.route('https://printer.invalid/**',status)
+        await page.locator('[data-pp-edit]').click()
         await page.locator('[name=printer_url]').fill('https://printer.invalid')
         await page.locator('[data-simpan-printer]').click()
         await page.evaluate("window.dispatchEvent(new Event('online'))")
@@ -79,10 +84,36 @@ async def test_kembali_dari_printer_diperiksa_otomatis_tanpa_membuang_ketikan(kl
         await page.evaluate("Object.defineProperty(document,'visibilityState',{value:'hidden',configurable:true});document.dispatchEvent(new Event('visibilitychange'));Object.defineProperty(document,'visibilityState',{value:'visible',configurable:true});document.dispatchEvent(new Event('visibilitychange'))")
         await page.wait_for_timeout(400)
         assert len(calls)==2
+        await page.locator('[data-pp-edit]').click()
         await page.locator('[name=printer_url]').fill('https://alamat-baru.invalid')
         await page.evaluate("window.dispatchEvent(new Event('online'))")
         await page.wait_for_timeout(400)
         assert len(calls)==2
         assert await page.locator('[name=printer_url]').input_value()=='https://alamat-baru.invalid'
         assert await page.evaluate("localStorage.getItem('timbangan-printer')")=='https://printer.invalid'
+        await b.close()
+
+@pytest.mark.parametrize('target',['https://example.invalid','//example.invalid','http://[','/timbangan/transaksi/1/cetak'])
+async def test_kembali_hanya_ke_cetak_lokal(klien,target):
+    await login(klien)
+    response=await klien.get('/timbangan/printer',params={'kembali':target})
+    assert response.status_code==200
+    assert ('Kembali ke cetak tiket' in response.text)==(target=='/timbangan/transaksi/1/cetak')
+
+async def test_simpan_ditolak_tetap_isian_tanpa_periksa(klien,alamat_ui):
+    await login(klien)
+    async with async_playwright() as pw:
+        b,ctx,page=await browser_uji(pw,klien,alamat_ui,390)
+        await page.goto(alamat_ui+'/timbangan/printer')
+        await page.locator('[data-pos-printer][data-pp-ready]').wait_for()
+        await page.locator('#pembuka').wait_for(state='hidden')
+        await page.locator('[data-pp-edit]').click()
+        await page.locator('[name=printer_url]').fill('https://gagal.invalid')
+        calls=[]
+        await page.route('https://gagal.invalid/**',lambda r:calls.append(r.request.url))
+        await page.evaluate("() => {Storage.prototype.setItem=function(){throw new Error('kuota uji')};}")
+        await page.locator('[data-simpan-printer]').click()
+        assert 'belum tersimpan' in await page.locator('[data-pp-summary]').inner_text()
+        assert await page.locator('[name=printer_url]').input_value()=='https://gagal.invalid'
+        assert not calls
         await b.close()

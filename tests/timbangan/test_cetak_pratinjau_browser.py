@@ -24,6 +24,12 @@ async def test_ui_pratinjau_hasil_tidak_pasti_dan_cetak_ulang(klien,alamat_ui,wi
         await page.locator('[data-cetak-halaman]').wait_for()
         await page.evaluate("localStorage.setItem('timbangan-printer','http://127.0.0.1:9999')")
         assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+        assert not await page.locator('[data-keluaran]').is_visible()
+        back=await page.locator('[data-printer-info] a').get_attribute('href')
+        assert 'kembali=' in back
+        await page.goto(alamat_ui+back)
+        await page.get_by_role('link',name='← Kembali ke cetak tiket',exact=True).click()
+        await page.locator('[data-cp-jalankan]').wait_for()
         OUT.mkdir(exist_ok=True,parents=True)
         await page.screenshot(path=str(OUT/f'cetak-{width}-{theme}-{os.environ.get("UJI_BROWSER","chromium")}.png'),full_page=True)
         jobs=[];mode={'value':'unknown'}
@@ -34,11 +40,11 @@ async def test_ui_pratinjau_hasil_tidak_pasti_dan_cetak_ulang(klien,alamat_ui,wi
             if mode['value']=='unknown':return await r.abort()
             return await r.fulfill(status=200,content_type='text/xml',body='<response success="true"/>')
         await page.route('**/cgi-bin/epos/**',printer)
-        await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
+        assert await page.locator('[data-cp-jalankan]').is_visible()
         await page.locator('[data-cp-jalankan]').evaluate('(e)=>{e.click();e.click()}')
         await page.wait_for_function("document.querySelector('[data-cp-status]').textContent.includes('Jangan kirim ulang')")
         assert len(jobs)==1
-        await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
+        assert await page.locator('[data-cp-jalankan]').is_visible()
         assert await page.locator('[data-cp-jalankan]').is_disabled()
         async with database.SessionLocal() as db:assert await db.scalar(select(func.count()).select_from(TimbanganCetak))==0
         await page.reload();await page.locator('[data-cp-ya]').wait_for(state='visible')
@@ -46,12 +52,12 @@ async def test_ui_pratinjau_hasil_tidak_pasti_dan_cetak_ulang(klien,alamat_ui,wi
         await page.wait_for_function("document.querySelector('.cp-history').textContent.includes('Cetak ke-1')")
         assert len(jobs)==1
         mode['value']='success'
-        await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
+        assert await page.locator('[data-cp-jalankan]').is_visible()
         await page.locator('[data-cp-jalankan]').click()
         assert len(jobs)==1
-        await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
+        assert await page.locator('[data-cp-jalankan]').is_visible()
         await page.locator('[name=alasan]').fill('UJI salinan printer simulasi')
-        await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
+        assert await page.locator('[data-cp-jalankan]').is_visible()
         await page.locator('[data-cp-jalankan]').evaluate('(e)=>{e.click();e.click()}')
         await page.wait_for_function("document.querySelector('.cp-history').textContent.includes('Cetak ke-2')")
         assert len(jobs)==2
@@ -66,11 +72,11 @@ async def test_printer_belum_ada_pdf_keyboard_dan_versi_berubah(klien,alamat_ui)
         b,ctx,page=await browser_uji(pw,klien,alamat_ui,768,browser=os.environ.get('UJI_BROWSER','chromium'))
         await buka(page,alamat_ui+f'/timbangan/transaksi/{tid}/cetak')
         await page.evaluate("window.TeraFlowPrinter.alamat=()=>''")
-        await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
+        assert await page.locator('[data-cp-jalankan]').is_visible()
         await page.locator('[data-cp-jalankan]').press('Enter')
         assert 'Printer belum disetel' in await page.locator('[data-cp-status]').text_content()
         async with database.SessionLocal() as db:assert await db.scalar(select(func.count()).select_from(Job))==0
-        await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
+        assert await page.locator('[data-cp-jalankan]').is_visible()
         # Jalur Bagikan iOS disimulasikan: berkas PDF asli, bukan cetak fisik.
         await page.evaluate("() => {Object.defineProperty(navigator,'userAgent',{value:'iPhone'});navigator.canShare=()=>true;navigator.share=async d=>{window.__dibagikan=d.files[0].type};}")
         # URL dokumen sebenarnya mengembalikan PDF tanpa menambah audit cetak.
@@ -89,7 +95,7 @@ async def test_printer_belum_ada_pdf_keyboard_dan_versi_berubah(klien,alamat_ui)
         async with database.SessionLocal() as db:
             t=await db.get(TimbanganTransaksi,tid);t.jumlah_revisi+=1;await db.commit()
         async with database.SessionLocal() as db:assert (await db.get(TimbanganTransaksi,tid)).jumlah_revisi==1
-        await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
+        assert await page.locator('[data-cp-jalankan]').is_visible()
         await page.locator('[data-cp-jalankan]').click()
         await page.wait_for_function("document.querySelector('[data-cp-status]').textContent.includes('berubah')",timeout=5000)
         assert await page.locator('[data-cp-segar]').is_visible()
@@ -108,7 +114,7 @@ async def test_admin_menuntaskan_pekerjaan_shift_lama_tanpa_kirim_ulang(klien,al
         errors=[];prints=[];page.on('pageerror',lambda e:errors.append(str(e)))
         await page.route('**/cgi-bin/epos/**',lambda r:prints.append(r.request.url))
         await buka(page,alamat_ui+f'/timbangan/transaksi/{tid}/cetak')
-        await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
+        assert await page.locator('[data-cp-jalankan]').is_visible()
         assert await page.locator('[data-cp-jalankan]').is_disabled()
         await page.locator('[data-cp-ya]').click()
         assert 'Isi alasan' in await page.locator('[data-cp-status]').text_content()

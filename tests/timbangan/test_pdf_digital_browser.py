@@ -44,13 +44,11 @@ async def test_pdf_tanpa_alasan_setelah_cetak_dan_saat_pending(klien,alamat_ui,w
             assert await keadaan(tid)==before and not posts
             assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
             if not pending:
-                assert not await page.locator('[data-cetak-fisik]').evaluate('e=>e.open')
-                await page.locator('[data-cetak-fisik]>summary').click()
+                assert await page.locator('[data-cp-jalankan]').is_visible()
                 await page.locator('[data-cp-jalankan]').click()
                 assert 'Isi alasan' in await page.locator('[data-cp-status]').text_content()
             if not pending:
-                await page.locator('[data-cetak-fisik]>summary').click()
-                assert await page.locator('.cp-preview').is_hidden()
+                assert not await page.locator('.cp-preview').evaluate('e=>e.open')
                 assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth')
             out=Path(os.environ.get('UJI_PDF_OUT',os.environ.get('UJI_CETAK_OUT','/tmp/tf-pdf-digital')));out.mkdir(parents=True,exist_ok=True)
             await page.screenshot(path=str(out/f'pdf-{width}-{pending}.png'),full_page=True)

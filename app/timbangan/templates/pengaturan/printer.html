@@ -1,17 +1,19 @@
 <div class="pp-page" data-pos-printer>
+  {% if kembali_cetak %}<a class="tbl halus" href="{{ kembali_cetak }}">← Kembali ke cetak tiket</a>{% endif %}
   <div class="pp-heading"><p class="bantu">Atur printer untuk browser ini.</p><button type="button" class="tbl halus" data-pp-help hidden><span aria-hidden="true">ⓘ</span> Petunjuk</button></div>
   <section class="kartu pp-card" aria-label="Printer struk">
     <div class="pp-row"><h2 class="kartu__judul">Printer struk</h2><span class="lencana lencana--netral" data-pp-status role="status">Belum diperiksa</span></div>
-    <div class="grup">
+    <div class="pp-current"><span data-alamat-printer></span> <button type="button" class="tbl halus" data-pp-edit>Ubah printer</button></div>
+    <div class="grup" data-pp-editor>
       <label class="lbl" for="printer-url">Alamat printer</label>
       <input class="fld teks" id="printer-url" name="printer_url" type="text" inputmode="url" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="{{ PRINTER_URL }}">
       <p class="bantu" data-pp-source>Alamat printer hanya berlaku pada browser/perangkat ini.</p>
       <p class="bantu" data-pp-active hidden>Alamat yang sedang dipakai: <span data-alamat-printer></span></p>
-      <div class="pp-actions"><button type="button" class="tbl halus" data-simpan-printer>Simpan alamat</button></div>
+      <div class="pp-actions"><button type="button" class="tbl halus" data-simpan-printer>Simpan &amp; periksa</button></div>
     </div>
     <div class="pp-tests">
       <div class="pp-actions"><button type="button" class="tbl" data-periksa-printer>Periksa sambungan</button>
-        <a class="tbl halus" href="{{ PREFIX }}/printer/uji" data-cetak="{{ PREFIX }}/printer/uji"><span data-teks>Cetak uji</span></a></div>
+        <details data-pp-test><summary>Uji keluaran kertas</summary><a class="tbl halus" href="{{ PREFIX }}/printer/uji" data-cetak="{{ PREFIX }}/printer/uji"><span data-teks>Cetak uji</span></a></details></div>
       <p class="bantu">Saat mencetak, sambungan diperiksa dan dicoba pulihkan otomatis. Periksa sambungan tidak mengeluarkan kertas. Cetak uji mengeluarkan kertas.</p>
       <div class="pp-result" data-pp-result role="status" hidden><p data-pp-summary></p><p class="bantu" data-pp-next hidden></p><a class="tbl halus" data-buka-printer data-pp-buka-alamat target="_blank" rel="noopener" hidden>Buka alamat printer</a></div>
       <details class="pp-details" data-pp-details hidden><summary>Rincian hasil</summary>
@@ -21,7 +23,7 @@
     </div>
   </section>
   <details class="pp-help-fallback" data-pp-help-fallback><summary>ⓘ Petunjuk Pos &amp; printer</summary><div class="pp-help-content" data-pp-help-content>
-    <section><h3>Urutan penyiapan</h3><p>1. Simpan alamat printer untuk browser ini.</p><p>2. Periksa sambungan tanpa mengeluarkan kertas.</p><p>3. Cetak uji untuk memeriksa keluaran kertas.</p></section>
+    <section><h3>Urutan penyiapan</h3><p>1. Simpan &amp; periksa alamat printer untuk browser ini.</p><p>2. Selesaikan izin browser bila diperlukan. Pemeriksaan tidak mengeluarkan kertas.</p><p>3. Cetak uji untuk memeriksa keluaran kertas.</p></section>
     <section><h3>Alamat dan penyimpanan</h3><p>Gunakan alamat yang diawali https://. Pada alur ini browser dapat menolak alamat http:// dari halaman HTTPS.</p><p>Struk dikirim langsung dari perangkat ini ke printer di jaringan pos, bukan dari server. Setelan disimpan di browser/perangkat ini dan tidak ikut berpindah ke ponsel, tablet, atau browser lain.</p><p>Kosongkan kolom lalu simpan untuk memakai alamat bawaan, jika tersedia. Alamat tersimpan belum membuktikan sambungan berhasil. Jika penyimpanan browser diblokir, setelan belum berubah dan ketikan tetap tersedia.</p></section>
     <details open><summary>Sertifikat dan izin jaringan</summary><div class="pp-help-content">
       <section><h3>Buka alamat printer</h3><p>Pastikan alamat yang dibuka memang milik printer pos. Jika browser menampilkan peringatan sertifikat, ikuti penyiapan printer yang digunakan di pos, lalu kembali ke halaman ini. Menyimpan alamat saja belum memberi izin sambungan.</p><a class="tbl halus" data-buka-printer target="_blank" rel="noopener">Buka <span data-alamat-printer></span> di tab baru</a><p class="bantu">Penyiapan sertifikat dan izin perlu dilakukan pada setiap browser/perangkat yang dipakai.</p></section>

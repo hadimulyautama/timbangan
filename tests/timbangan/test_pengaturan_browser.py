@@ -50,16 +50,18 @@ async def test_printer_lokal_simpan_gagal_bawaan_periksa_tanpa_kertas(klien,alam
             calls.append((r.request.method,r.request.post_data or ''))
             return await r.fulfill(status=200,content_type='text/xml',body='<response success="true"/>')
         await page.route('https://printer.invalid/**',jaringan)
+        await page.locator('[data-pp-edit]').click()
         await page.locator('[name=printer_url]').fill('https://printer.invalid/')
         await page.locator('[data-simpan-printer]').press('Enter')
         assert await page.evaluate("localStorage.getItem('timbangan-printer')")=='https://printer.invalid'
-        assert 'belum diperiksa' in await page.locator('[data-hasil-cetak]').text_content()
-        assert not calls
+        await page.wait_for_function("document.querySelector('[data-pp-status]').textContent==='Sambungan berhasil'")
+        assert calls
         await page.locator('[data-periksa-printer]').evaluate('(e)=>{e.click();e.click()}')
         await page.wait_for_function("document.querySelector('[data-periksa-printer]').dataset.sibuk!=='1'")
         assert calls and all('<text' not in body and '<cut' not in body and '<feed' not in body for _,body in calls)
         # Kegagalan penyimpanan lokal tidak kehilangan ketikan / mengaku berhasil.
         await page.evaluate("() => {window.__setItem=Storage.prototype.setItem;Storage.prototype.setItem=function(){throw new Error('UJI kuota')};}")
+        await page.locator('[data-pp-edit]').click()
         await page.locator('[name=printer_url]').fill('https://baru.invalid')
         await page.locator('[data-simpan-printer]').click()
         assert 'menolak menyimpan' in await page.locator('[data-hasil-cetak]').text_content()

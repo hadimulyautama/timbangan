@@ -14,6 +14,9 @@ dan ponsel Direksi di kantor tidak menunjuk apa pun.
 """
 from __future__ import annotations
 
+import re
+from urllib.parse import urlsplit
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
 
@@ -33,7 +36,13 @@ async def penyiapan(
     request: Request,
     akun: TimbanganAkun = Depends(butuh_akun),
 ):
-    return render(request, "printer.html", bagian="printer", judul_bagian="Pos & printer", kembali=f"{PREFIX}/pengaturan")
+    target = request.query_params.get("kembali", "")
+    try:
+        parsed = urlsplit(target)
+        safe = not parsed.scheme and not parsed.netloc and re.fullmatch(r"/timbangan/transaksi/[0-9]+/cetak", parsed.path)
+    except ValueError:
+        safe = False
+    return render(request, "printer.html", bagian="printer", judul_bagian="Pos & printer", kembali=target if safe else f"{PREFIX}/pengaturan", kembali_cetak=target if safe else None)
 
 
 @router.get("/printer/uji")

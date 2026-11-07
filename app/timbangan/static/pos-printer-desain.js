@@ -4,10 +4,15 @@
     const root=document.querySelector('[data-pos-printer]');if(!root||root.dataset.ppReady)return;root.dataset.ppReady='1';
     const input=root.querySelector('[name=printer_url]'),save=root.querySelector('[data-simpan-printer]'),check=root.querySelector('[data-periksa-printer]'),print=root.querySelector('[data-cetak]');
     const status=root.querySelector('[data-pp-status]'),result=root.querySelector('[data-pp-result]'),summary=root.querySelector('[data-pp-summary]'),details=root.querySelector('[data-pp-details]'),oldResult=root.querySelector('[data-hasil-cetak]'),report=root.querySelector('[data-laporan-printer]');
-    const clean=x=>String(x||'').trim().replace(/\/+$/,'');let committed=input.value,lastAction='',busy=false,lastStatus='Belum diperiksa';
+    const clean=x=>String(x||'').trim().replace(/\/+$/,'');let committed=input.value,lastAction='',busy=false,lastStatus='Belum diperiksa',editing=!window.TeraFlowPrinter.alamat();
+    const editor=root.querySelector('[data-pp-editor]'),current=root.querySelector('.pp-current');
+    root.querySelector('[data-pp-edit]').addEventListener('click',()=>{editing=true;sync();input.focus();});
     const dirty=()=>clean(input.value)!==clean(committed);
     function sync(){
       const changed=dirty(),active=window.TeraFlowPrinter.alamat();
+      editor.hidden=!editing&&!!active;current.hidden=editing||!active;
+      current.querySelector('[data-alamat-printer]').textContent=active||'';
+      root.querySelector('[data-pp-edit]').disabled=busy;
       status.textContent=changed?'Alamat belum disimpan':!active?'Alamat belum tersedia':lastStatus;
       root.querySelector('[data-pp-source]').textContent=changed?'Perubahan alamat belum disimpan.':'Alamat printer hanya berlaku pada browser/perangkat ini.';
       root.querySelector('[data-pp-active]').hidden=!changed&&!!input.value;
@@ -44,7 +49,8 @@
         if(!d.pesan)return;
         busy=false;details.hidden=false;
         if(lastAction==='alamat'){
-          if(d.nada==='ok'){committed=input.value;lastStatus='Belum diperiksa';show('Alamat disimpan di browser ini. Sambungan belum diperiksa.');}
+          if(d.nada==='ok'){committed=input.value;lastStatus='Belum diperiksa';editing=false;show('Alamat disimpan. Memeriksa sambungan…');
+            queueMicrotask(()=>check.click());}
           else {lastStatus='Alamat belum tersimpan';show('Alamat belum tersimpan. Browser menolak penyimpanan; ketikan tetap tersedia.',true);}
         } else if(lastAction==='cetak'){
           if(d.nada==='ok'){lastStatus='Uji cetak dikonfirmasi';show('Printer mengonfirmasi perintah cetak uji. Periksa kertas yang keluar.');}
