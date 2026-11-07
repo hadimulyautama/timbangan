@@ -1,0 +1,20 @@
+/* Hanya timbang pertama. Kontrol timbang kedua tetap memakai formulir.css. */
+.tp-heading,.tp-context{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0;flex-wrap:wrap}
+.tp-context{font-size:14px}
+.tp-page .tp-context strong{color:var(--tf-accent);font-weight:600}
+body.padiflow-ui .tp-page :is(.tp-heading,.tp-context)>.tbl{width:auto;flex:0 0 auto;min-height:44px;padding:9px 13px;white-space:nowrap}
+.tp-page .tahap{padding:8px 0}
+.tp-page .tp-time{border:0;padding:0;min-width:0}
+.tp-page .tp-time>summary{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:44px;list-style:none;color:var(--pd-muted);cursor:pointer;font-size:13px;flex-wrap:wrap}
+.tp-page .tp-time>summary::-webkit-details-marker{display:none}
+.tp-page .tp-time>summary>span:last-child{color:var(--tf-accent);text-decoration:underline;text-underline-offset:3px}
+.tp-page .tp-time[open]>summary{margin-bottom:10px}
+.tp-page .fw-side .fw-review{background:var(--pd-sheet);border:1px solid var(--pd-line);border-radius:13px}
+.tp-page .fw-optional>summary{font-weight:600}
+.tp-guide-fallback>summary{min-height:44px;align-content:center;cursor:pointer}
+.tp-guide-content{display:grid;gap:18px}
+.tp-guide-content section{display:grid;gap:8px}
+.tp-guide-content h3{margin:0;font-size:16px}
+.tp-page [hidden]{display:none!important}
+@media(max-width:650px){.tp-page .tp-heading{flex-wrap:nowrap;align-items:start}.tp-page .tp-heading h1{min-width:0}.tp-page .tp-context{align-items:start}.tp-page .tp-context>span{flex:1;min-width:0}}
+@media print{.tp-guide-button,.tp-guide-fallback,.tp-page dialog{display:none!important}}

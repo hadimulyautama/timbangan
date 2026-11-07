@@ -2,6 +2,7 @@
 {% from "macros.html" import isian, berat, tahap, konteks_jenis, angka_isian %}
 
 {% from "pengiriman_muatan.html" import rincian_kiriman %}
+{% from '_panduan.html' import panel as panel_panduan %}
 {% set trx = b.trx %}
 {% set masuk = trx.arah == MASUK %}
 {% set transfer = trx.arah == TRANSFER %}
@@ -13,20 +14,19 @@
 {% block bar_sub %}{{ trx.nomor_polisi or trx.kode }}{% endblock %}
 
 {% macro konteks_formulir() %}
-  {% if trx.arah == KELUAR %}
-    <div class="kartu bantu">Pengiriman · rincian muatan dan tara mengikuti Produksi.</div>
-  {% else %}
-    {{ konteks_jenis(aturan) }}
-  {% endif %}
-  {{ tahap(2,
-           'Truk bermuatan' if bongkar else 'Truk kosong',
-           'Setelah bongkar' if bongkar else 'Setelah muat') }}
+  <div class="tk-context">{{ aturan.nama }} · {{ ARAH_LABEL.get(trx.arah, trx.arah) }}{% if trx.jasa %} · <strong>JASA — titipan pelanggan</strong>{% endif %}</div>
+  {{ tahap(2, 'Sebelum bongkar' if bongkar else 'Sebelum muat',
+              'Setelah bongkar' if bongkar else 'Setelah muat') }}
 {% endmacro %}
 
+{% block gaya_tambahan %}
+<link rel="stylesheet" href="{{ PREFIX }}/static/panduan.css?v={{ VERSI }}">
+<link rel="stylesheet" href="{{ PREFIX }}/static/timbang-kedua-desain.css?v={{ VERSI }}">
+{% endblock %}
 {% block lebar %}lebar{% endblock %}
 {% block isi %}
-<div class="fw-page">
-  <h1>Timbang kedua</h1>
+<div class="fw-page tk-page">
+  <div class="tk-heading"><h1>Timbang kedua</h1><button type="button" class="tbl halus" data-tk-guide hidden><span aria-hidden="true">ⓘ</span> Panduan</button></div>
   {{ konteks_formulir() }}
 
   <div class="fw-identity kartu">
@@ -46,55 +46,38 @@
     </div>
   </div>
 
-{% if boleh_koreksi %}
-  <a href="{{ PREFIX }}/transaksi/{{ trx.id }}/koreksi" class="tbl halus blok">
-    Koreksi data tiket (plat / sopir)
-  </a>
-{% endif %}
+
 
 <form method="post" data-simpan-luring action="{{ PREFIX }}/tiket/{{ trx.id }}"
       class="fw-form" data-fw-stage="second" data-fw-preview="{{ PREFIX }}/tiket/{{ trx.id }}/pratinjau">
 
   <input type="hidden" name="kunci" value="{{ kunci }}">
   <div class="fw-columns"><div class="fw-main">
-  <section class="fw-weight"><div class="fw-direction"><strong>Timbang kedua · {{ 'kosong' if bongkar else 'bermuatan' }}</strong><span>{{ 'Setelah selesai bongkar' if bongkar else 'Setelah selesai muat' }}</span></div>
+  <section class="fw-weight">
   {{ berat('berat_kg',
            'Berat truk kosong' if bongkar else 'Berat truk bermuatan',
            angka_isian(trx.timbang2_kg)) }}
 
-  </section>
+  <details class="tk-time" data-tk-time>
+    <summary><span>Waktu timbang · <time data-tk-time-label>{{ sekarang.strftime('%d/%m/%Y %H:%M') }}</time></span><span>Ubah</span></summary>
   <div class="grup">
     <div class="lbl">Jam timbang</div>
     <input class="fld" type="datetime-local" name="waktu"
            value="{{ sekarang.strftime('%Y-%m-%dT%H:%M') }}">
-    <div class="bantu">
-      Tanggal transaksi mengikuti jam ini — bukan jam timbang pertama.
-    </div>
   </div>
+  </details>
+  </section>
 
   {# Setelah bongkar, jumlah karung sudah pasti. Di sinilah biasanya angka
      yang tadi dikosongkan akhirnya diisi. #}
-  {% if masuk or trx.arah in (RETUR_MASUK, RETUR_KELUAR) %}
-    <div class="kartu">
-      <div class="kartu__judul">
-        {{ 'Nota supplier' if masuk else 'Surat jalan' }}
-      </div>
-      <div style="display:flex;flex-direction:column;gap:14px">
-        {{ isian('nomor_acuan', 'Nomor', m.nomor_acuan if m else '', '', 'text',
-                 '', false, true) }}
-        {{ berat('berat_acuan_kg', 'Berat menurut dokumen',
-                 (m.berat_acuan_kg|round(0)|int) if m and m.berat_acuan_kg else '',
-                 '', false) }}
-      </div>
-    </div>
-  {% endif %}
+
 
   {# Muatan berdiri sendiri, terpisah dari dokumennya. Nomor dan berat adalah
      isi kertas yang dibawa sopir; jumlah karung adalah hitungan petugas saat
      bongkar. Dulu keduanya satu kartu bernama "Nota supplier", dan itu
      mengundang angka karung disalin dari nota — padahal justru hitungan
      sendiri itulah yang menentukan berat bersihnya. #}
-  <div class="kartu">
+  <div class="kartu {{ 'tk-cargo-pair' if trx.arah not in (KELUAR, RETUR_MASUK, RETUR_KELUAR) else '' }}">
     <div class="kartu__judul">Muatan</div>
     <div style="display:flex;flex-direction:column;gap:14px">
       {% if trx.arah in (RETUR_MASUK, RETUR_KELUAR) %}
@@ -124,13 +107,31 @@
     </div>
   </div>
 
-  <div class="grup">
-    <div class="lbl">Catatan</div>
-    <textarea class="fld" name="catatan" rows="2">{{ trx.catatan or '' }}</textarea>
-  </div>
+  {% if masuk or trx.arah in (RETUR_MASUK, RETUR_KELUAR) %}
+    <details class="kartu tk-document" data-tk-document>
+      <summary>
+        {{ 'Nota supplier' if masuk else 'Surat jalan' }} <span class="tk-doc-number" data-tk-document-number>{{ m.nomor_acuan if m and m.nomor_acuan else 'Belum diisi' }}</span>
+      </summary>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        {{ isian('nomor_acuan', 'Nomor', m.nomor_acuan if m else '', '', 'text',
+                 '', false, true) }}
+        {{ berat('berat_acuan_kg', 'Berat menurut dokumen',
+                 (m.berat_acuan_kg|round(0)|int) if m and m.berat_acuan_kg else '',
+                 '', false) }}
+      </div>
+    </details>
+  {% endif %}
+
+  <details class="kartu tk-notes">
+    <summary>Catatan</summary>
+    <div class="grup">
+      <div class="lbl">Catatan</div>
+      <textarea class="fld" name="catatan" rows="2">{{ trx.catatan or '' }}</textarea>
+    </div>
+  </details>
 
   </div><aside class="fw-side">
-  <section class="fw-review" data-fw-hasil aria-live="polite"><h2>Pratinjau perhitungan</h2><p>Isi berat timbang kedua untuk melihat pratinjau.</p><small>Belum menjadi hasil resmi. Backend menghitung dan memvalidasi saat disimpan.</small></section>
+  <section class="tk-result"><small class="tk-preview-label">Pratinjau · belum disimpan</small><div class="fw-review" data-fw-hasil aria-live="polite"><h2>Hasil penimbangan</h2><p>Isi berat timbang kedua untuk melihat pratinjau.</p></div></section>
   <button type="submit" name="aksi" value="selesai" class="tbl blok"
           data-sibuk="Menghitung…">
     Selesaikan penimbangan
@@ -140,21 +141,18 @@
             class="tbl halus blok" data-sibuk="Menyimpan…">
       Simpan sementara
     </button>
-    <div class="bantu" style="text-align:center;margin-top:-4px">
-      {% if trx.arah == "KELUAR" %}
-      Berat tersimpan dan tiket tetap terbuka. Nama pelanggan mengikuti perintah
-      Produksi saat tiket armada dipilih; tidak perlu diisi di sini.
-      {% else %}
-      Angkanya tersimpan dan tiket tetap terbuka. Jumlah karung wajib
-      dilengkapi sebelum penimbangan diselesaikan.
-      {% endif %}
-    </div>
+
   </aside></div>
 </form>
 
 
 
-  <section class="fw-exceptions"><h2>Tindakan pengecualian</h2>
+  <details class="fw-exceptions tk-actions tanpa-cetak"><summary>Tindakan lainnya</summary><div class="tk-actions-body">
+{% if boleh_koreksi %}
+  <a href="{{ PREFIX }}/transaksi/{{ trx.id }}/koreksi" class="tbl halus blok">
+    Koreksi data tiket
+  </a>
+{% endif %}
   {# ── HAPUS TIKET YANG BELUM DITIMBANG KEDUA ──
      Keputusan pemilik 30 September 2026: "jika masih timbang pertama dan
      harus timbang kedua. harus ada pilihan hapus dan jika dihapus hilang dari
@@ -229,6 +227,28 @@
     </form>
   </details>
 
-</section>
+</div></details>
+  <details class="tk-guide-fallback" data-tk-guide-fallback>
+    <summary><span aria-hidden="true">ⓘ</span> Panduan timbang kedua</summary>
+    <div class="tk-guide-content" data-tk-guide-content>
+      <section><h3>{{ aturan.nama }} · {{ ARAH_LABEL.get(trx.arah, trx.arah) }}</h3><p>{{ ringkas_aturan(aturan) }}</p>{% if trx.jasa %}<p>JASA — titipan pelanggan. Barangnya tetap milik pelanggan.</p>{% endif %}</section>
+      <section><h3>Penimbangan</h3><p>Timbang kedua · {{ 'kosong setelah selesai bongkar' if bongkar else 'bermuatan setelah selesai muat' }}. Tanggal transaksi mengikuti jam ini — bukan jam timbang pertama.</p><p>Netto timbangan adalah selisih berat truk bermuatan dan kosong. Berat barang memperhitungkan tara sesuai aturan komoditas. Retur tidak memakai potongan tara kemasan.</p></section>
+      {% if trx.arah == KELUAR %}<section><h3>Pengiriman</h3><p>Pengiriman · rincian muatan dan tara mengikuti Produksi. Peringatan integrasi tetap muncul di dekat muatan bila data belum tersedia.</p></section>{% endif %}
+      <section><h3>Pratinjau & penyimpanan</h3><p>Belum menjadi hasil resmi. Backend menghitung dan memvalidasi saat disimpan. Pratinjau belum tersimpan atau diverifikasi Produksi. Backend menghitung dan menjalankan seluruh validasi saat disimpan.</p>
+    <div class="bantu" style="text-align:center;margin-top:-4px">
+      {% if trx.arah == "KELUAR" %}
+      Berat tersimpan dan tiket tetap terbuka. Nama pelanggan mengikuti perintah
+      Produksi saat tiket armada dipilih; tidak perlu diisi di sini.
+      {% else %}
+      Angkanya tersimpan dan tiket tetap terbuka. Jumlah karung wajib
+      dilengkapi sebelum penimbangan diselesaikan.
+      {% endif %}
+    </div>
+      <p>Kiriman luring tetap menunggu sinkronisasi; status penyimpanan ditampilkan oleh aplikasi.</p></section>
+      <section><h3>Koreksi & pengecualian</h3><p>Koreksi data tiket tersedia sesuai izin di Tindakan lainnya. Hapus tiket dipakai jika penimbangan batal. Truk pergi tanpa ditimbang keluar hanya dipakai bila truk sudah pergi dan tidak bisa ditimbang kembali. Alasan dan konfirmasi tetap wajib; batas kewenangan tetap berlaku.</p></section>
+    </div>
+  </details>
+  {% call panel_panduan('tk-panduan', 'Panduan timbang kedua', {}, {'data-tk-guide-close':''}) %}<div data-tk-guide-slot></div>{% endcall %}
 </div>
 {% endblock %}
+{% block skrip %}<script src="{{ PREFIX }}/static/timbang-kedua-desain.js?v={{ VERSI }}" defer></script>{% endblock %}

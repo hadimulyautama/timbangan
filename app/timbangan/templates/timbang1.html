@@ -5,6 +5,7 @@
    Barang JASA dititipkan pelanggan untuk digiling — bukan dibeli. Borangnya
    SAMA, sebab cara menimbang, tara, dan ambangnya memang sama persis; yang
    ditambahkan hanya DUA pertanyaan: milik siapa, dan pesanan yang mana. #}
+{% from '_panduan.html' import panel as panel_panduan %}
 {% set jasa = jasa|default(false) %}
 {% set masuk = aturan.arah == MASUK %}
 {% set bebas = aturan.arah == BEBAS %}
@@ -19,41 +20,24 @@
 {% block bar_sub %}{{ akun.nama }}{% endblock %}
 
 {% macro konteks_formulir() %}
-  {% if aturan.arah == KELUAR %}
-    <div class="kartu bantu">Catat armada dan berat truk kosong. Produksi akan memilih tiket ini; rincian barang dan kemasan diambil otomatis setelah selesai dimuat.</div>
-  {% else %}
-    {{ konteks_jenis(aturan, PREFIX ~ ('/' if jasa else '/pilih/' ~ aturan.arah)) }}
-  {% endif %}
-  {% if jasa %}
-    {# Disebut di kepala layar, bukan cuma di judul. Satu-satunya hal yang
-       membedakan tiket ini dari barang masuk biasa adalah PEMILIKNYA, dan
-       petugas yang tak melihatnya akan mengisi borang yang sama dengan
-       kebiasaan yang sama. #}
-    <div class="konteks" style="border-color:#2f6e7a">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2f6e7a"
-           stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M20 12v8H4v-8"/><path d="M2 7h20v5H2z"/><path d="M12 22V7"/>
-        <path d="M12 7A3.5 3.5 0 0 0 8.5 3.5 3.5 3.5 0 0 0 12 7z"/>
-        <path d="M12 7a3.5 3.5 0 0 1 3.5-3.5A3.5 3.5 0 0 1 12 7z"/></svg>
-      <div style="flex-grow:1;min-width:0">
-        <div class="konteks__nama">Barang JASA — titipan pelanggan</div>
-        <div class="konteks__aturan">
-          Barangnya tidak dibeli. Digiling lalu kembali ke pemiliknya.
-        </div>
-      </div>
-    </div>
-  {% endif %}
+  <div class="tp-context">
+    <span>{{ aturan.nama }} · {{ ARAH_LABEL.get(aturan.arah, aturan.arah) }}{% if jasa %} · <strong>JASA — titipan pelanggan</strong>{% endif %}</span>
+    {% if aturan.arah != KELUAR %}<a class="tbl halus" href="{{ PREFIX }}{{ '/' if jasa else '/pilih/' ~ aturan.arah }}">Ganti</a>{% endif %}
+  </div>
   {% if not bebas %}
-    {{ tahap(1,
-             'Truk bermuatan' if bongkar else 'Truk kosong',
-             'Setelah bongkar' if bongkar else 'Setelah muat') }}
+    {{ tahap(1, 'Sebelum bongkar' if bongkar else 'Sebelum muat',
+                'Setelah bongkar' if bongkar else 'Setelah muat') }}
   {% endif %}
 {% endmacro %}
 
+{% block gaya_tambahan %}
+<link rel="stylesheet" href="{{ PREFIX }}/static/panduan.css?v={{ VERSI }}">
+<link rel="stylesheet" href="{{ PREFIX }}/static/timbang-pertama-desain.css?v={{ VERSI }}">
+{% endblock %}
 {% block lebar %}lebar{% endblock %}
 {% block isi %}
-<div class="fw-page">
-  <h1>Timbang pertama</h1>
+<div class="fw-page tp-page">
+  <div class="tp-heading"><h1>Timbang pertama</h1><button type="button" class="tbl halus tp-guide-button" data-tp-guide hidden><span aria-hidden="true">ⓘ</span> Panduan</button></div>
   {{ konteks_formulir() }}
 <form method="post" data-simpan-luring
       action="{{ PREFIX }}{{ '/jasa/' if jasa else '/timbang/' }}{{ aturan.kode }}"
@@ -62,35 +46,27 @@
      menyimpan; yang ditampilkan di bawah cuma perkiraan. #}
   <input type="hidden" name="kunci" value="{{ kunci }}">
 
-  <div class="kartu" style="padding:10px 14px">
-    <div class="baris">
-      <span>Nomor transaksi</span><b>{{ kode }}</b>
-      {# Disebut apa adanya. Petugas yang menulis nomor ini di buku sebelum
-         menekan simpan akan menulis nomor yang salah bila dua layar terbuka
-         bersamaan — dan itu persis yang pernah terjadi. #}
-      <small class="redup">perkiraan — nomor pastinya muncul setelah disimpan</small>
-    </div>
-  </div>
-
   <div class="fw-columns"><div class="fw-main">
-  <section class="fw-weight"><div class="fw-direction"><strong>Timbang pertama · {{ 'bermuatan' if bongkar or bebas else 'kosong' }}</strong><span>{{ 'Sebelum bongkar' if bongkar or bebas else 'Sebelum muat' }}</span></div>
+  <section class="fw-weight">
   {# ── Angka timbang: paling atas, karena itu yang dibaca dari alat ── #}
   {{ berat('berat_kg',
            'Berat truk bermuatan' if bongkar or bebas else 'Berat truk kosong',
-           bantu='Kapasitas jembatan ' ~ (KAPASITAS_KG|kg)) }}
+           bantu='') }}
 
-  </section>
+  <details class="tp-time" data-tp-time>
+    <summary><span>Waktu timbang · <time data-tp-time-label>{{ sekarang.strftime('%d/%m/%Y %H:%M') }}</time></span><span>Ubah</span></summary>
   <div class="grup">
     <div class="lbl">Jam timbang</div>
     <input class="fld" type="datetime-local" name="waktu"
            value="{{ sekarang.strftime('%Y-%m-%dT%H:%M') }}">
-    <div class="bantu">Terisi otomatis. Ubah hanya bila mencatat terlambat.</div>
   </div>
+  </details>
+  </section>
 
   <section class="fw-section"><h2>{{ 'Armada' if aturan.arah == KELUAR else 'Pihak & kendaraan' }}</h2>
   {# ── Pihak ── #}
   {% if aturan.arah == KELUAR %}
-    <div class="bantu">Pelanggan ditentukan pada perintah barang keluar di Produksi.</div>
+
   {% elif transfer %}
     <input type="hidden" name="lintasan_format" value="1">
     {# Draf sebelum pilihan master masih membawa teks ini. Tetap disalin
@@ -98,7 +74,7 @@
     <input type="hidden" name="pihak_nama" value="">
     <p class="bantu" data-lintasan-lama hidden>Catatan lintasan dari draf lama: <span></span>. Pilih asal dan tujuan dari daftar untuk melanjutkan.</p>
     {% include "pilihan_lintasan.html" %}
-    <p class="bantu">Pilihan lokasi tiket, bukan perintah pemindahan stok PadiFlow.</p>
+
   {% else %}
     {% set is_pelanggan = kolom_nama == 'nama_pelanggan' %}
     <div class="grup">
@@ -126,10 +102,7 @@
           {% endfor %}
         </optgroup>
       </select>
-      <div class="bantu">
-        Wajib dipilih dari daftar Kledo. Belum muncul? Minta Admin menekan
-        <b>Perbarui Kontak</b> di Pengaturan, lalu muat ulang layar ini.
-      </div>
+
     </div>
   {% endif %}
 
@@ -204,7 +177,7 @@
   </div>
 
   </div></section>
-  {% if not bebas %}<details class="fw-optional" data-fw-opsional {{ 'open' if pesan_err else '' }}><summary>{{ 'Dokumen, muatan & catatan' if masuk or aturan.arah in (RETUR_MASUK,RETUR_KELUAR) else 'Muatan & catatan' }}<small>Boleh dilengkapi nanti</small></summary><div class="fw-stack">{% endif %}
+  {% if not bebas %}<details class="fw-optional" data-fw-opsional {{ 'open' if pesan_err else '' }}><summary>{{ 'Dokumen, muatan & catatan' if masuk or aturan.arah in (RETUR_MASUK,RETUR_KELUAR) else 'Muatan & catatan' }}</summary><div class="fw-stack">{% endif %}
   {# ── Dokumen & muatan ── #}
   {% if transfer %}
     {# Muatan berdiri sendiri, di luar kartu nota.
@@ -332,12 +305,30 @@
 
   {% if not bebas %}</div></details>{% endif %}
   </div><aside class="fw-side">
-  <div class="fw-review"><h2>Penyimpanan timbang</h2><p>{{ 'Dua kali: tiket tetap terbuka untuk timbang kedua. Sekali saja: langsung diselesaikan oleh server.' if bebas else 'Tiket tetap terbuka sampai timbang kedua diselesaikan.' }}</p><small>Nomor pasti muncul setelah server mengonfirmasi penyimpanan. Kiriman luring tetap berstatus menunggu sinkronisasi.</small></div>
+  <div class="fw-review"><h2>Simpan timbang pertama</h2><p>{{ 'Dua kali: tiket tetap terbuka untuk timbang kedua. Sekali saja: langsung diselesaikan oleh server.' if bebas else ('Tiket akan menunggu timbang kedua setelah bongkar.' if bongkar else 'Tiket akan menunggu timbang kedua setelah muat.') }}</p></div>
   <button type="submit" class="tbl blok" data-sibuk="Menyimpan…">
     Simpan timbang pertama
   </button>
   </aside></div>
 </form>
 
+  <details class="tp-guide-fallback" data-tp-guide-fallback>
+    <summary><span aria-hidden="true">ⓘ</span> Panduan timbang pertama</summary>
+    <div class="tp-guide-content" data-tp-guide-content>
+      <section><h3>{{ aturan.nama }} · {{ ARAH_LABEL.get(aturan.arah, aturan.arah) }}</h3><p>{{ ringkas_aturan(aturan) }}</p></section>
+      <section><h3>Penimbangan</h3><p>Kapasitas jembatan {{ KAPASITAS_KG|kg }}. {% if bebas %}Dua kali: bermuatan lalu kosong. Sekali saja: langsung selesai, tanpa pembanding.{% else %}{{ 'Truk bermuatan sebelum bongkar, kemudian ditimbang lagi setelah bongkar.' if bongkar else 'Truk kosong sebelum muat, kemudian ditimbang lagi setelah muat.' }}{% endif %}</p><p>Jam timbang terisi otomatis. Ubah hanya bila mencatat terlambat.</p></section>
+      {% if aturan.arah == KELUAR %}
+      <section><h3>Pengiriman</h3><p>Catat armada dan berat truk kosong. Produksi akan memilih tiket ini; rincian barang dan kemasan diambil otomatis setelah selesai dimuat.</p><p>Pelanggan ditentukan pada perintah barang keluar di Produksi.</p></section>
+      {% elif transfer %}
+      <section><h3>Lintasan</h3><p>Pilihan lokasi tiket, bukan perintah pemindahan stok PadiFlow.</p></section>
+      {% else %}
+      <section><h3>{{ 'Pemilik barang' if jasa else PIHAK_LABEL.get(aturan.arah, 'Pihak') }}</h3><p>Wajib dipilih dari daftar Kledo. Belum muncul? Minta Admin menekan <b>Perbarui Kontak</b> di Pengaturan, lalu muat ulang layar ini setelah mengamankan isian.</p>{% if jasa %}<p>Barang JASA — titipan pelanggan. Barangnya tidak dibeli. Digiling lalu kembali ke pemiliknya.</p>{% endif %}</section>
+      {% endif %}
+      <section><h3>Dokumen & muatan</h3><p>Boleh dilengkapi nanti. Keterangan sumber tara dan aturan pengisian tetap tersedia pada bagian muatan.</p></section>
+      <section><h3>Nomor & penyimpanan</h3><p>Nomor transaksi <strong>{{ kode }}</strong> masih perkiraan — nomor pastinya muncul setelah disimpan. Nomor pasti muncul setelah server mengonfirmasi penyimpanan. Kiriman luring tetap berstatus menunggu sinkronisasi.</p><p>{{ 'Dua kali: tiket tetap terbuka untuk timbang kedua. Sekali saja: langsung diselesaikan oleh server.' if bebas else 'Tiket tetap terbuka sampai timbang kedua diselesaikan.' }}</p></section>
+    </div>
+  </details>
+  {% call panel_panduan('tp-panduan', 'Panduan timbang pertama', {}, {'data-tp-guide-close':''}) %}<div data-tp-guide-slot></div>{% endcall %}
 </div>
 {% endblock %}
+{% block skrip %}<script src="{{ PREFIX }}/static/timbang-pertama-desain.js?v={{ VERSI }}" defer></script>{% endblock %}

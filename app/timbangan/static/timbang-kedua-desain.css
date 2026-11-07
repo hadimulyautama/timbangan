@@ -1,0 +1,34 @@
+/* Hanya timbang kedua: warna dan kontrol mengikuti identitas TeraFlow. */
+.tk-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}
+body.padiflow-ui .tk-page .tk-heading>.tbl{width:auto;min-height:44px;flex:0 0 auto;padding:9px 13px;white-space:nowrap}
+.tk-context{font-size:14px}
+.tk-context strong{color:var(--tf-accent);font-weight:600}
+.tk-page .tahap{padding:8px 0}
+.tk-page .tk-time{border:0;padding:0;min-width:0}
+.tk-page .tk-time>summary{font-size:13px;font-weight:400;color:var(--pd-muted);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;min-height:44px;cursor:pointer;list-style:none}
+.tk-time>summary::-webkit-details-marker{display:none}
+.tk-time>summary>span:last-child{color:var(--tf-accent);text-decoration:underline;text-underline-offset:3px}
+.tk-page :is(.tk-document,.tk-notes)>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;font-weight:600;cursor:pointer;overflow-wrap:anywhere}
+.tk-page :is(.tk-document,.tk-notes,.tk-time)[open]>summary{margin-bottom:12px}
+.tk-page .tk-doc-number{font-size:12px;font-weight:400;color:var(--pd-muted);min-width:0;overflow-wrap:anywhere}
+.tk-page :is(.tk-document,.tk-notes)>summary::after{content:'⌄';flex:0 0 auto;color:var(--pd-muted)}
+.tk-page .tk-document>summary .tk-doc-number{flex:1;text-align:right}
+.tk-result{display:grid;gap:8px;background:var(--pd-sheet);border:1px solid var(--pd-line);border-radius:13px;padding:16px;min-width:0}
+.tk-preview-label{font-size:12px;color:var(--pd-muted)}
+.tk-page .tk-result .fw-review{padding:0;background:transparent}
+.tk-page .fw-preview-row--total{order:0;border:0;padding-top:0;display:grid;gap:4px}
+.tk-page .fw-preview-row--total>span{font-size:12px;color:var(--pd-muted)}
+.tk-page .fw-preview-row--total>strong{font-size:27px;line-height:1.4;font-weight:600}
+.tk-page .tk-actions{display:block;border:1px solid var(--pd-line);border-radius:13px;background:var(--pd-sheet);padding:14px 16px}
+.tk-actions>summary{min-height:44px;align-content:center;cursor:pointer;font-weight:600}
+.tk-actions[open]>summary{margin-bottom:12px}
+.tk-actions-body{display:grid;gap:12px;min-width:0}
+.tk-actions-body>.kartu{box-shadow:none}
+.tk-guide-fallback>summary{min-height:44px;align-content:center;cursor:pointer}
+.tk-guide-content{display:grid;gap:18px}
+.tk-guide-content section{display:grid;gap:8px}
+.tk-guide-content h3{font-size:16px;margin:0}
+.tk-page [hidden]{display:none!important}
+@container(min-width:660px){.tk-page .tk-cargo-pair>div:last-child{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}}
+@media(max-width:650px){.tk-heading{align-items:start}.tk-heading h1{min-width:0}.tk-page .fw-identity .baris{align-items:start}.tk-page .fw-identity .baris b{font-size:14px}}
+@media print{.tk-heading>button,.tk-guide-fallback,.tk-page dialog{display:none!important}}
