@@ -56,6 +56,8 @@ def cuplikan(data):
             row[k] = _angka(b.get(k), k)
         row['jumlah_karung'] = _angka(b.get('jumlah_karung'), 'Jumlah karung', bulat=True)
         row['jumlah'] = _angka(b.get('jumlah', row['jumlah_karung'] if row['satuan']=='karung' else row['berat_kg']), 'Jumlah aktual')
+        if row['satuan'] == 'karung' and Decimal(row['berat_kg']) > 0 and row['jumlah_karung'] <= 0:
+            raise MuatanTidakSah('Jumlah karung muatan berkemasan PadiFlow belum diisi. Lengkapi pencatatan muat di PadiFlow.')
         if bersama:
             if not all(type(row[k]) is int and row[k]>0 for k in ('outgoing_item_id','perintah_id','pelanggan_id')):
                 raise MuatanTidakSah('Identitas pelanggan, perintah, atau item kiriman bersama belum lengkap.')
@@ -72,6 +74,19 @@ def cuplikan(data):
     if sum(Decimal(r['berat_kg']) for r in hasil['muatan'])<=0:
         raise MuatanTidakSah('Muatan aktual PadiFlow belum mempunyai berat acuan yang sah.')
     return hasil
+
+
+def perlu_jumlah_karung(data):
+    """Curah resmi memakai kg; jangan meminta karung atau tara rekaan.
+
+    Hanya kontrak sumber bersidik yang boleh menyatakan seluruh muatan
+    aktual berupa kg. Payload lama tanpa satuan/sidik tetap memakai pagar
+    karung lama. Baris rencana yang tidak dimuat (0 kg) tidak menentukan unit.
+    """
+    if not data or not data.get('sidik_sumber'):
+        return True
+    aktual = [b for b in data['muatan'] if Decimal(str(b['berat_kg'])) > 0]
+    return not aktual or any(b.get('satuan') != 'kg' for b in aktual)
 
 
 async def baca(db, tiket_id):

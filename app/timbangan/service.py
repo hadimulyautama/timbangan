@@ -2481,7 +2481,8 @@ async def simpan_timbang_kedua(
 
     # Tolak sebelum angka, tanggal, atau baris muatan tiket disentuh.
     periksa_jumlah_karung(muatan if muatan is not None else trx.muatan,
-                          wajib=selesaikan)
+                          wajib=selesaikan and (pengiriman_snapshot is None or
+                                pengiriman.perlu_jumlah_karung(pengiriman_snapshot)))
     aturan = aturan_dari_snapshot(trx) or await aturan_untuk(db, trx.jenis_kode)
     waktu = sekarang()
 
@@ -2899,7 +2900,8 @@ async def koreksi_transaksi(
         muatan = pengiriman.input_muatan(snapshot_baru) if snapshot_baru != lama else None
         if muatan is not None:
             periksa_muatan(muatan)
-            periksa_jumlah_karung(muatan, wajib=trx.selesai and periksa_jumlah_karung(trx.muatan)>0)
+            periksa_jumlah_karung(muatan, wajib=trx.selesai and
+                periksa_jumlah_karung(trx.muatan)>0 and pengiriman.perlu_jumlah_karung(snapshot_baru))
 
     if trx.pengiriman_snapshot and muatan is not None and snapshot_baru is None:
         beda = _isi_kedua_berbeda(trx, muatan=muatan, tara_lain_kg=None,

@@ -23,7 +23,7 @@
   function labels() {
     var value = time.value, parts = value.split('T');
     var label = page.querySelector('[data-tk-time-label]');
-    label.textContent = value ? parts[0].split('-').reverse().join('/') + (parts[1] ? ' ' + parts[1] : '') : 'Belum diisi';
+    label.textContent = value ? parts[0].split('-').reverse().join('/') + (parts[1] ? ' ' + parts[1].slice(0,5) : '') : 'Belum diisi';
     if (value) label.setAttribute('datetime', value);
     var documentLabel = page.querySelector('[data-tk-document-number]');
     if (documentLabel && number) documentLabel.textContent = number.value || 'Belum diisi';

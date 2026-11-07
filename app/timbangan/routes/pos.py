@@ -6,7 +6,7 @@ dan tidak ada layar tambahan yang tidak dipakai setiap hari.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from dataclasses import fields
 from zoneinfo import ZoneInfo
 
@@ -906,9 +906,14 @@ async def form_timbang_kedua(
             integrasi_muatan = await pengiriman.baca(db, transaksi_id)
         except (klien_produksi.ProduksiTakTersedia, pengiriman.MuatanTidakSah, service.LayananError) as e:
             integrasi_error = str(e)
+    jam_form = sekarang()
+    # Perangkat/API dapat mencatat detik. Nilai menit akan tampak SEBELUM
+    # timbang pertama pada menit yang sama. HTML menerima milidetik; bulatkan
+    # ke atas kurang dari 1 ms agar pemotongan presisi juga tidak memundurkan.
+    jam_form += timedelta(microseconds=(-jam_form.microsecond) % 1000)
     return render(
         request, "timbang2.html",
-        kunci=str(uuid4()), b=baris, aturan=aturan, sekarang=sekarang(),
+        kunci=str(uuid4()), b=baris, aturan=aturan, sekarang=jam_form,
         tara=tara, asal_tara_id=asal_id,
         integrasi_muatan=integrasi_muatan, integrasi_error=integrasi_error,
         boleh_koreksi=service.boleh_mengubah(baris.trx, akun)[0],
@@ -968,10 +973,12 @@ async def pratinjau_timbang_kedua(
             raise service.LayananError("Berat timbang harus lebih dari 0 kg.")
         aturan = service.aturan_dari_snapshot(t) or await service.aturan_untuk(db, t.jenis_kode)
         muatan = service._baris_logic(t.muatan)
+        wajib_karung = True
         lama = t.muatan[0] if t.muatan else None
         if t.arah == logic.KELUAR:
             data = await pengiriman.baca(db, transaksi_id)
             muatan = service._baris_logic(pengiriman.input_muatan(data))
+            wajib_karung = pengiriman.perlu_jumlah_karung(data)
         elif t.arah in (logic.RETUR_MASUK, logic.RETUR_KELUAR):
             muatan = [logic.BarisMuatan(
                 jenis_kode=t.jenis_kode, jumlah_karung=_karung(jumlah_karung, lama.jumlah_karung if lama else 0),
@@ -983,7 +990,7 @@ async def pratinjau_timbang_kedua(
             muatan = service._baris_logic(_muatan_form_kedua(
                 t, jumlah_karung=jumlah_karung, tara_per_karung_kg=tara_per_karung_kg,
                 berat_acuan_kg=berat_acuan_kg, nomor_acuan=nomor_acuan))
-        service.periksa_jumlah_karung(muatan, wajib=True)
+        service.periksa_jumlah_karung(muatan, wajib=wajib_karung)
         bermuatan, kosong = service._bermuatan_dan_kosong(t.arah, float(t.timbang1_kg), kedua)
         hasil = logic.hitung(
             aturan=aturan, berat_bermuatan_kg=bermuatan,
