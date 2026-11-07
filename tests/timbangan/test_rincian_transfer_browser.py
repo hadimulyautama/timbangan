@@ -179,11 +179,13 @@ async def test_cetak_pdf_printer_sintetis_dan_audit(klien,alamat_ui,role):
         await page.unroute('**/cgi-bin/epos/**')
         await page.route('**/cgi-bin/epos/**',lambda r:r.abort())
         await page.locator('[data-cetak]').click()
-        await page.wait_for_function("document.querySelector('[data-hasil-cetak]').textContent.includes('belum bisa menghubungi')")
+        await page.wait_for_function("document.querySelector('[data-hasil-cetak]').textContent.includes('Printer belum dapat dihubungi')")
         async with database.SessionLocal() as db:assert await db.scalar(select(func.count()).select_from(TimbanganCetak))==0
         await page.unroute('**/cgi-bin/epos/**')
         dikirim=[]
         async def sukses(r):
+            if '<text' not in (r.request.post_data or ''):
+                return await r.fulfill(content_type='text/xml',body='<response success="true"/>')
             dikirim.append(r.request.post_data)
             return await r.fulfill(status=200,content_type='text/xml',body='<response success="true"/>')
         await page.route('**/cgi-bin/epos/**',sukses)
