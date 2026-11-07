@@ -1,0 +1,29 @@
+/* Satu kartu untuk tindakan; uraian lengkap memakai komponen petunjuk bersama. */
+.pp-page{display:grid;gap:16px;min-width:0;max-width:960px}
+.pp-heading,.pp-row,.pp-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.pp-actions{justify-content:start}
+body.padiflow-ui .pp-page .pp-card{display:grid;gap:18px;margin:0;padding:20px}
+body.padiflow-ui .pp-page .pp-card h2{margin:0;font-size:18px}
+body.padiflow-ui .pp-page .tbl{width:auto;min-height:44px;margin:0;padding:9px 13px;white-space:normal}
+.pp-page .grup{display:grid;gap:8px;margin:0;min-width:0}
+.pp-page input[name=printer_url]{width:100%;min-width:0;box-sizing:border-box;font-size:16px}
+.pp-page .pp-tests{display:grid;gap:14px;padding-top:16px;border-top:1px solid var(--pd-line)}
+.pp-result{display:grid;gap:10px;padding:12px;border-left:3px solid var(--tf-accent);background:var(--pd-soft);font-size:14px}
+.pp-result>.tbl{justify-self:start}
+.pp-page p{margin:0;line-height:1.6}
+.pp-page [data-alamat-printer]{overflow-wrap:anywhere}
+.pp-page summary{cursor:pointer;min-height:44px;align-content:center}
+.pp-page [data-laporan-printer] .baris{display:block;padding-block:10px;border-top:1px solid var(--pd-line)}
+.pp-help-content{display:grid;gap:16px}
+.pp-help-content section{display:grid;gap:8px}
+.pp-help-content details[open]>summary{margin-bottom:12px}
+.pp-help-content details>p+p{margin-top:10px}
+.pp-help-fallback{border:1px solid var(--pd-line);border-radius:12px;padding:12px}
+.pp-page [hidden]{display:none!important}
+.pp-page [aria-disabled=true]{opacity:.55;cursor:not-allowed}
+@media(max-width:650px){body.padiflow-ui .pp-page .pp-card{padding:16px}.pp-tests>.pp-actions{align-items:stretch}.pp-tests>.pp-actions>.tbl{flex:1}.pp-page{padding-bottom:70px}}
+
+.pp-title{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+body.padiflow-ui .pp-title>h1{font-size:25px;margin:0}
+body.padiflow-ui .pp-title>.tbl{width:auto;min-height:44px;padding:9px 13px;margin:0}
+.pp-title [hidden]{display:none!important}

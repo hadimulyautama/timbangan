@@ -1,114 +1,38 @@
-<div class="kartu"><h2 class="kartu__judul">Printer pos</h2><span class="lencana lencana--netral">Browser ini</span><p class="bantu">Kode perangkat {{ akun.perangkat_kode or "—" }} melekat pada akun dan ikut menyusun nomor transaksi. Alamat printer berikut hanya berlaku pada browser/perangkat ini.</p>
-
-
-  <div class="bantu" style="line-height:1.55">
-    Struk dikirim dari <b>perangkat ini</b> langsung ke printer di jaringan pos
-    timbang — bukan dari server. Karena itu penyiapannya dilakukan sekali di
-    tiap ponsel atau tablet, dan tidak ikut berpindah ke perangkat lain.
-  </div>
-
-  <div class="pesan" data-hasil-cetak hidden></div>
-
-  <div class="grup">
-    <label class="lbl" for="printer-url">Alamat printer</label>
-    <input class="fld teks" id="printer-url" name="printer_url" type="text" inputmode="url"
-           autocomplete="off" autocapitalize="none" spellcheck="false"
-           placeholder="{{ PRINTER_URL }}">
-    <div class="bantu">
-      Harus diawali <b>https://</b>. Halaman ini disajikan lewat HTTPS, dan
-      browser menolak menghubungi alamat <b>http://</b> dari halaman HTTPS.
+<div class="pp-page" data-pos-printer>
+  <div class="pp-heading"><p class="bantu">Atur printer untuk browser ini.</p><button type="button" class="tbl halus" data-pp-help hidden><span aria-hidden="true">ⓘ</span> Petunjuk</button></div>
+  <section class="kartu pp-card" aria-label="Printer struk">
+    <div class="pp-row"><h2 class="kartu__judul">Printer struk</h2><span class="lencana lencana--netral" data-pp-status role="status">Belum diperiksa</span></div>
+    <div class="grup">
+      <label class="lbl" for="printer-url">Alamat printer</label>
+      <input class="fld teks" id="printer-url" name="printer_url" type="text" inputmode="url" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="{{ PRINTER_URL }}">
+      <p class="bantu" data-pp-source>Alamat printer hanya berlaku pada browser/perangkat ini.</p>
+      <p class="bantu" data-pp-active hidden>Alamat yang sedang dipakai: <span data-alamat-printer></span></p>
+      <div class="pp-actions"><button type="button" class="tbl halus" data-simpan-printer>Simpan alamat</button></div>
     </div>
-  </div>
-  <button type="button" class="tbl halus blok" data-simpan-printer>
-    Simpan alamat di perangkat ini</button>
-  <div class="baris"><span>Alamat yang digunakan</span><b data-alamat-printer></b></div>
-  <p class="bantu">Alamat tersimpan belum membuktikan sambungan berhasil. Kosongkan alamat untuk memakai bawaan, bila tersedia.</p>
-
-  <div class="grup">
-    <div class="lbl">Periksa sambungan</div>
-    <button type="button" class="tbl halus blok" data-periksa-printer>
-      Periksa perangkat ini</button>
-    <div class="kartu" data-laporan-printer hidden style="margin-top:8px"></div>
-    <div class="bantu">
-      Tidak mengeluarkan kertas. Memisahkan tiga sebab kegagalan yang dari
-      layar terasa sama: sertifikat belum diterima, izin jaringan belum
-      diklik, atau perangkat tidak satu jaringan dengan printer.
+    <div class="pp-tests">
+      <div class="pp-actions"><button type="button" class="tbl" data-periksa-printer>Periksa sambungan</button>
+        <a class="tbl halus" href="{{ PREFIX }}/printer/uji" data-cetak="{{ PREFIX }}/printer/uji"><span data-teks>Cetak uji</span></a></div>
+      <p class="bantu">Periksa sambungan tidak mengeluarkan kertas. Cetak uji mengeluarkan kertas.</p>
+      <div class="pp-result" data-pp-result role="status" hidden><p data-pp-summary></p><button type="button" class="tbl halus" data-pp-help hidden>Buka Petunjuk</button></div>
+      <details class="pp-details" data-pp-details hidden><summary>Rincian hasil</summary>
+        <div class="pesan" data-hasil-cetak hidden></div>
+        <div data-laporan-printer hidden></div>
+      </details>
     </div>
-  </div>
-
-  <div class="grup">
-    <div class="lbl">Uji cetak</div>
-    <a class="tbl blok" href="{{ PREFIX }}/printer/uji"
-       data-cetak="{{ PREFIX }}/printer/uji">
-      <span data-teks>Cetak halaman uji</span></a>
-    <div class="bantu">
-      Uji cetak tidak membuat tiket atau riwayat cetak transaksi. Yang keluar memuat penggaris 48 kolom. Bila penggaris itu patah menjadi
-      dua baris, kertas yang terpasang bukan 80 mm.
-    </div>
-  </div>
-
-  <div class="bantu" style="line-height:1.55">
-    Printer tetap bisa dilewati: pada layar cetak, <b>Struk 80 mm (PDF)</b>
-    selalu tersedia dan bisa dicetak lewat dialog berbagi ponsel, atau
-    dikirim lewat WhatsApp.
-  </div>
-
-<details class="kartu"><summary>Penyiapan sertifikat dan izin jaringan</summary>  <div class="kartu">
-    <div class="kartu__judul">Dua izin, sekali seumur perangkat</div>
-
-    <div class="baris" style="align-items:flex-start;gap:10px">
-      <span><b>1. Terima sertifikat printer</b><br>
-        <span class="bantu">
-          Sertifikat bawaan printer ini menyebut nama dan alamat yang
-          <b>bukan miliknya</b> (pabrik memasang sertifikat yang sama di
-          banyak unit), jadi setiap browser menolaknya. Buka alamat printer
-          sekali di tab lain, pilih <i>Lanjutkan</i> pada peringatan, lalu
-          tutup tabnya. <b>Wajib diulang di tiap perangkat</b> — menyimpan
-          alamat printer saja tidak cukup.
-        </span>
-      </span>
-    </div>
-    <a class="tbl halus blok" data-buka-printer target="_blank" rel="noopener"
-       style="margin:4px 0 14px">
-      Buka <span data-alamat-printer style="font-family:var(--mono)"></span>
-      di tab baru</a>
-
-    <div class="baris" style="align-items:flex-start;gap:10px">
-      <span><b>2. Izinkan akses jaringan lokal</b><br>
-        <span class="bantu">
-          Saat pertama kali mencetak, browser bertanya apakah halaman ini boleh
-          menghubungi alat di jaringan setempat. Pilih <i>Izinkan</i>. Bila
-          pertanyaannya terlewat, cetakan akan menggantung sampai batas waktu —
-          periksa izin browser, kemudian gunakan pemeriksaan sambungan sebelum mencoba cetak kembali.
-        </span>
-      </span>
-    </div>
-  </div>
-
-  {# Ini akan terlihat oleh setiap orang yang memakai aplikasi, jadi harus
-     dijelaskan DI SINI dan bukan hanya diketahui yang memasang. Cap yang
-     tidak dijelaskan akan dilaporkan sebagai kerusakan — atau lebih buruk,
-     dikira kebocoran data. Keputusan menerimanya diambil 2 September 2026
-     setelah tiga jalur ditimbang. #}
-  <div class="kartu">
-    <div class="kartu__judul">Mengapa browser menulis “Tidak aman”</div>
-    <div class="bantu" style="line-height:1.6">
-      Setelah perangkat ini dipakai mencetak, browser memberi cap
-      <b>“Tidak aman” / “Not Secure”</b> pada alamat aplikasi. Itu wajar dan
-      sudah diperhitungkan.
-      <br><br>
-      Sebabnya sertifikat bawaan printer, bukan aplikasi ini. Sertifikat itu
-      dipasang pabrik dengan nama dan alamat milik unit lain, jadi browser
-      tidak bisa memastikannya — dan begitu Anda menyetujuinya, cap itu
-      melekat pada halaman yang memakainya.
-      <br><br>
-      Yang <b>tidak</b> berubah: sambungan ke server aplikasi tetap
-      terenkripsi dan tetap terverifikasi seperti biasa; catatan timbang,
-      kata sandi, dan foto bukti tidak melewati printer. Yang dikirim ke
-      printer hanya isi struk, dan hanya di dalam jaringan pos.
-    </div>
-  </div>
-
-</details>
-
+  </section>
+  <details class="pp-help-fallback" data-pp-help-fallback><summary>ⓘ Petunjuk Pos &amp; printer</summary><div class="pp-help-content" data-pp-help-content>
+    <section><h3>Urutan penyiapan</h3><p>1. Simpan alamat printer untuk browser ini.</p><p>2. Periksa sambungan tanpa mengeluarkan kertas.</p><p>3. Cetak uji untuk memeriksa keluaran kertas.</p></section>
+    <section><h3>Alamat dan penyimpanan</h3><p>Gunakan alamat yang diawali https://. Pada alur ini browser dapat menolak alamat http:// dari halaman HTTPS.</p><p>Struk dikirim langsung dari perangkat ini ke printer di jaringan pos, bukan dari server. Setelan disimpan di browser/perangkat ini dan tidak ikut berpindah ke ponsel, tablet, atau browser lain.</p><p>Kosongkan kolom lalu simpan untuk memakai alamat bawaan, jika tersedia. Alamat tersimpan belum membuktikan sambungan berhasil. Jika penyimpanan browser diblokir, setelan belum berubah dan ketikan tetap tersedia.</p></section>
+    <details open><summary>Sertifikat dan izin jaringan</summary><div class="pp-help-content">
+      <section><h3>Buka alamat printer</h3><p>Pastikan alamat yang dibuka memang milik printer pos. Jika browser menampilkan peringatan sertifikat, ikuti penyiapan printer yang digunakan di pos, lalu kembali ke halaman ini. Menyimpan alamat saja belum memberi izin sambungan.</p><a class="tbl halus" data-buka-printer target="_blank" rel="noopener">Buka <span data-alamat-printer></span> di tab baru</a><p class="bantu">Penyiapan sertifikat dan izin perlu dilakukan pada setiap browser/perangkat yang dipakai.</p></section>
+      <section><h3>Izinkan akses jaringan lokal</h3><p>Saat browser meminta akses alat di jaringan setempat, pilih Izinkan. Jika ditolak atau terlewat, periksa setelan situs di browser, lalu jalankan Periksa sambungan kembali.</p></section>
+      <section><h3>Jika tetap gagal</h3><p>Pastikan perangkat berada di jaringan pos yang bisa menjangkau printer, printer menyala, dan alamatnya benar. Keterangan kesalahan browser tidak selalu cukup untuk membedakan masalah jaringan dan sertifikat.</p></section>
+    </div></details>
+    <details><summary>Memeriksa hasil cetak uji</summary><p>Halaman uji memuat penggaris 48 kolom. Jika penggaris terbelah menjadi dua baris, periksa apakah kertas yang dipasang sesuai 80 mm.</p><p>Uji cetak tidak membuat tiket atau menambah riwayat cetak transaksi. Konfirmasi printer tidak menggantikan pemeriksaan kertas yang keluar. Jika hasil cetak belum pasti, periksa kertas sebelum mengulang.</p></details>
+    <details><summary>Kode pos dan akun</summary><p>Kode perangkat akun: <b>{{ akun.perangkat_kode or '—' }}</b>. Kode ini melekat pada akun dan ikut menyusun nomor transaksi. Alamat printer di halaman ini hanya berlaku pada browser/perangkat ini.</p></details>
+    <details><summary>Jika tidak memakai printer pos</summary><p>Pada layar cetak tiket, Struk 80 mm (PDF) tetap tersedia. Berkas dapat dicetak melalui dialog berbagi ponsel atau dibagikan, termasuk melalui WhatsApp. Pilihan PDF tidak mengubah alamat printer di halaman ini.</p></details>
+    <details><summary>Peringatan “Tidak aman” pada browser</summary><p>Penyiapan printer dapat memunculkan peringatan terkait sertifikat bawaan printer. Jangan menganggap semua peringatan aman; pastikan alamat yang dibuka memang printer pos yang dimaksud.</p><p>Aplikasi dan printer memakai jalur sambungan yang berbeda. Yang dikirim langsung ke printer adalah isi struk di jaringan pos; catatan timbang, kata sandi, dan foto bukti tidak dikirim melalui printer.</p><p>Untuk masalah sertifikat atau perubahan tanda keamanan browser, mintalah bantuan petugas yang menyiapkan printer pos.</p></details>
+  </div></details>
+  {% from "_panduan.html" import panel as panel_panduan %}
+  {% call panel_panduan('pp-petunjuk', 'Petunjuk Pos & printer', {}, {'data-pp-close':''}) %}<div data-pp-help-slot></div>{% endcall %}
 </div>

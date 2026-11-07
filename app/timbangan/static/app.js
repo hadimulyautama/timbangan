@@ -913,7 +913,7 @@
     }
     cetakKePrinter(tombol.dataset.cetak)
       .then(function () {
-        lapor('Struk keluar di printer.', 'ok');
+        lapor('Struk keluar di printer.', 'ok', false, {tindakan:'cetak',berhasil:true});
         if (catatCetak()) {
           // Kunci tetap dipegang selama POST audit dan perpindahan halaman.
           // Klik sesudah ACK printer pun tidak boleh mengirim kertas lagi.
@@ -924,11 +924,15 @@
         pulihkanCetak();
         lapor(err.belumPasti
           ? 'Hasil cetak belum dapat dipastikan. Periksa kertas sebelum mencoba lagi. ' + err.message
-          : err.message, 'err', err.penyiapan);
+          : err.message, 'err', err.penyiapan, {tindakan:'cetak',berhasil:false,belumPasti:!!err.belumPasti});
       });
   });
 
-  function lapor(pesan, nada, penyiapan) {
+  function lapor(pesan, nada, penyiapan, keadaanPrinter) {
+    // Halaman penyiapan merangkum hasil tanpa membaca/menebak teks atau ACK.
+    if (document.querySelector('[data-pos-printer]')) {
+      document.dispatchEvent(new CustomEvent('teraflow:printer', {detail:{jenis:'hasil',pesan:pesan||'',nada:nada,penyiapan:!!penyiapan,keadaan:keadaanPrinter||null}}));
+    }
     var kotak = document.querySelector('[data-hasil-cetak]');
     if (!kotak) { if (pesan) { alert(pesan); } return; }
     kotak.textContent = '';
@@ -1137,6 +1141,9 @@
         baris.appendChild(kiri);
         kotak.appendChild(baris);
       });
+      if (document.querySelector('[data-pos-printer]')) {
+        document.dispatchEvent(new CustomEvent('teraflow:printer', {detail:{jenis:'pemeriksaan',hasil:hasil}}));
+      }
     });
   });
 

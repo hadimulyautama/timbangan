@@ -6,6 +6,8 @@
 {% macro pintu(url, nama, ket, tanda='') %}
 <a class="pilihan set-pintu" href="{{ PREFIX }}{{ url }}"><div class="pilihan__isi"><div class="pilihan__nama">{{ nama }}</div><div class="pilihan__ket">{{ ket }}</div>{% if tanda %}<span class="lencana lencana--netral">{{ tanda }}</span>{% endif %}</div><span aria-hidden="true">›</span></a>
 {% endmacro %}
+{% block gaya_tambahan %}{% if bagian == 'printer' %}<link rel="stylesheet" href="{{ PREFIX }}/static/panduan.css?v={{ VERSI }}"><link rel="stylesheet" href="{{ PREFIX }}/static/pos-printer-desain.css?v={{ VERSI }}">{% endif %}{% endblock %}
+{% block skrip %}{% if bagian == 'printer' %}<script src="{{ PREFIX }}/static/pos-printer-desain.js?v={{ VERSI }}" defer></script>{% endif %}{% endblock %}
 {% block isi %}
 <div class="set-halaman" data-pengaturan data-bagian="{{ bagian }}">
 {% include 'pengaturan/skema.html' %}
