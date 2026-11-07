@@ -4,23 +4,25 @@
 function init(){
  const sumber=document.querySelector('[data-tindakan-sumber]'),dropdown=document.querySelector('[data-tindakan-dropdown]');
  if(!sumber||!dropdown||typeof HTMLDialogElement==='undefined')return;
- const menu=dropdown.querySelector('[data-tindakan-menu]'),pemicu=dropdown.querySelector('summary'),kode=sumber.dataset.kode;
+ const menu=dropdown.querySelector('[data-tindakan-menu]'),pemicu=dropdown.querySelector('[data-tindakan-trigger]'),kode=sumber.dataset.kode;
  const dialog=document.createElement('dialog');dialog.className='tf-actions-dialog';dialog.setAttribute('aria-labelledby','tf-actions-judul');
  dialog.innerHTML='<header><h2 id="tf-actions-judul"></h2><button type="button" class="tbl halus" data-tindakan-tutup aria-label="Tutup tindakan">×</button></header><div data-tindakan-slot></div>';
  document.body.append(dialog);const slot=dialog.querySelector('[data-tindakan-slot]'),judul=dialog.querySelector('h2'),tutup=dialog.querySelector('[data-tindakan-tutup]');
+ function terbuka(){return pemicu.getAttribute('aria-expanded')==='true';}
+ function aturMenu(value,fokus=false){pemicu.setAttribute('aria-expanded',String(value));menu.hidden=!value;menu.style.display=value?'block':'none';menu.inert=!value;dropdown.dataset.terbuka=String(value);if(value)posisi();if(fokus)pemicu.focus();}
  const sibuk=()=>!!slot.querySelector('[data-tf-busy="1"]');
  tutup.addEventListener('click',()=>{if(!sibuk()){dialog.close();pemicu.focus();}});
  dialog.addEventListener('cancel',e=>{if(sibuk())e.preventDefault();});
  dialog.addEventListener('close',()=>pemicu.focus());
  for(const node of [...sumber.children]){
   if(node.tagName==='A'){
-   node.className='tf-actions-item';menu.append(node);node.addEventListener('click',()=>{dropdown.open=false;});
+   node.className='tf-actions-item';menu.append(node);node.addEventListener('click',()=>{aturMenu(false);});
   }else if(node.tagName==='DETAILS'){
    const summary=node.querySelector(':scope>summary'),label=summary.textContent.trim().replace(/\s+/g,' '),button=document.createElement('button');
    button.type='button';button.className='tf-actions-item';button.textContent=label;button.setAttribute('aria-haspopup','dialog');
    if(node.querySelector('form')?.action.endsWith('/hapus'))button.classList.add('tf-actions-danger');
    node.hidden=true;node.open=true;slot.append(node);menu.append(button);
-   button.addEventListener('click',()=>{dropdown.open=false;slot.querySelectorAll(':scope>details').forEach(x=>x.hidden=x!==node);judul.textContent=label;dialog.showModal();node.querySelector('textarea,input')?.focus();});
+   button.addEventListener('click',()=>{aturMenu(false);slot.querySelectorAll(':scope>details').forEach(x=>x.hidden=x!==node);judul.textContent=label;dialog.showModal();node.querySelector('textarea,input')?.focus();});
   }else if(node.textContent.trim()){
    node.classList.add('tf-actions-note');menu.append(node);
   }
@@ -29,17 +31,16 @@ function init(){
  // Fallback tetap tersedia bila JS tidak berjalan; saat aktif tak ada salinan tombol bawah.
  const fallback=sumber.closest('[data-rd-actions-fallback]')||sumber.closest('details');
  if(fallback)fallback.hidden=true;sumber.hidden=true;dropdown.hidden=false;
- function posisi(){if(!dropdown.open)return;const rect=dropdown.getBoundingClientRect(),lebar=Math.min(280,innerWidth-32),kiri=Math.min(Math.max(rect.left,16),innerWidth-lebar-16);menu.style.left=(kiri-rect.left)+'px';menu.style.right='auto';}
- function tutupMenu(fokus=false){dropdown.open=false;pemicu.setAttribute('aria-expanded','false');if(fokus)pemicu.focus();}
- pemicu.setAttribute('aria-expanded','false');
- pemicu.addEventListener('click',e=>{e.preventDefault();dropdown.open=!dropdown.open;pemicu.setAttribute('aria-expanded',String(dropdown.open));posisi();});
- dropdown.addEventListener('toggle',()=>{pemicu.setAttribute('aria-expanded',String(dropdown.open));posisi();});window.addEventListener('resize',posisi);
- // Capture menangani klik/sentuh luar meski komponen lain menghentikan bubbling.
- function luar(e){if(dropdown.open&&!dropdown.contains(e.target))tutupMenu();}
+ function posisi(){if(!terbuka())return;const rect=pemicu.getBoundingClientRect(),lebar=Math.min(280,innerWidth-32),kiri=Math.min(Math.max(rect.left,16),innerWidth-lebar-16);menu.style.left=(kiri-rect.left)+'px';menu.style.right='auto';}
+ aturMenu(false);
+ pemicu.addEventListener('click',e=>{e.preventDefault();aturMenu(!terbuka());});
+ window.addEventListener('resize',posisi);
+ // Menu memakai elemen biasa agar penutupan tidak bergantung pada render details Safari.
+ function luar(e){if(terbuka()&&!dropdown.contains(e.target))aturMenu(false);}
  document.addEventListener('pointerdown',luar,true);document.addEventListener('click',luar,true);
- document.addEventListener('keydown',e=>{if(e.key==='Escape'&&dropdown.open){e.preventDefault();tutupMenu(true);}},true);
- dropdown.addEventListener('focusout',e=>{if(e.relatedTarget&&!dropdown.contains(e.relatedTarget))tutupMenu();});
- window.addEventListener('pagehide',()=>tutupMenu());
+ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&terbuka()){e.preventDefault();aturMenu(false,true);}},true);
+ dropdown.addEventListener('focusout',e=>{if(e.relatedTarget&&!dropdown.contains(e.relatedTarget))aturMenu(false);});
+ window.addEventListener('pagehide',()=>aturMenu(false));
  slot.querySelectorAll('form').forEach(form=>{
   let menunggu=false;const pesan=document.createElement('p');pesan.className='pesan pesan--err';pesan.setAttribute('role','alert');pesan.hidden=true;form.append(pesan);
   form.addEventListener('submit',async e=>{

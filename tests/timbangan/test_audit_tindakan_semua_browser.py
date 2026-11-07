@@ -55,21 +55,21 @@ async def test_menu_bisa_ditutup_semua_cara(klien,alamat_ui,width):
             await page.route('**/*',lokal)
         else:b,ctx,page=await browser_uji(pw,klien,alamat_ui,width)
         await buka(page,alamat_ui+f'/timbangan/transaksi/{tid}');lokasi=page.url
-        menu=page.locator('[data-tindakan-dropdown]');trigger=menu.locator('summary')
+        menu=page.locator('[data-tindakan-dropdown]');trigger=menu.locator('[data-tindakan-trigger]')
         tekan=trigger.tap if width==390 else trigger.click
         for _ in range(3):
-            await tekan();assert await menu.evaluate('e=>e.open')
-            await tekan();assert not await menu.evaluate('e=>e.open')
-        await trigger.click();await page.locator('h1').first.click();assert not await menu.evaluate('e=>e.open')
-        await trigger.click();await page.evaluate('document.activeElement.blur()');await page.keyboard.press('Escape');assert not await menu.evaluate('e=>e.open')
+            await tekan();assert await menu.evaluate("e=>e.dataset.terbuka==='true'")
+            await tekan();assert not await menu.evaluate("e=>e.dataset.terbuka==='true'")
+        await trigger.click();await page.locator('h1').first.click();assert not await menu.evaluate("e=>e.dataset.terbuka==='true'")
+        await trigger.click();await page.evaluate('document.activeElement.blur()');await page.keyboard.press('Escape');assert not await menu.evaluate("e=>e.dataset.terbuka==='true'")
         # Klik pada komponen yang menghentikan bubbling tetap harus menutup.
         await page.evaluate("() => {let e=document.createElement('button');e.id='uji-luar';e.textContent='Komponen luar';e.style='position:fixed;bottom:150px;right:15px;z-index:9999';e.addEventListener('click',x=>x.stopPropagation());document.body.append(e)}")
-        await trigger.click();await page.locator('#uji-luar').click();assert not await menu.evaluate('e=>e.open')
+        await trigger.click();await page.locator('#uji-luar').click();assert not await menu.evaluate("e=>e.dataset.terbuka==='true'")
         if width==390:
-            await page.evaluate("document.querySelector('[data-tindakan-dropdown]>summary').dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}))")
-            assert await menu.evaluate('e=>e.open')
+            await page.evaluate("document.querySelector('[data-tindakan-trigger]').dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}))")
+            assert await menu.evaluate("e=>e.dataset.terbuka==='true'")
             await page.locator('#uji-luar').dispatch_event('pointerdown',{'pointerType':'touch','bubbles':True})
-            assert not await menu.evaluate('e=>e.open')
+            assert not await menu.evaluate("e=>e.dataset.terbuka==='true'")
         assert page.url==lokasi
         await b.close()
 
@@ -84,7 +84,7 @@ async def test_seluruh_pilihan_dan_hak_akses(klien,alamat_ui,jenis,width,role):
     async with async_playwright() as pw:
         b,ctx,page=await browser_uji(pw,klien,alamat_ui,width,'dark' if width==390 else 'light');errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
         await buka(page,alamat_ui+f'/timbangan/transaksi/{tid}')
-        dropdown=page.locator('[data-tindakan-dropdown]');await dropdown.wait_for(state='visible');await dropdown.locator('summary').click()
+        dropdown=page.locator('[data-tindakan-dropdown]');await dropdown.wait_for(state='visible');await dropdown.locator('[data-tindakan-trigger]').click()
         menu=page.locator('[data-tindakan-menu]')
         assert await menu.get_by_role('link',name='Koreksi',exact=True).count()==1
         assert await menu.get_by_role('button',name='Batalkan transaksi',exact=True).count()==int(role!=P.OPERATOR)
@@ -109,7 +109,7 @@ async def test_seluruh_pilihan_dan_hak_akses(klien,alamat_ui,jenis,width,role):
         async with database.SessionLocal() as db:
             trx=await db.get(TimbanganTransaksi,tid);assert trx.nama_sopir=='Sopir Hasil Audit' and trx.berat_barang_kg==berat
         # Admin membatalkan; Super Admin menjalankan penghapusan dengan kode wajib.
-        await page.locator('[data-tindakan-dropdown]>summary').click()
+        await page.locator('[data-tindakan-trigger]').click()
         if role==P.ADMIN:
             await page.locator('[data-tindakan-menu]').get_by_role('button',name='Batalkan transaksi',exact=True).click()
             form=page.locator('.tf-actions-dialog form[action$="/batal"]')
@@ -125,7 +125,7 @@ async def test_seluruh_pilihan_dan_hak_akses(klien,alamat_ui,jenis,width,role):
             await form.locator('button[type=submit]').click();await page.wait_for_url('**/transaksi?ok=**')
             async with database.SessionLocal() as db:assert await db.get(TimbanganTransaksi,tid) is None
         else:
-            await page.keyboard.press('Escape');assert not await page.locator('[data-tindakan-dropdown]').evaluate('e=>e.open')
+            await page.keyboard.press('Escape');assert not await page.locator('[data-tindakan-dropdown]').evaluate("e=>e.dataset.terbuka==='true'")
         assert not errors,errors
         out=Path(os.environ['UJI_AUDIT_OUT']);out.mkdir(parents=True,exist_ok=True)
         (out/f'{jenis}-{width}-{role}.json').write_text(json.dumps(dict(jenis=jenis,width=width,role=role,koreksi=True,pembatalan_diizinkan=role!=P.OPERATOR,hapus_diizinkan=role==P.SUPERADMIN,galat=errors),indent=2))

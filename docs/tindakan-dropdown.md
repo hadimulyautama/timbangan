@@ -7,3 +7,5 @@ Koreksi tetap menuju formulir koreksi asli. Pembatalan/penghapusan menampilkan s
 Tidak ada migrasi. Rollback ke commit sebelumnya mempertahankan seluruh transaksi/audit.
 
 Penutupan menu ditangani eksplisit pada pemicu, pointer/click di luar dalam fase capture, Escape pada dokumen, perpindahan fokus, dan pagehide. Dengan demikian penutupan tidak bergantung pada fokus summary atau event bubbling komponen lain. aria-expanded mengikuti keadaan sebenarnya. Hak akses dan endpoint server tidak diubah.
+
+Menu utama sekarang memakai div + button dengan aria-expanded, hidden, display:none eksplisit dan inert saat tertutup. Native details hanya dipertahankan untuk fallback/formulir lama. Menu tertutup harus memiliki nol kotak tata letak dan tidak menyisakan lapisan visual; posisi dihitung dari tombol pemicu, bukan tinggi kontainer details.

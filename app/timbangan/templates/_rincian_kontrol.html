@@ -5,7 +5,7 @@
   <a class="dk-kembali" href="{{ kembali }}" aria-label="Kembali">← {{ 'Kembali ke riwayat' if '/transaksi' in kembali else 'Kembali' }}</a>
   <div class="tf-detail-controls__actions rd-buttons">
     {% if panduan %}<button type="button" class="tbl halus" data-rd-guide hidden><span aria-hidden="true">ⓘ</span> Panduan</button>{% endif %}
-    <details class="tf-actions" data-tindakan-dropdown hidden><summary class="tbl halus">Tindakan lainnya <span aria-hidden="true">▾</span></summary><div class="tf-actions-menu" data-tindakan-menu role="group" aria-label="Pilihan tindakan"></div></details>
+    <div class="tf-actions" data-tindakan-dropdown hidden><button type="button" class="tbl halus" data-tindakan-trigger aria-expanded="false" aria-controls="tf-tindakan-pilihan">Tindakan lainnya <span aria-hidden="true">▾</span></button><div id="tf-tindakan-pilihan" class="tf-actions-menu" data-tindakan-menu role="group" aria-label="Pilihan tindakan" hidden></div></div>
     {% if trx.status_tiket == 'SELESAI' and trx.status_transaksi != 'VOID' %}
       <a href="{{ prefix }}/transaksi/{{ trx.id }}/cetak" class="tbl" data-cetak-langsung data-tiket="{{ trx.id }}" data-prefix="{{ prefix }}">Cetak</a>
       <button type="button" class="tbl halus" data-lihat-pdf data-pdf-url="{{ prefix }}/transaksi/{{ trx.id }}/cetak/80mm">Lihat</button>

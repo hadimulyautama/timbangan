@@ -40,7 +40,7 @@ async def test_dropdown_semua_detail_dan_form_asli(klien,alamat_ui,jenis,width):
         dropdown=page.locator('[data-tindakan-dropdown]');await dropdown.wait_for(state='visible')
         guide=page.locator('[data-rd-guide]')
         if await guide.count():assert await guide.evaluate('e=>e.nextElementSibling.matches("[data-tindakan-dropdown]")')
-        await dropdown.locator('summary').click()
+        await dropdown.locator('[data-tindakan-trigger]').click()
         menu=page.locator('[data-tindakan-menu]');await menu.get_by_role('button',name='Batalkan transaksi',exact=True).wait_for(state='visible')
         assert await menu.get_by_role('link',name='Koreksi',exact=True).count()==1
         assert await menu.get_by_role('button',name='Hapus permanen',exact=True).count()==1
@@ -63,8 +63,8 @@ async def test_dropdown_semua_detail_dan_form_asli(klien,alamat_ui,jenis,width):
         assert len(posts)==1 and await form.locator('[name=alasan]').input_value()=='Alasan tetap setelah kegagalan'
         assert page.url==lokasi
         await page.get_by_role('button',name='Tutup tindakan').click()
-        assert await dropdown.locator('summary').evaluate('e=>e===document.activeElement')
-        await dropdown.locator('summary').click();await menu.get_by_role('button',name='Hapus permanen',exact=True).click()
+        assert await dropdown.locator('[data-tindakan-trigger]').evaluate('e=>e===document.activeElement')
+        await dropdown.locator('[data-tindakan-trigger]').click();await menu.get_by_role('button',name='Hapus permanen',exact=True).click()
         hapus=dialog.locator('form[action$="/hapus"]');assert await hapus.is_visible()
         assert await hapus.locator('[name=ketik_kode]').get_attribute('required') is not None
         assert await hapus.locator('[name=alasan]').get_attribute('required') is not None
@@ -72,8 +72,8 @@ async def test_dropdown_semua_detail_dan_form_asli(klien,alamat_ui,jenis,width):
         out=Path(os.environ['UJI_TINDAKAN_OUT']);out.mkdir(parents=True,exist_ok=True)
         await page.screenshot(path=str(out/f'tindakan-{jenis}-{width}.png'),full_page=True)
         await page.keyboard.press('Escape')
-        await dropdown.locator('summary').click();await page.keyboard.press('Escape')
-        assert not await dropdown.evaluate('e=>e.open') and not errors
+        await dropdown.locator('[data-tindakan-trigger]').click();await page.keyboard.press('Escape')
+        assert not await dropdown.evaluate("e=>e.dataset.terbuka==='true'") and not errors
         async with database.SessionLocal() as db:assert (await db.get(TimbanganTransaksi,tid)).status_transaksi=='AKTIF'
         await b.close()
 
@@ -83,7 +83,7 @@ async def test_hak_akses_dan_pembatalan_asli(klien,alamat_ui,role):
     async with async_playwright() as pw:
         b,ctx,page=await browser_uji(pw,klien,alamat_ui)
         await buka(page,alamat_ui+f'/timbangan/transaksi/{tid}');dropdown=page.locator('[data-tindakan-dropdown]');await dropdown.wait_for(state='visible')
-        await dropdown.locator('summary').click();menu=page.locator('[data-tindakan-menu]')
+        await dropdown.locator('[data-tindakan-trigger]').click();menu=page.locator('[data-tindakan-menu]')
         assert await menu.get_by_role('button',name='Hapus permanen',exact=True).count()==0
         if await menu.get_by_role('button',name='Batalkan transaksi',exact=True).count():
             await menu.get_by_role('button',name='Batalkan transaksi',exact=True).click()
@@ -99,7 +99,7 @@ async def test_hapus_tetap_memerlukan_kode_dan_berhasil_setelah_konfirmasi(klien
     async with async_playwright() as pw:
         b,ctx,page=await browser_uji(pw,klien,alamat_ui)
         await buka(page,alamat_ui+f'/timbangan/transaksi/{tid}')
-        await page.locator('[data-tindakan-dropdown]>summary').click()
+        await page.locator('[data-tindakan-trigger]').click()
         await page.locator('[data-tindakan-menu]').get_by_role('button',name='Hapus permanen',exact=True).click()
         form=page.locator('.tf-actions-dialog form[action$="/hapus"]')
         await form.locator('[name=alasan]').fill('Penghapusan data uji sementara')
