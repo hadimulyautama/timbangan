@@ -1,4 +1,5 @@
 """Desain kedua memakai form dan server asli dengan database fixture sintetis."""
+from profil_browser import mesin, konteks
 import os
 from datetime import timedelta
 from pathlib import Path
@@ -26,9 +27,9 @@ async def test_kedua_desktop_ponsel_seluruh_alur(lokal,monkeypatch):
     tickets=[(arah,kode,await tiket_uji(arah,kode)) for arah,kode in ALUR]
     errors=[]
     async with async_playwright() as pw:
-        browser=await pw.chromium.launch()
+        browser=await mesin(pw).launch()
         for width in [1440,390,320]:
-            context,page=await halaman(browser,url,klien,width)
+            context,page=await halaman(browser,url,klien,width,pw=pw)
             page.on('pageerror',lambda e:errors.append(str(e)))
             for arah,kode,tid in tickets:
                 await page.goto(f'{url}/timbangan/tiket/{tid}')
@@ -91,7 +92,7 @@ async def test_kedua_desktop_ponsel_seluruh_alur(lokal,monkeypatch):
 async def test_simpan_sementara_lalu_selesai(lokal):
     url,klien=lokal;tid=await tiket_uji('MASUK','GABAH_BASAH')
     async with async_playwright() as pw:
-        browser=await pw.chromium.launch();context,page=await halaman(browser,url,klien,390)
+        browser=await mesin(pw).launch();context,page=await halaman(browser,url,klien,390,pw=pw)
         await page.goto(f'{url}/timbangan/tiket/{tid}')
         await page.wait_for_function('window.timbanganLuring && window.timbanganLuring.siap()')
         await page.locator('[name=berat_kg]').fill('5000')
@@ -112,8 +113,8 @@ async def test_simpan_sementara_lalu_selesai(lokal):
 async def test_cache_rilis_dan_kedua_formulir_luring(lokal):
     url,klien=lokal;tid=await tiket_uji('MASUK','GABAH_BASAH')
     async with async_playwright() as pw:
-        browser=await pw.chromium.launch()
-        context=await browser.new_context(viewport={'width':390,'height':900})
+        browser=await mesin(pw).launch()
+        context=await browser.new_context(**konteks(pw,390,900))
         await context.add_cookies([{'name':k,'value':v,'url':url} for k,v in klien.cookies.items()])
         await context.route('https://fonts.googleapis.com/**',lambda r:r.abort())
         await context.route('https://fonts.gstatic.com/**',lambda r:r.abort())
@@ -140,7 +141,7 @@ async def test_tanpa_js_dan_pesan_integrasi_tetap(lokal,monkeypatch):
     url,klien=lokal;await pasang_muatan(monkeypatch,gagal=True)
     tid=await tiket_uji('KELUAR','PENGIRIMAN')
     async with async_playwright() as pw:
-        browser=await pw.chromium.launch();context,page=await halaman(browser,url,klien,390,False)
+        browser=await mesin(pw).launch();context,page=await halaman(browser,url,klien,390,False,pw=pw)
         await page.goto(f'{url}/timbangan/tiket/{tid}')
         assert 'Gangguan sintetis Produksi' in await page.locator('.fw-main').inner_text()
         await page.locator('[data-tk-guide-fallback]>summary').click()
