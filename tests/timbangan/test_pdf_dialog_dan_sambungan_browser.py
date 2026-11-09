@@ -55,6 +55,7 @@ async def test_periksa_langsung_tanpa_panduan(klien,alamat_ui,width):
             if mode['gagal']:return await route.abort()
             await route.fulfill(status=200,content_type='text/xml',body='<response success="true"/>')
         await page.route('https://printer.invalid/**',printer)
+        await page.locator('[data-pp-edit]').click()
         await page.locator('[name=printer_url]').fill('https://printer.invalid');await page.locator('[data-simpan-printer]').click()
         await page.get_by_role('button',name='Periksa sambungan',exact=True).click()
         await page.wait_for_function("document.querySelector('[data-pp-summary]').textContent==='Printer belum dapat dihubungi.'")

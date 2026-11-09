@@ -102,7 +102,6 @@ async def test_uji_printer_sukses_gagal_tidak_pasti_tanpa_transaksi(klien,alamat
     async with async_playwright() as pw:
         b,ctx,page=await browser_uji(pw,klien,alamat_ui,390,browser=os.environ.get('UJI_BROWSER','chromium'))
         await buka(page,alamat_ui+'/timbangan/pengaturan?bagian=printer')
-        await page.locator('[name=printer_url]').fill('https://printer.invalid');await page.locator('[data-simpan-printer]').click()
         calls=[];mode={'value':'success'}
         async def printer(r):
             calls.append(r.request.post_data);await asyncio.sleep(.15)
@@ -112,6 +111,10 @@ async def test_uji_printer_sukses_gagal_tidak_pasti_tanpa_transaksi(klien,alamat
             xml='<response success="true"/>' if mode['value']=='success' else '<response success="false" code="EPTR_COVER_OPEN"/>'
             return await r.fulfill(status=200,content_type='text/xml',body=xml)
         await page.route('https://printer.invalid/**',printer)
+        await page.locator('[data-pp-edit]').click()
+        await page.locator('[name=printer_url]').fill('https://printer.invalid');await page.locator('[data-simpan-printer]').click()
+        await page.wait_for_function("document.querySelector('[data-pp-status]').textContent==='Sambungan berhasil'")
+        calls.clear()
         for value,pesan in [('success','Struk keluar'),('failed','Penutup printer terbuka'),('unknown','belum dapat dipastikan')]:
             mode['value']=value;before=len(calls)
             await page.locator('[data-cetak]').evaluate('(e)=>{e.click();e.click()}')
