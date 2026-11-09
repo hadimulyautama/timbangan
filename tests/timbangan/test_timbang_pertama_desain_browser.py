@@ -1,5 +1,7 @@
 """Browser nyata, server lokal, dan database sintetis milik fixture test_web."""
+from contextlib import asynccontextmanager
 import asyncio
+from profil_browser import mesin, konteks
 import os
 import socket
 from pathlib import Path
@@ -10,8 +12,8 @@ from test_web import app_uji, klien, login  # noqa: F401
 
 JALUR=['/timbang/'+k for k in ['GABAH_BASAH','GABAH_KERING','BERAS_PK','BERAS_MASUK','BROKEN_MASUK','PENGIRIMAN','TRANSFER','RETUR_PELANGGAN','RETUR_SUPPLIER','BEBAS']]+['/jasa/GABAH_KERING']
 
-@pytest.fixture
-async def lokal(app_uji,klien):
+@asynccontextmanager
+async def _server_lokal(app_uji,klien):
     await login(klien)
     sock=socket.socket();sock.bind(('127.0.0.1',0));sock.listen()
     url=f'http://127.0.0.1:{sock.getsockname()[1]}'
@@ -21,13 +23,25 @@ async def lokal(app_uji,klien):
         if server.started:break
         await asyncio.sleep(.02)
     assert server.started
-    try:yield url,klien
-    finally:
+    async def putus():
         server.should_exit=True
         await task
+    try:yield url,klien,putus
+    finally:await putus()
 
-async def halaman(browser,url,klien,width=1440,js=True):
-    context=await browser.new_context(viewport={'width':width,'height':1000},locale='id-ID',timezone_id='Asia/Jakarta',java_script_enabled=js,service_workers='block')
+@pytest.fixture
+async def lokal_server(app_uji,klien):
+    async with _server_lokal(app_uji,klien) as server:yield server
+
+@pytest.fixture
+async def lokal(app_uji,klien):
+    async with _server_lokal(app_uji,klien) as server:
+        url,client,_=server
+        yield url,client
+
+async def halaman(browser,url,klien,width=1440,js=True,pw=None):
+    options=konteks(pw,width,1000) if pw else {'viewport':{'width':width,'height':1000}}
+    context=await browser.new_context(**options,locale='id-ID',timezone_id='Asia/Jakarta',java_script_enabled=js,service_workers='block')
     await context.add_cookies([{'name':k,'value':v,'url':url} for k,v in klien.cookies.items()])
     await context.route('https://fonts.googleapis.com/**',lambda r:r.abort())
     await context.route('https://fonts.gstatic.com/**',lambda r:r.abort())
@@ -37,9 +51,9 @@ async def halaman(browser,url,klien,width=1440,js=True):
 async def test_desktop_ponsel_semua_jenis_dan_panduan(lokal):
     url,klien=lokal;errors=[]
     async with async_playwright() as pw:
-        browser=await pw.chromium.launch()
+        browser=await mesin(pw).launch()
         for width in [1440,390,320]:
-            context,page=await halaman(browser,url,klien,width)
+            context,page=await halaman(browser,url,klien,width,pw=pw)
             page.on('pageerror',lambda e:errors.append(str(e)))
             for jalur in JALUR:
                 await page.goto(url+'/timbangan'+jalur)
@@ -88,8 +102,8 @@ async def test_desktop_ponsel_semua_jenis_dan_panduan(lokal):
 async def test_simpan_dan_lanjut_timbang_kedua(lokal):
     url,klien=lokal
     async with async_playwright() as pw:
-        browser=await pw.chromium.launch()
-        context,page=await halaman(browser,url,klien,390)
+        browser=await mesin(pw).launch()
+        context,page=await halaman(browser,url,klien,390,pw=pw)
         await page.goto(url+'/timbangan/timbang/GABAH_BASAH')
         await page.wait_for_function('window.timbanganLuring && window.timbanganLuring.siap()')
         await page.locator('[name=berat_kg]').fill('15000')
@@ -107,8 +121,8 @@ async def test_simpan_dan_lanjut_timbang_kedua(lokal):
 async def test_tanpa_js_semua_isian_dan_panduan_tetap_tersedia(lokal):
     url,klien=lokal
     async with async_playwright() as pw:
-        browser=await pw.chromium.launch()
-        context,page=await halaman(browser,url,klien,390,False)
+        browser=await mesin(pw).launch()
+        context,page=await halaman(browser,url,klien,390,False,pw=pw)
         response=await page.goto(url+'/timbangan/timbang/GABAH_BASAH')
         assert await page.locator('.tp-page').count()==1,(response.status,page.url,await page.locator('body').inner_text())
         await page.locator('[data-tp-guide-fallback] summary').click()

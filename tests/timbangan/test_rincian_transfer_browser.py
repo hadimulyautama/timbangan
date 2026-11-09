@@ -1,4 +1,5 @@
 """UI transfer dengan basis data SQLite sementara; tidak menuju host operasional."""
+from profil_browser import mesin, konteks
 from pathlib import Path
 from urllib.parse import urlsplit
 from datetime import timedelta
@@ -19,9 +20,10 @@ from app.timbangan.models import TimbanganTransaksi,TimbanganAkun,TimbanganAudit
 from hmu_identitas import peran as P
 OUT=Path(os.environ.get('UJI_TRANSFER_OUT',str(Path(__file__).resolve().parents[3]/'gambar')))
 
-async def browser_uji(pw,klien,alamat,width=390,theme='light',browser='chromium'):
+async def browser_uji(pw,klien,alamat,width=390,theme='light',browser=None):
+    browser=browser or os.getenv('UJI_BROWSER','chromium')
     opts={'executable_path':os.environ['UJI_WEBKIT_PATH']} if browser=='webkit' and os.environ.get('UJI_WEBKIT_PATH') else {}
-    b=await getattr(pw,browser).launch(**opts);ctx=await b.new_context(viewport={'width':width,'height':920},service_workers='block',reduced_motion='reduce',color_scheme=theme)
+    b=await getattr(pw,browser).launch(**opts);ctx=await b.new_context(**konteks(pw,width,920),service_workers='block',color_scheme=theme)
     await ctx.add_cookies([{'name':k,'value':v,'url':alamat} for k,v in klien.cookies.items()])
     await ctx.add_init_script("localStorage.setItem('pd.tema.timbang', '"+theme+"')")
     page=await ctx.new_page()
@@ -176,7 +178,7 @@ async def test_cetak_pdf_printer_sintetis_dan_audit(klien,alamat_ui,role):
             return await r.fulfill(status=200,content_type='text/xml',body='<response success="true"/>')
         await page.route('**/cgi-bin/epos/**',sukses)
         await page.locator('[data-cp-jalankan]').evaluate('e=>{e.click();e.click()}')
-        await page.wait_for_function("document.querySelector('.cp-history').textContent.includes('Cetak ke-1')")
+        await page.wait_for_function("document.querySelector('.cp-history')?.textContent.includes('Cetak ke-1')")
         assert len(dikirim)==1 and dikirim[0].count('<cut type="feed"/>')==2
         async with database.SessionLocal() as db:
             row=await db.scalar(select(TimbanganCetak));assert row.urutan==1
@@ -186,7 +188,7 @@ async def test_cetak_pdf_printer_sintetis_dan_audit(klien,alamat_ui,role):
         assert len(dikirim)==1
         await page.locator('[name=alasan]').fill('Kertas uji rusak, cetak ulang sintetis')
         await page.locator('[data-cp-jalankan]').evaluate('e=>{e.click();e.click()}')
-        await page.wait_for_function("document.querySelector('.cp-history').textContent.includes('Cetak ke-2')")
+        await page.wait_for_function("document.querySelector('.cp-history')?.textContent.includes('Cetak ke-2')")
         async with database.SessionLocal() as db:
             rows=(await db.scalars(select(TimbanganCetak).order_by(TimbanganCetak.urutan))).all()
             assert len(rows)==2 and rows[-1].alasan=='Kertas uji rusak, cetak ulang sintetis'
@@ -223,9 +225,9 @@ async def test_tanpa_js_legacy_dan_bacaan_sementara(klien,alamat_ui):
     async with database.SessionLocal() as db:
         t=await db.get(TimbanganTransaksi,tid);t.timbang2_kg=6400;await db.commit()
     async with async_playwright() as pw:
-        b=await pw.chromium.launch()
+        b=await mesin(pw).launch()
         for js in [False,True]:
-            ctx=await b.new_context(viewport={'width':390,'height':950},java_script_enabled=js,service_workers='block',reduced_motion='reduce')
+            ctx=await b.new_context(**konteks(pw,390,950),java_script_enabled=js,service_workers='block')
             await ctx.add_cookies([{'name':k,'value':v,'url':alamat_ui} for k,v in klien.cookies.items()])
             page=await ctx.new_page();await page.goto(alamat_ui+f'/timbangan/transaksi/{tid}?tab=perhitungan')
             if not js:await page.locator('#rd-perhitungan>summary').click()

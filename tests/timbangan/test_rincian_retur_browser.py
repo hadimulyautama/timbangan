@@ -1,4 +1,5 @@
 """Browser aplikasi asli pada HTTP loopback, data sintetis dan DB sementara."""
+from profil_browser import mesin, konteks
 from pathlib import Path
 from urllib.parse import urlsplit
 import pytest
@@ -25,8 +26,8 @@ async def test_tab_tampilan_akses_dan_gagal_simpan(klien,monkeypatch,alamat_ui,w
     await login(klien,siapa)
     async with database.SessionLocal() as db:before=await db.scalar(select(func.count()).select_from(TimbanganAudit))
     async with async_playwright() as pw:
-        browser=await pw.chromium.launch()
-        ctx=await browser.new_context(viewport={'width':width,'height':920},service_workers='block',reduced_motion='reduce',color_scheme=theme)
+        browser=await mesin(pw).launch()
+        ctx=await browser.new_context(**konteks(pw,width,920),service_workers='block',color_scheme=theme)
         await ctx.add_cookies([{'name':k,'value':v,'url':alamat_ui} for k,v in klien.cookies.items()])
         await ctx.add_init_script("localStorage.setItem('pd.tema.timbang', '"+theme+"')")
         page=await ctx.new_page();errors=[];writes=[]
@@ -81,7 +82,7 @@ async def test_tindakan_retur_gagal_dan_kirim_ganda_ditahan(klien,alamat_ui,monk
             a=await db.scalar(select(TimbanganAkun).where(TimbanganAkun.username=='wahid'));a.role='SUPERADMIN';await db.commit()
     await login(klien,'budi' if role=='operator' else 'wahid')
     async with async_playwright() as pw:
-        browser=await pw.chromium.launch();ctx=await browser.new_context(viewport={'width':390,'height':900},service_workers='block',reduced_motion='reduce')
+        browser=await mesin(pw).launch();ctx=await browser.new_context(**konteks(pw,390,900),service_workers='block')
         await ctx.add_cookies([{'name':k,'value':v,'url':alamat_ui} for k,v in klien.cookies.items()])
         page=await ctx.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
         await page.goto(alamat_ui+f'/timbangan/transaksi/{tid}');await page.locator('#pembuka').wait_for(state='hidden')
@@ -127,7 +128,7 @@ async def test_banyak_barang_nama_panjang_320(klien,monkeypatch,alamat_ui):
     monkeypatch.setattr(klien_produksi,'detail_retur',baca)
     await login(klien,'wahid')
     async with async_playwright() as pw:
-        browser=await pw.chromium.launch();ctx=await browser.new_context(viewport={'width':320,'height':900},service_workers='block',reduced_motion='reduce')
+        browser=await mesin(pw).launch();ctx=await browser.new_context(**konteks(pw,320,900),service_workers='block')
         await ctx.add_cookies([{'name':k,'value':v,'url':alamat_ui} for k,v in klien.cookies.items()])
         page=await ctx.new_page()
         await page.goto(alamat_ui+f'/timbangan/transaksi/{tid}');await page.locator('#pembuka').wait_for(state='hidden')

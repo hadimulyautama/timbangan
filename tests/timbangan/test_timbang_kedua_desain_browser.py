@@ -1,10 +1,11 @@
 """Desain kedua memakai form dan server asli dengan database fixture sintetis."""
+from profil_browser import mesin, konteks
 import os
 from datetime import timedelta
 from pathlib import Path
 from playwright.async_api import async_playwright
 from test_web import app_uji,klien  # noqa: F401
-from test_timbang_pertama_desain_browser import lokal,halaman  # noqa: F401
+from test_timbang_pertama_desain_browser import lokal,lokal_server,halaman  # noqa: F401
 from test_formulir import tiket_uji as tiket_awal,pasang_muatan
 from app import database
 from app.timbangan.models import TimbanganTransaksi
@@ -26,9 +27,9 @@ async def test_kedua_desktop_ponsel_seluruh_alur(lokal,monkeypatch):
     tickets=[(arah,kode,await tiket_uji(arah,kode)) for arah,kode in ALUR]
     errors=[]
     async with async_playwright() as pw:
-        browser=await pw.chromium.launch()
+        browser=await mesin(pw).launch()
         for width in [1440,390,320]:
-            context,page=await halaman(browser,url,klien,width)
+            context,page=await halaman(browser,url,klien,width,pw=pw)
             page.on('pageerror',lambda e:errors.append(str(e)))
             for arah,kode,tid in tickets:
                 await page.goto(f'{url}/timbangan/tiket/{tid}')
@@ -91,7 +92,7 @@ async def test_kedua_desktop_ponsel_seluruh_alur(lokal,monkeypatch):
 async def test_simpan_sementara_lalu_selesai(lokal):
     url,klien=lokal;tid=await tiket_uji('MASUK','GABAH_BASAH')
     async with async_playwright() as pw:
-        browser=await pw.chromium.launch();context,page=await halaman(browser,url,klien,390)
+        browser=await mesin(pw).launch();context,page=await halaman(browser,url,klien,390,pw=pw)
         await page.goto(f'{url}/timbangan/tiket/{tid}')
         await page.wait_for_function('window.timbanganLuring && window.timbanganLuring.siap()')
         await page.locator('[name=berat_kg]').fill('5000')
@@ -109,14 +110,12 @@ async def test_simpan_sementara_lalu_selesai(lokal):
             assert (await db.get(TimbanganTransaksi,tid)).status_tiket=='SELESAI'
         await context.close();await browser.close()
 
-async def test_cache_rilis_dan_kedua_formulir_luring(lokal):
-    url,klien=lokal;tid=await tiket_uji('MASUK','GABAH_BASAH')
+async def test_cache_rilis_dan_kedua_formulir_luring(lokal_server):
+    url,klien,putus=lokal_server;tid=await tiket_uji('MASUK','GABAH_BASAH')
     async with async_playwright() as pw:
-        browser=await pw.chromium.launch()
-        context=await browser.new_context(viewport={'width':390,'height':900})
+        browser=await mesin(pw).launch()
+        context=await browser.new_context(**konteks(pw,390,900))
         await context.add_cookies([{'name':k,'value':v,'url':url} for k,v in klien.cookies.items()])
-        await context.route('https://fonts.googleapis.com/**',lambda r:r.abort())
-        await context.route('https://fonts.gstatic.com/**',lambda r:r.abort())
         page=await context.new_page()
         await page.goto(url+'/timbangan/timbang/GABAH_BASAH')
         await page.evaluate('navigator.serviceWorker.ready')
@@ -126,7 +125,8 @@ async def test_cache_rilis_dan_kedua_formulir_luring(lokal):
         cached=await page.evaluate('async()=>Array.from(await (await caches.open("timbangan-v"+document.documentElement.dataset.versi)).keys()).map(r=>new URL(r.url).pathname)')
         for name in ['panduan.css','timbang-pertama-desain.css','timbang-pertama-desain.js','timbang-kedua-desain.css','timbang-kedua-desain.js']:
             assert '/timbangan/static/'+name in cached
-        await context.set_offline(True)
+        # Putuskan server sungguhan agar salinan dapat dilayani worker.
+        await putus()
         await page.reload()
         await page.locator('[data-tk-guide]').click()
         assert await page.locator('#tk-panduan').evaluate('e=>e.open')
@@ -140,7 +140,7 @@ async def test_tanpa_js_dan_pesan_integrasi_tetap(lokal,monkeypatch):
     url,klien=lokal;await pasang_muatan(monkeypatch,gagal=True)
     tid=await tiket_uji('KELUAR','PENGIRIMAN')
     async with async_playwright() as pw:
-        browser=await pw.chromium.launch();context,page=await halaman(browser,url,klien,390,False)
+        browser=await mesin(pw).launch();context,page=await halaman(browser,url,klien,390,False,pw=pw)
         await page.goto(f'{url}/timbangan/tiket/{tid}')
         assert 'Gangguan sintetis Produksi' in await page.locator('.fw-main').inner_text()
         await page.locator('[data-tk-guide-fallback]>summary').click()

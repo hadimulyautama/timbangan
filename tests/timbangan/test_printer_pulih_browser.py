@@ -1,4 +1,5 @@
 """Transport browser asli, printer tiruan; tidak ada koneksi printer atau DB."""
+from profil_browser import konteks
 import os
 from pathlib import Path
 import pytest
@@ -11,7 +12,7 @@ STRUK = '<epos-print><text>UJI</text><cut/></epos-print>'
 async def halaman(pw, mesin):
     opts = {'executable_path': os.environ['UJI_WEBKIT_PATH']} if mesin == 'webkit' and os.environ.get('UJI_WEBKIT_PATH') else {}
     b = await getattr(pw, mesin).launch(**opts)
-    ctx = await b.new_context(service_workers='block')
+    ctx = await b.new_context(**konteks(pw),service_workers='block')
     page = await ctx.new_page()
     await page.route('**/*', lambda r: r.fulfill(status=200, content_type='text/html', body='<html><body data-printer="https://printer.invalid"><div data-acuan></div></body></html>'))
     await page.goto('https://app.invalid/')

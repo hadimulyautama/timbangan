@@ -13,6 +13,14 @@ function lepaskan(){
  if(tugas)tugas.destroy().catch(()=>{});tugas=null;pdf=null;view.replaceChildren();
 }
 function kontrol(){kecil.disabled=!pdf||zoom<=1;besar.disabled=!pdf||zoom>=2;}
+// Safari lama belum menyediakan async iterator untuk ReadableStream.
+// Reader standar tetap membaca seluruh teks tanpa mengubah PDF asli.
+async function teksHalaman(halaman){
+ const reader=halaman.streamTextContent().getReader(),teks=[];
+ try{while(true){const {value,done}=await reader.read();if(done)break;for(const item of value.items||[])teks.push(item.str||'');}}
+ finally{reader.releaseLock();}
+ return teks.join(' ');
+}
 async function gambar(){
  if(!pdf)return;
  const dok=pdf,nomor=++putaran;renderAktif?.cancel();view.replaceChildren();kontrol();
@@ -27,8 +35,8 @@ async function gambar(){
    figure.append(canvas);view.append(figure);
    renderAktif=halaman.render({canvasContext:canvas.getContext('2d'),viewport,transform:[rasio,0,0,rasio,0,0],background:'#fff'});
    await renderAktif.promise;if(nomor!==putaran||!dialog.open)return;
-   const teks=await halaman.getTextContent();if(nomor!==putaran||!dialog.open)return;
-   const pembaca=document.createElement('p');pembaca.className='tf-pdf-sr';pembaca.textContent=teks.items.map(x=>x.str||'').join(' ');figure.append(pembaca);
+   const teks=await teksHalaman(halaman);if(nomor!==putaran||!dialog.open)return;
+   const pembaca=document.createElement('p');pembaca.className='tf-pdf-sr';pembaca.textContent=teks;figure.append(pembaca);
    figure.dataset.pdfSelesai='1';
   }
   if(nomor===putaran){status.textContent=dok.numPages+' halaman';view.setAttribute('aria-busy','false');}

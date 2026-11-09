@@ -21,6 +21,7 @@ async def test_pdf_gagal_retry_semua_halaman_zoom_dan_tutup(klien,alamat_ui,widt
         await buka(page,alamat_ui+f'/timbangan/transaksi/{tid}');lokasi=page.url
         async def berkas(route):
             await route.fulfill(status=200,content_type='text/html' if mode['gagal'] else 'application/pdf',body='Sesi habis' if mode['gagal'] else raw.getvalue())
+        await page.evaluate("delete ReadableStream.prototype[Symbol.asyncIterator]")
         await page.route('**/cetak/80mm*',berkas)
         await page.get_by_role('button',name='Lihat',exact=True).click()
         await page.get_by_role('button',name='Coba lagi',exact=True).wait_for(state='visible')

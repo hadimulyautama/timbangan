@@ -90,3 +90,55 @@ jobs:
         with:
           name: regresi-teraflow83-${{ matrix.suite }}
           path: bukti/
+
+  safari:
+    name: Operator Safari/iPhone (${{ matrix.browser }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [webkit, chromium]
+    env:
+      UJI_BROWSER: ${{ matrix.browser }}
+      UJI_IPHONE: "1"
+      UJI_PDF_OUT: ../bukti/pdf
+      UJI_TRANSFER_OUT: ../bukti/transfer
+      UJI_CETAK_OUT: ../bukti/cetak
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: timbangan
+      - uses: actions/checkout@v4
+        with:
+          repository: hadimulyautama/penggilingan-beras
+          ref: 070aa3f23366fefa1dbb25444064e53a6bac9fed
+          path: produksi
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: timbangan/requirements*.txt
+      - name: Pasang dependensi dan mesin browser yang diminta
+        run: |
+          python -m pip install -r timbangan/requirements.txt -r timbangan/requirements-dev.txt playwright==1.62.0
+          python -m playwright install --with-deps "${{ matrix.browser }}"
+      - name: Timbang, transfer, pengiriman, PDF dan printer tanpa data produksi
+        working-directory: timbangan
+        run: |
+          if [ "$UJI_BROWSER" = webkit ]; then lawan=chromium; else lawan=webkit; fi
+          python -m pytest -q tests/timbangan/test_timbang_pertama_desain_browser.py \
+            tests/timbangan/test_timbang_kedua_desain_browser.py \
+            tests/timbangan/test_rincian_transfer_browser.py \
+            tests/timbangan/test_rincian_keluar_browser.py \
+            tests/timbangan/test_rincian_retur_browser.py \
+            tests/timbangan/test_curah_browser.py \
+            tests/timbangan/test_cetak_pratinjau_browser.py \
+            tests/timbangan/test_pdf_dialog_dan_sambungan_browser.py \
+            tests/timbangan/test_printer_pulih_browser.py \
+            -k "not $lawan" --junitxml=../bukti/safari.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: safari-teraflow-${{ matrix.browser }}
+          path: bukti/
