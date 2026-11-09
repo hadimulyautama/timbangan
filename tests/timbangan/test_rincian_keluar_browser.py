@@ -1,6 +1,7 @@
 """UI detail asli, HTTP loopback dan DB SQLite sementara; tanpa layanan operasional."""
 import json
 import os
+from profil_browser import mesin, konteks
 from pathlib import Path
 from urllib.parse import urlsplit
 import pytest
@@ -24,7 +25,7 @@ async def test_tab_akses_pemeriksaan_dan_layout(klien,alamat_ui,width,theme,role
     async with database.SessionLocal() as db:
         before=await db.scalar(select(func.count()).select_from(TimbanganAudit))
     async with async_playwright() as pw:
-        browser=await getattr(pw,engine).launch();ctx=await browser.new_context(viewport={'width':width,'height':920},service_workers='block',reduced_motion='reduce',color_scheme=theme)
+        browser=await getattr(pw,engine).launch();ctx=await browser.new_context(**konteks(pw,width,920),service_workers='block',color_scheme=theme)
         await ctx.add_cookies([{'name':k,'value':v,'url':alamat_ui} for k,v in klien.cookies.items()])
         await ctx.add_init_script("localStorage.setItem('pd.tema.timbang', '"+theme+"')")
         page=await ctx.new_page();errors=[];writes=[]
@@ -103,7 +104,7 @@ async def test_satu_pelanggan_banyak_barang_nama_panjang(klien,alamat_ui):
     tid=await buat_tiket(data=p)
     await login(klien)
     async with async_playwright() as pw:
-        browser=await pw.chromium.launch();ctx=await browser.new_context(viewport={'width':320,'height':900},service_workers='block')
+        browser=await mesin(pw).launch();ctx=await browser.new_context(**konteks(pw,320,900),service_workers='block')
         await ctx.add_cookies([{'name':k,'value':v,'url':alamat_ui} for k,v in klien.cookies.items()])
         page=await ctx.new_page()
         await page.goto(alamat_ui+f'/timbangan/transaksi/{tid}');await page.locator('#pembuka').wait_for(state='hidden')
@@ -127,7 +128,7 @@ async def test_tindakan_lama_gagal_tetap_utuh_dan_kirim_ganda_ditahan(klien,alam
             a=await db.scalar(select(TimbanganAkun).where(TimbanganAkun.username=='wahid'));a.role='SUPERADMIN';await db.commit()
     await login(klien,'budi' if role=='operator' else 'wahid')
     async with async_playwright() as pw:
-        browser=await pw.chromium.launch();ctx=await browser.new_context(viewport={'width':390,'height':900},service_workers='block',reduced_motion='reduce')
+        browser=await mesin(pw).launch();ctx=await browser.new_context(**konteks(pw,390,900),service_workers='block')
         await ctx.add_cookies([{'name':k,'value':v,'url':alamat_ui} for k,v in klien.cookies.items()])
         page=await ctx.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
         await page.goto(alamat_ui+f'/timbangan/transaksi/{tid}');await page.locator('#pembuka').wait_for(state='hidden')
@@ -167,9 +168,9 @@ async def test_tindakan_lama_gagal_tetap_utuh_dan_kirim_ganda_ditahan(klien,alam
 async def test_disclosure_tanpa_js_dan_url_lama(klien,alamat_ui):
     tid=await buat_tiket(beda=1000);await login(klien,'wahid')
     async with async_playwright() as pw:
-        browser=await pw.chromium.launch()
+        browser=await mesin(pw).launch()
         for js in [False,True]:
-            ctx=await browser.new_context(viewport={'width':390,'height':950},java_script_enabled=js,service_workers='block',reduced_motion='reduce')
+            ctx=await browser.new_context(**konteks(pw,390,950),java_script_enabled=js,service_workers='block')
             await ctx.add_cookies([{'name':k,'value':v,'url':alamat_ui} for k,v in klien.cookies.items()])
             page=await ctx.new_page()
             await page.goto(alamat_ui+f'/timbangan/transaksi/{tid}?tab=muatan')

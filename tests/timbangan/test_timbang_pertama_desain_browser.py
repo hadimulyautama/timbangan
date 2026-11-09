@@ -12,7 +12,7 @@ from test_web import app_uji, klien, login  # noqa: F401
 JALUR=['/timbang/'+k for k in ['GABAH_BASAH','GABAH_KERING','BERAS_PK','BERAS_MASUK','BROKEN_MASUK','PENGIRIMAN','TRANSFER','RETUR_PELANGGAN','RETUR_SUPPLIER','BEBAS']]+['/jasa/GABAH_KERING']
 
 @pytest.fixture
-async def lokal(app_uji,klien):
+async def lokal_server(app_uji,klien):
     await login(klien)
     sock=socket.socket();sock.bind(('127.0.0.1',0));sock.listen()
     url=f'http://127.0.0.1:{sock.getsockname()[1]}'
@@ -22,10 +22,16 @@ async def lokal(app_uji,klien):
         if server.started:break
         await asyncio.sleep(.02)
     assert server.started
-    try:yield url,klien
-    finally:
+    async def putus():
         server.should_exit=True
         await task
+    try:yield url,klien,putus
+    finally:await putus()
+
+@pytest.fixture
+async def lokal(lokal_server):
+    url,klien,_=lokal_server
+    yield url,klien
 
 async def halaman(browser,url,klien,width=1440,js=True,pw=None):
     options=konteks(pw,width,1000) if pw else {'viewport':{'width':width,'height':1000}}

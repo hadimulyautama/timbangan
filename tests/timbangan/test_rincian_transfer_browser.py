@@ -178,7 +178,7 @@ async def test_cetak_pdf_printer_sintetis_dan_audit(klien,alamat_ui,role):
             return await r.fulfill(status=200,content_type='text/xml',body='<response success="true"/>')
         await page.route('**/cgi-bin/epos/**',sukses)
         await page.locator('[data-cp-jalankan]').evaluate('e=>{e.click();e.click()}')
-        await page.wait_for_function("document.querySelector('.cp-history').textContent.includes('Cetak ke-1')")
+        await page.wait_for_function("document.querySelector('.cp-history')?.textContent.includes('Cetak ke-1')")
         assert len(dikirim)==1 and dikirim[0].count('<cut type="feed"/>')==2
         async with database.SessionLocal() as db:
             row=await db.scalar(select(TimbanganCetak));assert row.urutan==1
@@ -188,7 +188,7 @@ async def test_cetak_pdf_printer_sintetis_dan_audit(klien,alamat_ui,role):
         assert len(dikirim)==1
         await page.locator('[name=alasan]').fill('Kertas uji rusak, cetak ulang sintetis')
         await page.locator('[data-cp-jalankan]').evaluate('e=>{e.click();e.click()}')
-        await page.wait_for_function("document.querySelector('.cp-history').textContent.includes('Cetak ke-2')")
+        await page.wait_for_function("document.querySelector('.cp-history')?.textContent.includes('Cetak ke-2')")
         async with database.SessionLocal() as db:
             rows=(await db.scalars(select(TimbanganCetak).order_by(TimbanganCetak.urutan))).all()
             assert len(rows)==2 and rows[-1].alasan=='Kertas uji rusak, cetak ulang sintetis'
