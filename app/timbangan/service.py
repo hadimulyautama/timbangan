@@ -259,12 +259,17 @@ def _aturan_dari_baris(baris: TimbanganJenis) -> logic.AturanJenis:
 async def daftar_jenis(
     db: AsyncSession, *, arah: str | None = None, hanya_aktif: bool = True
 ) -> list[TimbanganJenis]:
-    q = select(TimbanganJenis).order_by(TimbanganJenis.urutan, TimbanganJenis.nama)
-    if hanya_aktif:
-        q = q.where(TimbanganJenis.status == "aktif")
-    if arah:
-        q = q.where(TimbanganJenis.arah.in_([arah, logic.BEBAS]))
-    return list((await db.execute(q)).scalars())
+    semua = list((await db.execute(select(TimbanganJenis).order_by(TimbanganJenis.urutan,TimbanganJenis.nama))).scalars())
+    tertulis = {r.kode for r in semua}
+    master = await _aturan_master_padiflow(db)
+    rows = [r for r in semua if (not hanya_aktif or r.status=='aktif') and (not arah or r.arah in (arah,logic.BEBAS))]
+    from dataclasses import asdict,replace
+    rows = [TimbanganJenis(**asdict(replace(_aturan_dari_baris(r),nama=master[r.kode].nama)),id=r.id,status=r.status,urutan=r.urutan) if r.kode in master else r for r in rows]
+    for aturan in (await _aturan_master_padiflow(db, aktif_saja=hanya_aktif)).values():
+        if aturan.kode in tertulis or arah and aturan.arah not in (arah, logic.BEBAS):
+            continue
+        rows.append(TimbanganJenis(**asdict(aturan), status='aktif', urutan=10000))
+    return rows
 
 
 async def daftar_jenis_jasa(db: AsyncSession) -> list[TimbanganJenis]:
@@ -281,12 +286,7 @@ async def daftar_jenis_jasa(db: AsyncSession) -> list[TimbanganJenis]:
     yang sama. Menjadikannya arah tersendiri berarti menggandakan aturan tara
     dan ambang untuk barang yang cara menimbangnya sama persis.
     """
-    q = (select(TimbanganJenis)
-         .where(TimbanganJenis.status == "aktif",
-                TimbanganJenis.boleh_jasa.is_(True),
-                TimbanganJenis.arah == logic.MASUK)
-         .order_by(TimbanganJenis.urutan, TimbanganJenis.nama))
-    return list((await db.execute(q)).scalars())
+    return [r for r in await daftar_jenis(db,arah=logic.MASUK,hanya_aktif=True) if r.boleh_jasa and r.arah==logic.MASUK]
 
 
 @dataclass(frozen=True)
@@ -411,9 +411,64 @@ async def peta_aturan(db: AsyncSession) -> dict[str, logic.AturanJenis]:
     `logic` supaya modul tetap bisa berjalan tanpa penyemaian lebih dulu.
     """
     baris = list((await db.execute(select(TimbanganJenis))).scalars())
-    if not baris:
-        return dict(logic.JENIS_PETA)
-    return {b.kode: _aturan_dari_baris(b) for b in baris}
+    hasil = dict(logic.JENIS_PETA) if not baris else {b.kode: _aturan_dari_baris(b) for b in baris}
+    for kode, aturan in (await _aturan_master_padiflow(db)).items():
+        if kode in hasil:
+            from dataclasses import replace
+            # Nama milik master produk; aturan timbang/tara tetap milik TeraFlow.
+            hasil[kode]=replace(hasil[kode],nama=aturan.nama)
+        else:
+            hasil[kode]=aturan
+    return hasil
+
+
+async def _aturan_master_padiflow(db, *, aktif_saja=False):
+    """Master bersama dibaca saja; tidak membuat atau mengubah transaksi/aturan lama."""
+    import json, re
+    from dataclasses import replace
+    from sqlalchemy import inspect, text
+    if not await db.run_sync(lambda s: inspect(s.connection()).has_table('setelan_pabrik')):
+        return {}
+    if db.get_bind().dialect.name == "postgresql":
+        await db.execute(text("SELECT pg_advisory_xact_lock_shared(861274003)"))
+    rows = (await db.execute(text("SELECT kunci,nilai FROM setelan_pabrik WHERE kunci LIKE 'jenis_hasil_samping:%'"))).all()
+    hasil = {}
+    for key, raw in rows:
+        try:
+            row = json.loads(raw)
+        except (ValueError, TypeError):
+            continue
+        if not isinstance(row,dict):
+            continue
+        kode = row.get('kode', '')
+        legacy = {'broken':('BROKEN','BROKEN_MASUK'),'menir':('MENIR',),'bekatul':('BEKATUL',),'reject':('REJECT',)}
+        if ((kode not in legacy and not re.fullmatch(r'hs_[a-f0-9]{15}', kode)) or key != 'jenis_hasil_samping:'+kode
+                or not isinstance(row.get('nama'), str) or not row['nama'].strip()
+                or row.get('bentuk') not in ('karung','curah') or aktif_saja and not row.get('aktif')):
+            continue
+        if kode in legacy:
+            for old in legacy[kode]:
+                hasil[old]=replace(logic.JENIS_PETA[old],nama=row['nama'])
+            if kode=='broken':
+                continue
+            suffixes=[('_MASUK','BROKEN_MASUK')]
+        else:
+            suffixes=[('', 'BROKEN'), ('_MASUK', 'BROKEN_MASUK')]
+        for suffix, dasar in suffixes:
+            code = kode.upper()+suffix
+            hasil[code] = replace(logic.JENIS_PETA[dasar], kode=code, nama=row['nama'], boleh_jasa=bool(suffix))
+            if row['bentuk']=='curah':
+                hasil[code]=replace(hasil[code],sumber_tara=logic.TARA_MANUAL,tara_tetap_kg=0,tara_bawaan_kg=0,ambang_jenis=logic.AMBANG_TIDAK_ADA,ambang_nilai=0)
+    return hasil
+
+
+def samping_curah(aturan):
+    """Aturan virtual curah: tanpa tara/ambang per karung rekaan.
+
+    Disimpan di aturan_snapshot bersama tiket sehingga pembacaan lama stabil.
+    """
+    return ((aturan.kode.startswith('HS_') or aturan.kode in {'MENIR_MASUK','BEKATUL_MASUK','REJECT_MASUK'}) and aturan.sumber_tara==logic.TARA_MANUAL
+            and aturan.ambang_jenis==logic.AMBANG_TIDAK_ADA)
 
 
 async def aturan_untuk(db: AsyncSession, kode: str) -> logic.AturanJenis:
@@ -1937,6 +1992,9 @@ async def simpan_timbang_pertama(
                 )
             trx = lama_
 
+    if trx is None and (data.jenis_kode.startswith('HS_') or data.jenis_kode in {'MENIR_MASUK','BEKATUL_MASUK','REJECT_MASUK'}):
+        if data.jenis_kode not in await _aturan_master_padiflow(db,aktif_saja=True):
+            raise LayananError('Jenis hasil samping sudah nonaktif. Pilih jenis aktif untuk tiket baru.')
     awal = None
     if trx is not None:
         audit_awal = await db.scalar(select(TimbanganAudit.nilai_sesudah).where(
@@ -2043,7 +2101,7 @@ async def simpan_timbang_pertama(
         return trx
 
     if data.cara_timbang == CARA_SEKALI:
-        periksa_jumlah_karung(data.muatan, wajib=True)
+        periksa_jumlah_karung(data.muatan, wajib=not samping_curah(aturan))
 
     if cuplikan_lintasan is not None:
         trx.lintasan_transfer = cuplikan_lintasan
@@ -2330,7 +2388,8 @@ async def selesaikan_partai(
 
     muatan = (muatan_partai_dengan_karung(trx, jumlah_karung)
               if jumlah_karung is not None else trx.muatan)
-    periksa_jumlah_karung(muatan, wajib=True)
+    aturan = aturan_dari_snapshot(trx) or await aturan_untuk(db, trx.jenis_kode)
+    periksa_jumlah_karung(muatan, wajib=not samping_curah(aturan))
     if jumlah_karung is not None:
         await _pasang_muatan(db, trx, muatan)
     aturan = aturan_dari_snapshot(trx) or await aturan_untuk(db, trx.jenis_kode)
@@ -2480,7 +2539,8 @@ async def simpan_timbang_kedua(
     )
 
     # Tolak sebelum angka, tanggal, atau baris muatan tiket disentuh.
-    wajib_karung = not await retur_supplier_curah(db, trx)
+    aturan = aturan_dari_snapshot(trx) or await aturan_untuk(db, trx.jenis_kode)
+    wajib_karung = not await retur_supplier_curah(db, trx) and not samping_curah(aturan)
     periksa_jumlah_karung(muatan if muatan is not None else trx.muatan,
                           wajib=selesaikan and wajib_karung and (pengiriman_snapshot is None or
                                 pengiriman.perlu_jumlah_karung(pengiriman_snapshot)))
