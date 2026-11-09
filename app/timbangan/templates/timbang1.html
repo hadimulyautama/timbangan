@@ -245,6 +245,8 @@
       {{ isian('jumlah_karung', 'Jumlah karung', '', 'karung', 'text',
                'Boleh dikosongkan dan dihitung saat bongkar. Wajib diisi sebelum selesai.',
                false, false, 'inputmode="numeric" enterkeyhint="next" data-jumlah-karung') }}
+    {% elif muatan_curah %}
+      <div class="kartu bantu">Hasil samping curah. Berat mengikuti timbangan dan nota; jumlah karung tidak diperlukan.</div>
     {% elif aturan.arah == KELUAR %}
       <div class="kartu bantu">Jumlah karung dan tara per kemasan mengikuti catatan barang di Produksi. Pos Timbang mengambilnya otomatis saat timbang kedua.</div>
     {% else %}

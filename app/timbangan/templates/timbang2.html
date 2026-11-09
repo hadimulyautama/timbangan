@@ -97,6 +97,8 @@
         {% else %}
           <div class="bantu peringatan">Belum ada perintah Produksi yang cocok. Pastikan tiket armada sudah dipilih pada perintah barang keluar dan barang sudah dicatat dimuat.</div>
         {% endif %}
+      {% elif muatan_curah %}
+      <div class="bantu">Hasil samping curah — tanpa jumlah karung dan tanpa potongan tara karung.</div>
       {% else %}
       {{ isian('jumlah_karung', 'Jumlah karung',
                m.jumlah_karung if m and m.jumlah_karung else '', 'karung', 'text',

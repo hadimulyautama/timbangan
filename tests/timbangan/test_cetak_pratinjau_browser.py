@@ -49,7 +49,7 @@ async def test_ui_pratinjau_hasil_tidak_pasti_dan_cetak_ulang(klien,alamat_ui,wi
         async with database.SessionLocal() as db:assert await db.scalar(select(func.count()).select_from(TimbanganCetak))==0
         await page.reload();await page.locator('[data-cp-ya]').wait_for(state='visible')
         await page.locator('[data-cp-ya]').evaluate('(e)=>{e.click();e.click()}')
-        await page.wait_for_function("document.querySelector('.cp-history').textContent.includes('Cetak ke-1')")
+        await page.wait_for_function("document.querySelector('.cp-history')?.textContent.includes('Cetak ke-1')")
         assert len(jobs)==1
         mode['value']='success'
         assert await page.locator('[data-cp-jalankan]').is_visible()
@@ -59,7 +59,7 @@ async def test_ui_pratinjau_hasil_tidak_pasti_dan_cetak_ulang(klien,alamat_ui,wi
         await page.locator('[name=alasan]').fill('UJI salinan printer simulasi')
         assert await page.locator('[data-cp-jalankan]').is_visible()
         await page.locator('[data-cp-jalankan]').evaluate('(e)=>{e.click();e.click()}')
-        await page.wait_for_function("document.querySelector('.cp-history').textContent.includes('Cetak ke-2')")
+        await page.wait_for_function("document.querySelector('.cp-history')?.textContent.includes('Cetak ke-2')")
         assert len(jobs)==2
         assert await page.locator('[name=cp-format][value=NCR]').count()==0
         assert not errors,errors
@@ -120,7 +120,7 @@ async def test_admin_menuntaskan_pekerjaan_shift_lama_tanpa_kirim_ulang(klien,al
         assert 'Isi alasan' in await page.locator('[data-cp-status]').text_content()
         await page.locator('[name=alasan_penyelesaian]').fill('Shift sebelumnya berhenti mengirim; kedua lembar diperiksa')
         await page.locator('[data-cp-ya]').click()
-        await page.wait_for_function("document.querySelector('.cp-history').textContent.includes('Cetak ke-1')")
+        await page.wait_for_function("document.querySelector('.cp-history')?.textContent.includes('Cetak ke-1')")
         assert not prints and not errors
         async with database.SessionLocal() as db:
             assert await db.scalar(select(func.count()).select_from(TimbanganCetak))==1

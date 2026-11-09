@@ -381,7 +381,7 @@ async def form_timbang_pertama(
     # hanya pelanggan. Lihat `service.PIHAK_ARAH`.
     sering, lainnya = await service.pihak_pilihan(db, aturan.arah)
     return render(
-        request, "timbang1.html",
+        request, "timbang1.html", muatan_curah=service.samping_curah(aturan),
         aturan=aturan, lokasi_transfer=lokasi_transfer,
         # PERKIRAAN, bukan nomor yang sudah jadi milik layar ini.
         # Nomor sungguhannya diterbitkan server saat menyimpan —
@@ -448,7 +448,7 @@ async def form_jasa_masuk(
     # Daftar PELANGGAN, bukan pemasok — lihat `service.pihak_untuk`.
     sering, lainnya = await service.pihak_pilihan(db, aturan.arah, jasa=True)
     return render(
-        request, "timbang1.html",
+        request, "timbang1.html", muatan_curah=service.samping_curah(aturan),
         aturan=aturan,
         jasa=True,
         kode=await service.kode_baru(db, akun, aturan.arah),
@@ -913,7 +913,7 @@ async def form_timbang_kedua(
     # ke atas kurang dari 1 ms agar pemotongan presisi juga tidak memundurkan.
     jam_form += timedelta(microseconds=(-jam_form.microsecond) % 1000)
     return render(
-        request, "timbang2.html",
+        request, "timbang2.html", muatan_curah=service.samping_curah(aturan),
         kunci=str(uuid4()), b=baris, aturan=aturan, sekarang=jam_form,
         tara=tara, asal_tara_id=asal_id,
         retur_curah=await retur_supplier_curah(db, baris.trx),

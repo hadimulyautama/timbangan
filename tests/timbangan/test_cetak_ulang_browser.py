@@ -30,7 +30,7 @@ async def test_alasan_sebelum_kertas_dan_audit_setelah_printer(klien,alamat_ui,r
             return await r.fulfill(status=200,content_type='text/xml',body='<response success="false" code="EPTR_COVER_OPEN"/>' if status['gagal'] else '<response success="true"/>')
         await page.route('**/cgi-bin/epos/**',printer)
         await page.locator('[data-cp-jalankan]').evaluate('(a)=>{a.click();a.click()}')
-        await page.wait_for_function("document.querySelector('.cp-history').textContent.includes('Cetak ke-1')");assert len(jobs)==1
+        await page.wait_for_function("document.querySelector('.cp-history')?.textContent.includes('Cetak ke-1')");assert len(jobs)==1
         assert jobs[0].count('<cut')==2 and 'RANGKAP 2/2' in jobs[0]
         # Tanpa alasan/sekadar spasi tidak boleh mengirim permintaan printer.
         await page.locator('[data-cetak-fisik]').evaluate('e=>e.open=true')
@@ -85,7 +85,7 @@ async def test_tombol_tetap_terkunci_sampai_pencatatan_cetak_selesai(klien,alama
             },20);
         }""")
         await page.locator('[data-cp-jalankan]').click()
-        await page.wait_for_function("document.querySelector('.cp-history').textContent.includes('Cetak ke-1')")
+        await page.wait_for_function("document.querySelector('.cp-history')?.textContent.includes('Cetak ke-1')")
         assert await page.evaluate("sessionStorage.getItem('uji-kunci-audit')")=='1'
         assert len(jobs)==len(audit)==1
         async with database.SessionLocal() as db:assert await db.scalar(select(func.count()).select_from(TimbanganCetak))==1
@@ -113,7 +113,7 @@ async def test_koneksi_gagal_sebelum_struk_tidak_membuat_cetak_sukses(klien,alam
             assert await db.scalar(select(func.count()).select_from(TimbanganCetak))==0
         pulih['ya']=True
         await page.locator('[data-cp-jalankan]').click()
-        await page.wait_for_function("document.querySelector('.cp-history').textContent.includes('Cetak ke-1')")
+        await page.wait_for_function("document.querySelector('.cp-history')?.textContent.includes('Cetak ke-1')")
         assert len(struk)==1 and struk[0].count('<cut')==2
         async with database.SessionLocal() as db:
             assert await db.scalar(select(func.count()).select_from(TimbanganCetak))==1
