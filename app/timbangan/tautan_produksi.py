@@ -111,6 +111,8 @@ async def pastikan_bebas_tautan(db: AsyncSession, trx, *, tindakan: str) -> None
     # Penerimaan PadiFlow mengunci tiket yang sama. Pertahankan kunci sampai
     # tindakan selesai agar penerimaan tidak menyelinap setelah pemeriksaan.
     await db.refresh(trx, with_for_update=True)
+    if getattr(trx,'pengiriman_pk_id',None):
+        raise LayananError(tindakan+' tidak bisa dilakukan terpisah: tiket terhubung ke perjalanan PK PadiFlow. Periksa muatan dan jejak perjalanan.')
     kode = await batch_tertaut(db, getattr(trx, "id", None))
     kode.extend(await pengiriman_tertaut(db, getattr(trx, "id", None)))
     kode.extend(await produk_tertaut(db, trx))

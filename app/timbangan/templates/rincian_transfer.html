@@ -23,7 +23,17 @@
     {% if trx.status_transaksi == 'VOID' %}<p class="pesan pesan--err">Dibatalkan. {{ trx.void_alasan }}</p>{% elif trx.status_tiket == TIKET_DITUTUP_PAKSA %}<p class="pesan pesan--err">Tiket ditutup tanpa timbang kedua. {{ trx.tutup_paksa_alasan }}</p>{% endif %}
     <div class="rd-control-status"><div>{{ lencana('TANPA_KONTROL') }} · Tidak ada dokumen pembanding</div><p class="bantu">Transfer Internal tidak memakai nota atau surat jalan sebagai pembanding. Tara yang sah tetap diperhitungkan.</p></div>
     {% if pemeriksaan %}<div class="rd-control-status"><div class="dk-sebar"><span>Pemeriksaan historis {{ 'selesai' if pemeriksaan.status == 'SELESAI' else 'masih terbuka' }}</span><a class="tbl halus" href="#pemeriksaan" data-rd-exam-open>{{ 'Lihat temuan' if pemeriksaan.status == 'SELESAI' else 'Buka pemeriksaan' }}</a></div><p class="bantu">Penutupan pemeriksaan tidak mengubah angka, perlakuan kontrol transfer, atau stok.</p></div>{% endif %}
+      {% if trx.pengiriman_pk_id %}
+      <div class="rd-transfer-link"><h3>Perjalanan PK #{{ trx.pengiriman_pk_id }}</h3>
+      <p><strong>{{ {'selesai':'Transfer selesai · stok telah tercatat','menunggu_admin':'Selisih perlu pemeriksaan Admin'}.get(trx.pengiriman_pk_status, 'Menunggu penyelesaian otomatis' if final else 'Menunggu timbang kedua') }}</strong></p>
+      {% set plan=trx.lintasan_transfer.get('_pengiriman_pk',{}) %}
+      <p>Muatan lot asal {{ plan.get('total','—') }} kg. Hasil timbang tetap {{ trx.berat_barang_kg|kg(2) if final else 'belum selesai' }}.</p>
+      <ul>{% for item in plan.get('items',[]) %}<li>{{ item.lot }} · {{ item.berat_kg }} kg</li>{% endfor %}</ul>
+      <p class="bantu">Selisih kurang dari 0,5% dianggap genap sesuai muatan asal; mulai 0,5% perlu Admin. Tidak ada konfirmasi penerimaan operator tujuan. Sambungan tertunda diulang otomatis.</p>
+      <a href="{{ produksi_url }}/transfer-bertahap?pengiriman={{ trx.pengiriman_pk_id }}">Buka perjalanan PadiFlow →</a></div>
+      {% else %}
       <div class="rd-transfer-link"><p><span class="lencana">Tidak ada transfer tertaut</span></p><p>Tiket timbang ini belum memiliki relasi eksplisit dengan transfer PadiFlow. Kode dalam catatan bukan bukti keterhubungan. Selesai timbang tidak menyatakan transfer PadiFlow selesai.</p><a href="{{ produksi_url }}/pekerjaan">Buka Pekerjaan PadiFlow →</a><p class="bantu">Akses mengikuti sesi dan izin PadiFlow. Membaca tiket tidak memindahkan stok.</p></div>
+      {% endif %}
   </section>
   <details class="rd-disclosure" id="rd-ringkasan"><summary id="dk-tab-ringkasan">Rincian transfer</summary>
     <section id="dk-ringkasan" data-dk-panel="ringkasan" aria-labelledby="dk-tab-ringkasan">
@@ -79,7 +89,7 @@
     <p>Halaman ini membaca satu tiket Transfer Internal. Berat barang transfer merupakan hasil tersimpan setelah tara, bukan konfirmasi perpindahan stok PadiFlow.</p>
     <p>Transfer Internal tidak memakai nota atau surat jalan sebagai pembanding. Tidak ada acuan, selisih atau batas kontrol dokumen baru. Tara yang sah tetap diperhitungkan; total pengurang sudah termasuk tara lain.</p>
     <p>Lintasan mengikuti pilihan lokasi tersimpan. Teks lokasi lama dipertahankan tanpa dipetakan otomatis. Lokasi yang belum diketahui tidak ditebak.</p>
-    <p>Tiket ini belum memiliki relasi eksplisit ke transfer PadiFlow. Kode dalam catatan bukan bukti keterhubungan; selesai timbang tidak menyatakan transfer PadiFlow selesai.</p>
+    <p>{% if trx.pengiriman_pk_id %}Tiket tertaut ke perjalanan PK. Penyelesaian stok mengikuti status perjalanan PadiFlow; selisih tidak dibagi ke lot.{% else %}Tiket ini belum memiliki relasi eksplisit ke transfer PadiFlow. Kode dalam catatan bukan bukti keterhubungan; selesai timbang tidak menyatakan transfer PadiFlow selesai.{% endif %}</p>
     <p>Nilai kontrol lama, dokumen historis, cuplikan pengiriman dan pemeriksaan tetap tersedia di Jejak & dokumen. Semuanya bukan pembanding atau relasi transfer baru.</p>
     <p>Koreksi, pembatalan, hapus permanen dan audit mengikuti izin serta keadaan tiket. Penutupan pemeriksaan tidak mengubah angka atau stok. Pratinjau tidak menyatakan printer berhasil mencetak.</p>
   </div></details>

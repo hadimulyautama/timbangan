@@ -50,6 +50,7 @@ MIGRASI = (
     AKAR / "migrations" / "versions" / "0047_pengiriman_snapshot.py",
     AKAR / "migrations" / "versions" / "0048_lintasan_transfer.py",
     AKAR / "migrations" / "versions" / "0049_pekerjaan_cetak.py",
+    AKAR / "migrations" / "versions" / "0051_pengiriman_pk.py",
 )
 
 # Daftar di atas DITULIS TANGAN, dan karena itu ia basi tiap kali ada migrasi

@@ -1,4 +1,5 @@
 <div data-tindakan-sumber data-kode="{{ trx.kode }}">
+{% if trx.pengiriman_pk_id %}<p class="bantu">Pembatalan dan penghapusan terpisah ditahan karena tiket terikat muatan dan stok perjalanan PadiFlow.</p>{% endif %}
     {% if boleh_ubah and trx.status_transaksi != 'VOID' %}
       <a href="{{ PREFIX }}/transaksi/{{ trx.id }}/koreksi" class="tbl halus blok">
         Koreksi
@@ -7,7 +8,7 @@
       <div class="bantu">{{ sebab_terkunci }}</div>
     {% endif %}
 
-    {% if boleh_batal and trx.status_transaksi != 'VOID' %}
+    {% if boleh_batal and trx.status_transaksi != 'VOID' and not trx.pengiriman_pk_id %}
       {# Kata yang dipakai mengikuti KEADAAN tiketnya, bukan peran orangnya.
          Tiket yang belum ditimbang kedua belum punya netto dan belum masuk
          pembukuan mana pun — yang dibatalkan cuma niat menimbang, dan
@@ -33,7 +34,7 @@
       </details>
     {% endif %}
 
-    {% if akun.is_super %}
+    {% if akun.is_super and not trx.pengiriman_pk_id %}
       {# Satu-satunya tindakan yang tidak meninggalkan barisnya. Karena itu
          terbatas pada Super Admin, terkunci di balik nomor transaksi yang
          harus diketik, dan tetap menuliskan salinan penuh ke jejak audit. #}

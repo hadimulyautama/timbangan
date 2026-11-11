@@ -374,6 +374,18 @@ async def form_timbang_pertama(
 
     if aturan.arah == logic.KELUAR and aturan.kode != "PENGIRIMAN":
         return redirect("/timbang/PENGIRIMAN")
+    muatan_pk = None
+    ident = request.query_params.get('pengiriman_pk_id', '')
+    if ident:
+        from app.timbangan import transfer_pk
+        try:
+            if not ident.isdigit() or int(ident)<=0 or aturan.arah != logic.TRANSFER:
+                raise service.LayananError('Pilih perjalanan Transfer Internal yang sah.')
+            muatan_pk = await transfer_pk.pilihan(int(ident),akun,request.cookies.get('produksi_lihat'))
+            if muatan_pk['status'] != 'dalam_perjalanan':
+                raise service.LayananError('Perjalanan sudah diperiksa. Buka tiket yang ada di riwayat.')
+        except service.LayananError as e:
+            return redirect('/tiket',err=str(e))
     tara, asal = await service.tara_disarankan(db, supplier_id=None, aturan=aturan)
     from app.timbangan import lintasan_transfer
     lokasi_transfer = await lintasan_transfer.pilihan(db) if aturan.arah == logic.TRANSFER else None
@@ -382,7 +394,7 @@ async def form_timbang_pertama(
     sering, lainnya = await service.pihak_pilihan(db, aturan.arah)
     return render(
         request, "timbang1.html", muatan_curah=service.samping_curah(aturan),
-        aturan=aturan, lokasi_transfer=lokasi_transfer,
+        aturan=aturan, lokasi_transfer=lokasi_transfer, muatan_pk=muatan_pk,
         # PERKIRAAN, bukan nomor yang sudah jadi milik layar ini.
         # Nomor sungguhannya diterbitkan server saat menyimpan —
         # lihat `service.alokasi_nomor`. Dua layar yang terbuka
@@ -558,6 +570,7 @@ async def simpan_timbang_pertama(
     transfer_asal: str = Form(""),
     transfer_tujuan: str = Form(""),
     lintasan_format: str = Form(""),
+    pengiriman_pk_id: str = Form(""),
     nomor_polisi: str = Form(""),
     nama_sopir: str = Form(""),
     nomor_acuan: str = Form(""),
@@ -600,6 +613,8 @@ async def simpan_timbang_pertama(
         supplier_id=int(supplier_id) if supplier_id.isdigit() else None,
         pihak_nama=pihak_nama.strip() or None,
         transfer_asal=transfer_asal, transfer_tujuan=transfer_tujuan,
+        pengiriman_pk_id=int(pengiriman_pk_id) if pengiriman_pk_id.isdigit() else None,
+        produksi_lihat=request.cookies.get("produksi_lihat"),
         nomor_polisi=nomor_polisi.strip() or None,
         nama_sopir=nama_sopir.strip() or None,
         tara_lain_kg=_angka(tara_lain_kg),
@@ -609,6 +624,8 @@ async def simpan_timbang_pertama(
     )
 
     try:
+        if pengiriman_pk_id and (not pengiriman_pk_id.isdigit() or int(pengiriman_pk_id)<=0):
+            raise service.LayananError('Identitas pengiriman PK tidak sah.')
         # Formulir baru harus memakai master. Antrean/API lama tanpa penanda
         # ini tetap diterima tanpa menebak hubungan dari teks historis.
         if aturan.arah == logic.TRANSFER and lintasan_format and not (transfer_asal and transfer_tujuan):
@@ -617,11 +634,11 @@ async def simpan_timbang_pertama(
             db, akun=akun, data=data,
             ip=request.client.host if request.client else None, komit=not kiriman.aktif(request))
     except (service.LayananError, logic.ValidasiError) as e:
-        return redirect(f"/timbang/{jenis_kode}", err=str(e))
+        return redirect(f"/timbang/{jenis_kode}"+(f"?pengiriman_pk_id={pengiriman_pk_id}" if pengiriman_pk_id.isdigit() else ""), err=str(e))
     except DBAPIError as e:
         # R-T-01: galat basis data bukan layar hitam — kembali ke borang
         # dengan kalimat yang menyebut bahwa timbangannya TIDAK tersimpan.
-        return redirect(f"/timbang/{jenis_kode}", err=await galat_db(db, e, "menyimpan timbangan"))
+        return redirect(f"/timbang/{jenis_kode}"+(f"?pengiriman_pk_id={pengiriman_pk_id}" if pengiriman_pk_id.isdigit() else ""), err=await galat_db(db, e, "menyimpan timbangan"))
 
     if trx.selesai:
         return redirect(f"/transaksi/{trx.id}", ok="Timbangan tersimpan.")
@@ -1085,6 +1102,11 @@ async def simpan_timbang_kedua(
             f"/tiket/{transaksi_id}",
             ok="Tersimpan. Tiket masih terbuka — selesaikan setelah muatan dan timbang kedua sudah pasti.",
         )
+    if trx.pengiriman_pk_id:
+        from app.timbangan import transfer_pk
+        await kiriman.sebelum_integrasi(request, db, f"{PREFIX}/transaksi/{trx.id}")
+        await transfer_pk.sinkron_satu(trx.id)
+        return redirect(f'/transaksi/{trx.id}',ok='Timbang tersimpan. Status penyelesaian perjalanan tersedia di bawah; sambungan yang tertunda dicoba ulang otomatis.')
     if baris.trx.arah == logic.KELUAR:
         await kiriman.sebelum_integrasi(request, db, f"{PREFIX}/transaksi/{trx.id}")
         if not akun.akun_id:

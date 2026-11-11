@@ -48,7 +48,15 @@ async def lifespan(app: FastAPI):
         # Penyemaian gagal tidak boleh menahan service menyala — halaman
         # tetap dapat dilayani, dan aturan bawaan dari kode tetap berlaku.
         log.exception("Penyemaian awal gagal (lanjut jalan)")
-    yield
+    import asyncio
+    from contextlib import suppress
+    from app.timbangan.transfer_pk import pekerja
+    tugas=asyncio.create_task(pekerja())
+    try:
+        yield
+    finally:
+        tugas.cancel()
+        with suppress(asyncio.CancelledError):await tugas
 
 
 app = FastAPI(title="Pos Timbang — PT Hadi Mulya Utama", lifespan=lifespan)

@@ -1,3 +1,4 @@
+{% if trx is defined and trx.pengiriman_pk_id %}<p>Lintasan mengikuti muatan perjalanan PK #{{ trx.pengiriman_pk_id }}.</p><p>{{ trx.lintasan_transfer.asal.nama }} → {{ trx.lintasan_transfer.tujuan.nama }}</p>{% else %}
 {% set tersimpan = trx.lintasan_transfer if trx is defined else none %}
 {% for nama,label,daftar,nilai in [('transfer_asal','Asal',lokasi_transfer.asal,tersimpan.asal.gudang_id|string if tersimpan else ''),('transfer_tujuan','Tujuan',lokasi_transfer.tujuan,tersimpan.tujuan.pilihan if tersimpan else '')] %}
 <div class="grup"><label class="lbl" for="{{ nama }}">{{ label }}</label>
@@ -7,3 +8,5 @@
 </select></div>
 {% endfor %}
 {% if not lokasi_transfer.asal or not lokasi_transfer.tujuan %}<p class="pesan pesan--err">Master lokasi aktif belum lengkap. Hubungi Admin untuk memeriksa Gudang 1 dan Gudang 2.</p>{% endif %}
+
+{% endif %}

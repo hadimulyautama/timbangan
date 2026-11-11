@@ -411,6 +411,10 @@ async def simpan_koreksi(
         # R-T-01: galat basis data bukan layar hitam.
         return redirect(f"/transaksi/{transaksi_id}/koreksi", err=await galat_db(db, e, "menyimpan koreksi"))
 
+    if b.trx.pengiriman_pk_id:
+        from app.timbangan import transfer_pk
+        await db.commit()
+        await transfer_pk.sinkron_satu(transaksi_id)
     if sumber and akun.akun_id:
         try:
             hasil = await klien_produksi.selesaikan_pengiriman(transaksi_id, akun.akun_id,

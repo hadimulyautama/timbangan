@@ -28,6 +28,7 @@
 <div class="fw-page tk-page">
   <div class="tk-heading"><h1>Timbang kedua</h1><button type="button" class="tbl halus" data-tk-guide hidden><span aria-hidden="true">ⓘ</span> Panduan</button></div>
   {{ konteks_formulir() }}
+  {% if trx.pengiriman_pk_id %}{% set plan=trx.lintasan_transfer.get('_pengiriman_pk',{}) %}<section class="kartu"><h2>Perjalanan PK #{{ trx.pengiriman_pk_id }}</h2><p>{{ trx.lintasan_transfer.asal.nama }} → {{ trx.lintasan_transfer.tujuan.nama }}</p><ul>{% for item in plan.get('items',[]) %}<li>{{ item.lot }} · {{ item.berat_kg }} kg</li>{% endfor %}</ul><p>Muatan asal <strong>{{ plan.get('total','—') }} kg</strong>. Selesai timbang akan menyelesaikan perjalanan otomatis bila selisih kurang dari 0,5%. Mulai 0,5% diperiksa Admin. Tidak perlu konfirmasi operator tujuan.</p></section>{% endif %}
 
   <div class="fw-identity kartu">
     <div class="fw-row"><strong class="fw-plate">{{ trx.nomor_polisi or trx.kode }}</strong><span class="lencana lencana--hati">Menunggu timbang kedua</span></div>

@@ -73,7 +73,15 @@
        untuk pemulihan lokal; server memakai pilihan ID pada formulir baru. #}
     <input type="hidden" name="pihak_nama" value="">
     <p class="bantu" data-lintasan-lama hidden>Catatan lintasan dari draf lama: <span></span>. Pilih asal dan tujuan dari daftar untuk melanjutkan.</p>
-    {% include "pilihan_lintasan.html" %}
+    {% if muatan_pk %}
+    <input type="hidden" name="pengiriman_pk_id" value="{{ muatan_pk.id }}">
+    <input type="hidden" name="transfer_asal" value="{{ muatan_pk.lintasan.asal.gudang_id }}">
+    <input type="hidden" name="transfer_tujuan" value="{{ muatan_pk.lintasan.tujuan.pilihan }}">
+    <h3>Perjalanan PK #{{ muatan_pk.id }}</h3>
+    <p>{{ muatan_pk.lintasan.asal.nama }} → {{ muatan_pk.lintasan.tujuan.nama }}</p>
+    <ul>{% for item in muatan_pk['items'] %}<li>{{ item.lot }} · {{ item.berat_kg }} kg</li>{% endfor %}</ul>
+    <p>Muatan asal <strong>{{ muatan_pk.total }} kg</strong>. Selesai timbang akan memeriksa perjalanan otomatis, tanpa konfirmasi operator tujuan.</p>
+    {% else %}{% include "pilihan_lintasan.html" %}{% endif %}
 
   {% else %}
     {% set is_pelanggan = kolom_nama == 'nama_pelanggan' %}
@@ -160,7 +168,7 @@
      Sopir terakhir dititipkan pada `data-sopir` di opsi yang sama supaya tidak
      ada salinan kedua daftar yang bisa berbeda suatu hari. #}
   <div class="fw-inline">
-  {{ pilihan_kendaraan(kendaraan, '', masuk or (not bebas and not transfer), 'data-nopol') }}
+  {{ pilihan_kendaraan(kendaraan, muatan_pk.nomor_polisi if muatan_pk else '', masuk or (not bebas and not transfer), 'data-nopol') }}
     {# Wajib: sopir satu-satunya orang yang hadir di jembatan saat angkanya
        dibaca. Tanpa namanya, sengketa muatan tidak punya saksi. Pada partai
        kecil syarat itu dipenuhi pihaknya sendiri, yang memang berdiri di situ. #}
@@ -171,7 +179,7 @@
      karung sudah terisi otomatis dari aturan komoditas tanpa tombol, dan itu angka
      yang langsung memengaruhi hasil timbang. Yang penting bukan menahan
      isian, melainkan menyebut ASALNYA — itulah guna keterangan di bawah. #}
-  {{ pilihan_sopir(sopir_pilihan, '', true, 'data-sopir-isian') }}
+  {{ pilihan_sopir(sopir_pilihan, muatan_pk.nama_sopir if muatan_pk else '', true, 'data-sopir-isian') }}
   <div class="bantu bantu--asal" id="asal-sopir" hidden>
     Terisi dari kedatangan terakhir truk ini — ubah bila sopirnya berganti.
   </div>

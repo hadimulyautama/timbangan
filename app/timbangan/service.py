@@ -1029,6 +1029,8 @@ class InputTimbang:
     # Tambahan di akhir mempertahankan urutan argumen pemanggil lama.
     transfer_asal: str = ""
     transfer_tujuan: str = ""
+    pengiriman_pk_id: int | None = None
+    produksi_lihat: str | None = None
 
 
 def periksa_jumlah_karung(muatan, *, wajib: bool = False) -> int:
@@ -1995,6 +1997,8 @@ async def simpan_timbang_pertama(
     if trx is None and (data.jenis_kode.startswith('HS_') or data.jenis_kode in {'MENIR_MASUK','BEKATUL_MASUK','REJECT_MASUK'}):
         if data.jenis_kode not in await _aturan_master_padiflow(db,aktif_saja=True):
             raise LayananError('Jenis hasil samping sudah nonaktif. Pilih jenis aktif untuk tiket baru.')
+    if trx is not None and trx.pengiriman_pk_id!=data.pengiriman_pk_id:
+        raise LayananError('Kunci kiriman sudah dipakai untuk perjalanan transfer berbeda.')
     awal = None
     if trx is not None:
         audit_awal = await db.scalar(select(TimbanganAudit.nilai_sesudah).where(
@@ -2003,6 +2007,8 @@ async def simpan_timbang_pertama(
         ).order_by(TimbanganAudit.id).limit(1))
         awal = json.loads(audit_awal).get('isian_awal') if audit_awal else None
 
+    from app.timbangan import transfer_pk
+    snapshot_pk = await transfer_pk.siapkan(db,akun,data,trx)
     cuplikan_lintasan = None
     if data.transfer_asal or data.transfer_tujuan:
         from app.timbangan import lintasan_transfer as lintasan
@@ -2103,6 +2109,10 @@ async def simpan_timbang_pertama(
     if data.cara_timbang == CARA_SEKALI:
         periksa_jumlah_karung(data.muatan, wajib=not samping_curah(aturan))
 
+    if snapshot_pk is not None:
+        cuplikan_lintasan = snapshot_pk
+    trx.pengiriman_pk_id = data.pengiriman_pk_id
+    if data.pengiriman_pk_id:trx.pengiriman_pk_status='baru'
     if cuplikan_lintasan is not None:
         trx.lintasan_transfer = cuplikan_lintasan
     trx.arah = data.arah
@@ -2825,6 +2835,9 @@ async def koreksi_transaksi(
     # bersamaan. Temuan QA T-04.
     await db.refresh(trx, with_for_update=True)
     pastikan_versi(trx, versi)
+
+    from app.timbangan import transfer_pk
+    await transfer_pk.penjaga_koreksi(db,trx,perubahan,muatan)
 
     nilai = await setelan.semua(db)
     boleh, sebab = boleh_mengubah(trx, akun, nilai["jam_kunci_otomatis"])
