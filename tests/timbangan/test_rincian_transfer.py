@@ -29,6 +29,7 @@ async def tiket(*,selesai=True,terstruktur=True,karung=100,tara='.0858',lain=2,n
         return t.id
 
 @pytest.mark.parametrize('tujuan',['gudang:102','silo:103','silo:104'])
+@pytest.mark.fondasi_multi
 async def test_pilihan_simpan_replay_dan_snapshot(klien,tujuan):
     await master();await login(klien)
     page=await klien.get('/timbangan/timbang/TRANSFER');assert page.status_code==200
