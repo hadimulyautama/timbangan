@@ -682,3 +682,24 @@ body .beranda-sambut h1 { font-size: var(--tipe-judul); }
  body.tf-pos .tf-filter>.tf-search{flex:0 1 360px;order:1}
  body.tf-pos .tf-filter>button.cari-berikon{order:2;flex:none}
 }
+
+/* Desktop: satu item memegang label dan pemisahnya, sehingga pemisah tidak
+   tertinggal sendiri saat nama panjang membungkus. Ponsel tidak disentuh. */
+@media(min-width:900px){
+ .nav-rantai{list-style:none;display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin:0;padding:0;min-width:0}
+ .nav-rantai>li{display:flex;align-items:baseline;gap:10px;min-width:0;max-width:100%;line-height:1.6}
+ .nav-rantai :is(a,[aria-current=page]){overflow-wrap:anywhere;min-width:0;padding-block:4px}
+ .nav-rantai a{text-decoration:none}
+ .nav-rantai a:hover{text-decoration:underline;text-underline-offset:3px}
+ .nav-rantai [aria-current=page]{font-weight:600}
+ .nav-rantai__pemisah{flex:none;font-size:16px;user-select:none}
+}
+@media(min-width:900px){
+ body.padiflow-ui.pd-timbang .pd-crumb{display:flex;align-items:flex-start;justify-content:space-between;gap:20px}
+ body.padiflow-ui .pd-crumb>nav{flex:1;min-width:0}
+ body.padiflow-ui .pd-crumb .nav-rantai a{color:var(--pd-muted)}
+ body.padiflow-ui .pd-crumb .nav-rantai [aria-current=page]{color:var(--pd-ink)}
+ .pd-desktop-back{flex:none;white-space:nowrap;text-decoration:none;min-height:32px;display:inline-flex;align-items:center}
+ .pd-back-mobile{display:none!important}
+}
+@media(max-width:899px){.pd-desktop-back{display:none}}

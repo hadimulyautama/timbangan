@@ -36,7 +36,7 @@ BASE_DIR = Path(__file__).parent
 PREFIX = "/timbangan"
 
 # Dinaikkan bila CSS/JS berubah, supaya perangkat tidak memakai berkas lama.
-VERSI = "124"
+VERSI = "125"
 
 #: Warna tiap status. Dipisahkan dari `logic` karena ini urusan tampilan.
 NADA_STATUS = {
@@ -139,6 +139,10 @@ templates.env.globals.update({
     "ROLES": ROLES,
     "ROLE_LABEL": ROLE_LABEL,
 })
+
+
+from app.timbangan.breadcrumb import tampil as breadcrumb_susun
+templates.env.globals["breadcrumb_susun"] = breadcrumb_susun
 
 
 def render(request: Request, nama: str, **konteks) -> HTMLResponse:

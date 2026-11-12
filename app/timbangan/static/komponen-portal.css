@@ -232,3 +232,10 @@ body.padiflow-ui .penerimaan-detail h1 { font: 600 25px/1.25 var(--pd-font); }
 body.padiflow-ui .penerimaan-detail h2 { font: 600 16px/1.4 var(--pd-font); }
 body.padiflow-ui .penerimaan-tabs a { font: 400 14px/1.4 var(--pd-font); border-radius: 9px; }
 body.padiflow-ui .penerimaan-tabs a[aria-selected=true] { background: var(--pd-soft); border-color: var(--pd-line); font-weight: 600; }
+
+@media(min-width:900px){
+ body.padiflow-ui.pd-timbang .bar>.pd-crumb{width:100%;max-width:none;box-sizing:border-box;min-height:56px;align-items:center;padding:10px 22px;background:var(--pd-sheet);border-bottom:1px solid var(--pd-line)}
+}
+@media(min-width:900px){
+ html:has(body.padiflow-ui.pd-timbang){scrollbar-gutter:stable}
+}

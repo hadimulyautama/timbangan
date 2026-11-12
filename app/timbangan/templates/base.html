@@ -165,7 +165,7 @@
       <a href="{{ PREFIX }}/transaksi">≡ Riwayat</a>
     </div>{% endif %}
     {% if kembali %}
-      <a href="{{ kembali }}" aria-label="Kembali">
+      <a class="pd-back-mobile" href="{{ kembali }}" aria-label="Kembali">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M15 18l-6-6 6-6"/></svg>
@@ -184,7 +184,13 @@
       </a>
     {% endif %}
    </div>
-   {% if akun %}<div class="pd-crumb" aria-label="Breadcrumb"><a href="{{ PREFIX }}/">Pos Timbang</a><span aria-hidden="true"> › </span><strong>{{ self.bar_judul() }}</strong></div>{% endif %}
+   {% if akun %}<div class="pd-crumb">
+    {% if breadcrumb_susun is defined %}
+    {% set rantai = breadcrumb_susun(self.bar_judul()|striptags|trim) %}
+    <nav aria-label="Jejak halaman"><ol class="nav-rantai">{% for item in rantai["items"] %}<li>{% if not loop.first %}<span class="nav-rantai__pemisah" aria-hidden="true">›</span>{% endif %}{% if item.alamat %}<a href="{{ item.alamat }}">{{ item.nama }}</a>{% else %}<span aria-current="page">{{ item.nama }}</span>{% endif %}</li>{% endfor %}</ol></nav>
+    {% if rantai.kembali %}<a class="pd-desktop-back" href="{{ rantai.kembali }}" aria-label="Kembali ke {{ rantai["items"][-2].nama }}">← Kembali</a>{% endif %}
+    {% else %}<a href="{{ PREFIX }}/">Pos Timbang</a><span aria-hidden="true"> › </span><strong>{{ self.bar_judul() }}</strong>{% endif %}
+   </div>{% endif %}
   </header>
   {% endblock %}
 
