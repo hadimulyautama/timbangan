@@ -41,12 +41,12 @@
   <section aria-label="{{ {'rekap':'Rekap','pemeriksaan':'Pemeriksaan','pemantauan':'Pemantauan pihak'}[tab] }}" class="lp-panel">
   {% if tab == 'rekap' %}
     <details class="lr-period" data-lr-period open>
-      <summary><span>Periode <b>{{ f.dari|tgl(true) }} – {{ f.sampai|tgl(true) }}</b></span><span class="lr-filter-label">Filter periode <span aria-hidden="true">⌄</span></span></summary>
+      <summary><span>Periode <b>{{ f.dari|tgl(true) }} – {{ f.sampai|tgl(true) }}</b></span><span class="lr-filter-label filter-berikon">Filter periode <span aria-hidden="true">⌄</span></span></summary>
     <form action="{{ PREFIX }}/laporan" method="get" class="lp-dates lr-dates">
       <input type="hidden" name="tab" value="{{ tab }}">
       <label>Dari<input class="fld" type="date" name="dari" value="{{ f.dari|iso }}"></label>
       <label>Sampai<input class="fld" type="date" name="sampai" value="{{ f.sampai|iso }}"></label>
-      <button type="submit" class="tbl">Terapkan periode</button>
+      <button type="submit" class="filter-berikon tbl">Terapkan periode</button>
     </form>
     </details>
   {% elif tab != 'pemeriksaan' %}

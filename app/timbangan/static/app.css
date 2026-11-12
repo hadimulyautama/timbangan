@@ -651,3 +651,14 @@ body .beranda-sambut h1 { font-size: var(--tipe-judul); }
 .kg-barang{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:10px 0;border-bottom:1px solid var(--garis)}
 .kg-barang>div{min-width:0}.kg-tara{grid-column:1/-1}.kg-subtotal{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;padding-top:12px}
 @media(max-width:360px){.kg-barang{grid-template-columns:minmax(0,1fr)}.kg-tara{grid-column:auto}}
+
+/* Ikon dekoratif untuk pembuka/penerapan filter. Tidak menambah node atau
+   pendengar klik; label, badge aktif, dan target sentuh tetap milik kontrol. */
+.filter-berikon::before {
+  content: "" !important; display: inline-block; width: 18px; height: 18px;
+  flex: 0 0 18px; vertical-align: -3px; margin-inline-end: 6px;
+  background-color: currentColor; pointer-events: none;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M3%204h18l-7%208v8l-4-2v-6z%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M3%204h18l-7%208v8l-4-2v-6z%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat;
+}
+.btn.filter-berikon::before, .tbl.filter-berikon::before { margin-inline-end: 0; }

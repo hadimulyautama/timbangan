@@ -23,9 +23,9 @@
   <form method="get" action="{{ PREFIX }}/transaksi" class="rh-form" aria-label="Filter riwayat timbang">
     <label>Cari tiket<input class="fld teks" type="search" name="cari" value="{{ f.cari or '' }}" placeholder="Nomor polisi, kode, nama"></label>
     <button type="submit" class="tbl rh-search-submit">Cari</button>
-    <button type="button" class="tbl halus rh-filter-trigger" data-rh-filter hidden>☷ Filter{% if filter_jumlah %} ({{ filter_jumlah }}){% endif %}</button>
+    <button type="button" class="filter-berikon tbl halus rh-filter-trigger" data-rh-filter hidden>Filter{% if filter_jumlah %} ({{ filter_jumlah }}){% endif %}</button>
     <details id="rh-filters" class="rh-more" {{ 'open' if filter_jumlah }}>
-      <summary>Filter{% if filter_jumlah %} ({{ filter_jumlah }}){% endif %}</summary>
+      <summary class="filter-berikon">Filter{% if filter_jumlah %} ({{ filter_jumlah }}){% endif %}</summary>
       <div class="rh-filter-panel">
       <div class="rh-fields rh-period">
         <label>Dari<input class="fld" type="date" name="dari" value="{{ f.dari|iso }}"></label>
@@ -49,7 +49,7 @@
           {% for kode, label in [('TERBUKA','Terbuka'),('SELESAI','Selesai'),('DITUTUP_PAKSA','Ditutup tanpa timbang kedua')] %}<option value="{{ kode }}" {{ 'selected' if f.status_tiket == kode }}>{{ label }}</option>{% endfor %}
         </select></label>
       </div>
-      <div class="rh-form-actions"><button type="submit" class="tbl">Terapkan filter</button><a class="tf-link" href="{{ PREFIX }}/transaksi">Hapus filter</a></div>
+      <div class="rh-form-actions"><button type="submit" class="filter-berikon tbl">Terapkan filter</button><a class="tf-link" href="{{ PREFIX }}/transaksi">Hapus filter</a></div>
       </div>
     </details>
   </form>
