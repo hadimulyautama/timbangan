@@ -20,7 +20,7 @@
       {% for k in pilihan_kegiatan %}<option value="{{ k }}" {{ 'selected' if kegiatan == k }}>{{ label_kegiatan.get(k, k) }}</option>{% endfor %}
       {% if kegiatan and kegiatan not in pilihan_kegiatan %}<option value="{{ kegiatan }}" selected>{{ label_kegiatan.get(kegiatan, kegiatan) }}</option>{% endif %}
     </select></label>{% else %}<input type="hidden" name="kegiatan" value="{{ kegiatan }}">{% endif %}
-    <button type="submit" class="tbl halus">Cari</button>
+    <button type="submit" class="cari-berikon tbl halus">Cari</button>
     {% if q or kegiatan %}<a href="{{ PREFIX }}/tiket?tab={{ tab }}" class="tf-link">Hapus filter</a>{% endif %}
   </form>
   <div class="tf-sub">{{ jumlah_hasil }} dari {{ jumlah_antrean[tab] }} {{ 'truk' if tab == 'truk' else 'partai kecil' }} · paling lama di atas · jumlah tab mencakup semua tiket aktif</div>

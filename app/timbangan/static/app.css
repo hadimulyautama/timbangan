@@ -654,11 +654,31 @@ body .beranda-sambut h1 { font-size: var(--tipe-judul); }
 
 /* Ikon dekoratif untuk pembuka/penerapan filter. Tidak menambah node atau
    pendengar klik; label, badge aktif, dan target sentuh tetap milik kontrol. */
-.filter-berikon::before {
+.filter-berikon::before, .cari-berikon::before {
   content: "" !important; display: inline-block; width: 18px; height: 18px;
   flex: 0 0 18px; vertical-align: -3px; margin-inline-end: 6px;
   background-color: currentColor; pointer-events: none;
   -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M3%204h18l-7%208v8l-4-2v-6z%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat;
   mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M3%204h18l-7%208v8l-4-2v-6z%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat;
 }
-.btn.filter-berikon::before, .tbl.filter-berikon::before { margin-inline-end: 0; }
+.btn.filter-berikon::before, .tbl.filter-berikon::before, .btn.cari-berikon::before, .tbl.cari-berikon::before { margin-inline-end: 0; }
+
+/* Ikon pencarian memakai ukuran/warna kontrol yang sama dengan filter. */
+.cari-berikon::before {
+ -webkit-mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Ccircle%20cx%3D%2210.5%22%20cy%3D%2210.5%22%20r%3D%226.5%22%2F%3E%3Cpath%20d%3D%22m16%2016%205%205%22%2F%3E%3C%2Fsvg%3E");
+ mask-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Ccircle%20cx%3D%2210.5%22%20cy%3D%2210.5%22%20r%3D%226.5%22%2F%3E%3Cpath%20d%3D%22m16%2016%205%205%22%2F%3E%3C%2Fsvg%3E");
+}
+
+/* Susunan desktop saja; field lanjutan tetap berada di form GET aslinya. */
+@media(min-width:701px){
+ body.tf-riwayat form.rh-form.kontrol-cari-kiri{grid-template-columns:max-content minmax(180px,360px) max-content minmax(0,1fr);justify-content:start;align-items:end;column-gap:12px}
+ body.tf-riwayat .rh-form>.rh-filter-trigger{grid-column:1;grid-row:1}
+ body.tf-riwayat .rh-form>label{grid-column:2;grid-row:1}
+ body.tf-riwayat .rh-form>.rh-search-submit{grid-column:3;grid-row:1}
+ body.tf-riwayat .rh-form>.rh-more{grid-column:1/-1;grid-row:2}
+ body.tf-riwayat .rh-form>:is(.rh-filter-trigger,.rh-search-submit){height:48px;min-height:48px;box-sizing:border-box}
+ body.tf-riwayat .rh-form>label input{height:48px;box-sizing:border-box}
+ body.tf-pos .tf-filter{justify-content:flex-start}
+ body.tf-pos .tf-filter>.tf-search{flex:0 1 360px;order:1}
+ body.tf-pos .tf-filter>button.cari-berikon{order:2;flex:none}
+}

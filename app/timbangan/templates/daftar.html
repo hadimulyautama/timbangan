@@ -20,9 +20,9 @@
   </header>
   {% if akun.is_admin %}<p class="pesan pesan--err" data-hasil-unduh role="alert" hidden></p>{% endif %}
 
-  <form method="get" action="{{ PREFIX }}/transaksi" class="rh-form" aria-label="Filter riwayat timbang">
+  <form method="get" action="{{ PREFIX }}/transaksi" class="rh-form kontrol-cari-kiri" aria-label="Filter riwayat timbang">
     <label>Cari tiket<input class="fld teks" type="search" name="cari" value="{{ f.cari or '' }}" placeholder="Nomor polisi, kode, nama"></label>
-    <button type="submit" class="tbl rh-search-submit">Cari</button>
+    <button type="submit" class="cari-berikon tbl rh-search-submit">Cari</button>
     <button type="button" class="filter-berikon tbl halus rh-filter-trigger" data-rh-filter hidden>Filter{% if filter_jumlah %} ({{ filter_jumlah }}){% endif %}</button>
     <details id="rh-filters" class="rh-more" {{ 'open' if filter_jumlah }}>
       <summary class="filter-berikon">Filter{% if filter_jumlah %} ({{ filter_jumlah }}){% endif %}</summary>
