@@ -26,6 +26,18 @@ def angka(nilai, digit: int = 0) -> str:
     return teks.replace(",", "#").replace(".", ",").replace("#", ".")
 
 
+def angka_rinci(nilai, digit: int = 3) -> str:
+    """Bobot tersimpan sampai tiga desimal, dengan pemisah Indonesia.
+
+    Format %g memakai titik desimal dan dapat berpindah ke notasi ilmiah.
+    Pada partai kecil, 12.345 lalu terbaca sebagai dua belas ribu kilogram
+    bila disalin ke isian. Buang hanya nol pecahan, bukan pemisah ribuan,
+    supaya angka yang dibaca petugas dapat diketik ulang tanpa berubah arti.
+    """
+    teks = angka(nilai, digit)
+    return teks.rstrip("0").rstrip(",") if "," in teks else teks
+
+
 def kg(nilai, digit: int = 0) -> str:
     if nilai is None:
         return "-"

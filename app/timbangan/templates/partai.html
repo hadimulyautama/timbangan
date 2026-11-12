@@ -46,7 +46,7 @@
   {# Angka berjalan besar-besar: inilah satu-satunya hal yang ingin dilihat
      petugas maupun penjualnya di antara dua timbangan. #}
   <div class="hasil hasil--aman">
-    <div class="hasil__angka">{{ '%g'|format(trx.timbang1_kg or 0) }} <span class="sat">kg</span></div>
+    <div class="hasil__angka">{{ (trx.timbang1_kg or 0)|angka_rinci }} <span class="sat">kg</span></div>
     <div class="hasil__ket">{{ trx.penimbangan|length }} kali timbang · belum ditutup</div>
   </div>
 
@@ -56,13 +56,13 @@
       <div class="baris">
         <span>
           <b style="font-family:var(--mono)">{{ '%02d'|format(p.urutan) }}</b>
-          &nbsp;{{ '%g'|format(p.berat_kg) }} kg
+          &nbsp;{{ p.berat_kg|angka_rinci }} kg
           <span class="bantu">· {{ p.waktu|jam }}</span>
         </span>
         {% if trx.penimbangan|length > 1 %}
           <form method="post" action="{{ PREFIX }}/partai/{{ trx.id }}/hapus"
                 style="display:inline"
-                onsubmit="return confirm('Hapus timbangan {{ '%g'|format(p.berat_kg) }} kg?')">
+                onsubmit="return confirm('Hapus timbangan {{ p.berat_kg|angka_rinci }} kg?')">
             <input type="hidden" name="urutan" value="{{ p.urutan }}">
             <button type="submit" class="tbl halus kecil">Hapus</button>
           </form>
@@ -79,9 +79,9 @@
        saat menyimpan. Lihat `service.alokasi_nomor`. #}
 
     <div class="grup">
-      <div class="lbl">{{ PIHAK_LABEL.get(aturan.arah, 'Pihak') }}</div>
+      <label class="lbl" for="f-supplier_id">{{ PIHAK_LABEL.get(aturan.arah, 'Pihak') }}</label>
       {# Partai kecil memakai aturan kontak yang sama dengan timbang truk. #}
-      <select class="fld" name="supplier_id" required
+      <select class="fld" id="f-supplier_id" name="supplier_id" required
               data-cari="Ketik nama {{ PIHAK_LABEL.get(aturan.arah, 'pihak')|lower }}…">
         <option value="">— pilih —</option>
         {% if pihak_sering %}
@@ -107,17 +107,18 @@
      peringatan "bukan kelipatan 10 kg", yang benar untuk jembatan truk dan
      salah di sini. Timbangan kecil membaca sampai kilogram — 2 kg ya 2 kg. #}
   <div class="grup" style="margin-top:18px">
-    <div class="lbl">{{ 'Timbangan berikutnya' if trx else 'Berat timbangan' }}</div>
+    <div class="lbl" id="berat-judul">{{ 'Timbangan berikutnya' if trx else 'Berat timbangan' }}</div>
     <div id="berat-daftar" style="display:flex;flex-direction:column;gap:8px">
       <div class="berat-baris" style="display:flex;gap:8px;align-items:center">
-        <span class="bantu" style="min-width:22px;font-family:var(--mono)" data-nomor></span>
-        <input class="fld" name="berat_kg" type="text" inputmode="decimal"
+        <label class="bantu" for="f-berat-1" style="min-width:22px;font-family:var(--mono)" data-nomor
+               aria-label="Berat timbangan {{ (trx.penimbangan|length + 1) if trx else 1 }} dalam kg">{{ (trx.penimbangan|length + 1) if trx else 1 }}</label>
+        <input class="fld" id="f-berat-1" name="berat_kg" type="text" inputmode="decimal" aria-describedby="berat-bantu"
                autocomplete="off" placeholder="kg" style="flex:1">
       </div>
     </div>
     <button type="button" class="tbl halus" id="tambah-berat"
             style="margin-top:8px">+ Tambah timbangan</button>
-    <div class="bantu">Angka apa adanya, tanpa dibulatkan. Kolom kosong diabaikan.</div>
+    <div class="bantu" id="berat-bantu">Angka apa adanya, tanpa dibulatkan. Gunakan koma untuk desimal, misalnya 12,345 kg. Kolom kosong diabaikan.</div>
   </div>
 
   {{ isian('jumlah_karung', 'Jumlah karung total',
@@ -156,8 +157,15 @@
   var sudah = {{ (trx.penimbangan|length) if trx else 0 }};
 
   function nomori() {
-    Array.prototype.forEach.call(daftar.querySelectorAll('[data-nomor]'),
-      function (el, i) { el.textContent = ('0' + (sudah + i + 1)).slice(-2); });
+    Array.prototype.forEach.call(daftar.querySelectorAll('.berat-baris'), function (baris, i) {
+      var urutan = sudah + i + 1;
+      var label = baris.querySelector('[data-nomor]');
+      var input = baris.querySelector('input');
+      input.id = 'f-berat-' + (i + 1);
+      label.htmlFor = input.id;
+      label.textContent = String(urutan).padStart(2, '0');
+      label.setAttribute('aria-label', 'Berat timbangan ' + urutan + ' dalam kg');
+    });
   }
 
   tombol.addEventListener('click', function () {
@@ -168,6 +176,7 @@
     baris.querySelector('input').focus();
   });
 
+  daftar.closest('form').addEventListener('draf-dipulihkan', nomori);
   nomori();
 })();
 </script>

@@ -14,16 +14,16 @@
 {% macro isian(nama, label, nilai='', satuan='', tipe='text', bantu='',
                wajib=false, teks=false, atribut='') %}
   <div class="grup">
-    <div class="lbl">{{ label }}{% if not wajib %} <span
-      style="text-transform:none;letter-spacing:0;font-weight:500">(boleh kosong)</span>{% endif %}</div>
+    <label class="lbl" for="f-{{ nama }}">{{ label }}{% if not wajib %} <span
+      style="text-transform:none;letter-spacing:0;font-weight:500">(boleh kosong)</span>{% endif %}</label>
     <div class="{{ 'sat' if satuan else '' }}">
       <input class="fld {{ 'teks' if teks else '' }}" name="{{ nama }}"
-             id="f-{{ nama }}" type="{{ tipe }}"
+             id="f-{{ nama }}" type="{{ tipe }}"{% if bantu %} aria-describedby="bantu-{{ nama }}"{% endif %}
              value="{{ nilai if nilai is not none else '' }}"
              {% if wajib %}required{% endif %} {{ atribut|safe }}>
       {% if satuan %}<span>{{ satuan }}</span>{% endif %}
     </div>
-    {% if bantu %}<div class="bantu">{{ bantu }}</div>{% endif %}
+    {% if bantu %}<div class="bantu" id="bantu-{{ nama }}">{{ bantu }}</div>{% endif %}
   </div>
 {% endmacro %}
 

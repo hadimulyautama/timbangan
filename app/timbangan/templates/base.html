@@ -288,6 +288,7 @@
     <div class="bawah__akun"><div class="bawah__nama">{{ akun.nama }}</div><div class="bawah__peran">{{ akun.role_label }}</div></div>
     <div class="bawah__ukur" role="separator" tabindex="0"
          aria-orientation="vertical" aria-label="Ubah lebar sidebar"
+         aria-controls="menu-timbang" aria-valuemin="220" aria-valuemax="420" aria-valuenow="226"
          title="Tarik untuk mengubah lebar sidebar"></div>
   </nav>
 
@@ -329,7 +330,9 @@
     pegangan.setAttribute("aria-valuenow", String(n));
     if (tetap) { try { localStorage.setItem(kunci, String(n)); } catch (_) {} }
   }
-  try { var awal = Number(localStorage.getItem(kunci)); if (awal) terapkan(awal, false); } catch (_) {}
+  var awal = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sidebar")) || 226;
+  try { var tersimpan = Number(localStorage.getItem(kunci)); if (Number.isFinite(tersimpan) && tersimpan > 0) awal = tersimpan; } catch (_) {}
+  terapkan(awal, false);
   var tarik = false;
   pegangan.addEventListener("pointerdown", function (e) {
     tarik = true; pegangan.setPointerCapture(e.pointerId);

@@ -36,7 +36,7 @@ BASE_DIR = Path(__file__).parent
 PREFIX = "/timbangan"
 
 # Dinaikkan bila CSS/JS berubah, supaya perangkat tidak memakai berkas lama.
-VERSI = "125"
+VERSI = "126"
 
 #: Warna tiap status. Dipisahkan dari `logic` karena ini urusan tampilan.
 NADA_STATUS = {
@@ -102,7 +102,7 @@ def ringkas_aturan(aturan: logic.AturanJenis) -> str:
 
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 templates.env.filters.update({
-    "angka": fmt.angka, "kg": fmt.kg, "kg_tanda": fmt.kg_tanda,
+    "angka": fmt.angka, "angka_rinci": fmt.angka_rinci, "kg": fmt.kg, "kg_tanda": fmt.kg_tanda,
     "persen": fmt.persen, "ton": fmt.ton, "tgl": fmt.tgl,
     "tgl_jam": fmt.tgl_jam, "iso": fmt.iso, "jam": fmt.jam,
     "audit_nilai": fmt.audit_nilai,
