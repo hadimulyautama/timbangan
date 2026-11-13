@@ -1,6 +1,12 @@
 name: uji
 on:
   workflow_dispatch:
+    inputs:
+      padiflow_ref:
+        description: Revisi PadiFlow pasangan yang diuji
+        type: string
+        required: true
+        default: 946bc0f3c7875cc763ac632f83613bbcc7c98d40
 jobs:
   regresi:
     runs-on: ubuntu-latest
@@ -28,7 +34,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: hadimulyautama/penggilingan-beras
-          ref: 7b19c11f283d2068419609e1763ad48406e75c6a
+          ref: ${{ inputs.padiflow_ref }}
           path: produksi
       - uses: actions/setup-python@v5
         with:
@@ -77,7 +83,7 @@ jobs:
       - name: Regresi PostgreSQL dan paket identitas
         if: matrix.suite == 'postgres'
         working-directory: timbangan
-        run: python -m pytest -q tests/pg tests/test_identitas_paket.py --junitxml=../bukti/postgres.xml
+        run: python -m pytest -q tests/pg tests/test_identitas_paket.py tests/test_ruang_data.py --junitxml=../bukti/postgres.xml
       - name: Browser detail retur dan regresi pengiriman
         if: matrix.suite == 'browser'
         working-directory: timbangan
@@ -112,7 +118,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: hadimulyautama/penggilingan-beras
-          ref: 7b19c11f283d2068419609e1763ad48406e75c6a
+          ref: ${{ inputs.padiflow_ref }}
           path: produksi
       - uses: actions/setup-python@v5
         with:

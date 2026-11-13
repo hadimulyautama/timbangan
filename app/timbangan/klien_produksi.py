@@ -23,6 +23,7 @@ import logging
 import httpx
 
 from app.config import settings
+from hmu_identitas.ruang_data import header_integrasi
 
 log = logging.getLogger("timbangan.klien_produksi")
 
@@ -47,7 +48,7 @@ async def _minta(metode: str, path: str, *, operator_akun_id: int | None = None,
     url = settings.produksi_api_url.rstrip("/") + path
     try:
         async with httpx.AsyncClient(timeout=settings.produksi_api_timeout) as c:
-            headers = {"X-Internal-Token": settings.produksi_api_token}
+            headers = {"X-Internal-Token": settings.produksi_api_token, **header_integrasi()}
             if operator_akun_id is not None:
                 headers["X-Operator-Akun"] = str(int(operator_akun_id))
             if lihat:
