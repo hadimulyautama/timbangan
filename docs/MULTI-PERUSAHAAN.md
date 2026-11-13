@@ -71,3 +71,22 @@ Kasus lain memakai formulir asli untuk replay, satu perjalanan/satu tiket,
 gangguan RPC serta pemulihan. Integrasi dua proses nyata dijalankan dari
 PadiFlow menurut instruksi pada dokumen lintas aplikasi. Mock RPC bukan bukti
 integrasi jaringan. Semua suite CI lengkap tetap menjadi pengaman rilis.
+
+## Tahap 2 — master organisasi disiapkan
+
+13 November 2026: kedua aplikasi membawa `Perusahaan`, `LokasiPabrik`,
+`PenempatanGudang`, dan `KeanggotaanPerusahaan` dari paket core yang sama.
+`hmu_identitas.organisasi.konteks_kerja` membentuk nilai immutable baca-saja
+setelah memeriksa keanggotaan dan kecocokan perusahaan/lokasi/gudang aktif.
+Belum ada gerbang atau layar operasional yang memakai konteks baru.
+
+DDL empat tabel kosong hanya dimiliki rantai PadiFlow `0128_master_organisasi`.
+TeraFlow tidak menambah migrasi master duplikat. Tidak ada seed perusahaan,
+penetapan pemilik, backfill transaksi, atau perubahan identitas pada tiket lama.
+Uji dua interpreter memakai database uji bersama untuk memeriksa ID dan
+keputusan akses yang sama, di samping integrasi HTTP transfer yang sudah ada.
+
+Rincian batas, keputusan runner, rollback dan bukti migrasi berada pada
+[tahap 2 PadiFlow](https://github.com/hadimulyautama/penggilingan-beras/blob/main/docs/multi-perusahaan/MASTER-ORGANISASI.md).
+Multi-perusahaan belum diaktifkan; master kontak/produk, sesi, portal,
+integrasi dan cache perlu mendapat cakupan perusahaan sebelum itu.
