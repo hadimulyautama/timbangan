@@ -2,7 +2,7 @@
 import io,os
 from pathlib import Path
 import pytest
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright,expect
 from reportlab.pdfgen import canvas
 from test_web import app_uji,klien,login
 from test_pengiriman_gabungan_browser import alamat_ui
@@ -39,7 +39,9 @@ async def test_pdf_gagal_retry_semua_halaman_zoom_dan_tutup(klien,alamat_ui,widt
         await page.screenshot(path=str(out/f'pdf-dialog-{width}.png'),full_page=True)
         await page.keyboard.press('Escape')
         assert not await page.locator('.tf-pdf-dialog').evaluate('e=>e.open')
-        assert await page.locator('.tf-pdf-page').count()==0
+        # Event close pada dialog dijadwalkan browser; tunggu pembersihan nyata,
+        # bukan menganggap Escape dan callback close selesai pada tick yang sama.
+        await expect(page.locator('.tf-pdf-page')).to_have_count(0)
         assert await page.get_by_role('button',name='Lihat',exact=True).evaluate('e=>e===document.activeElement')
         assert await keadaan(tid)==before and page.url==lokasi and not errors
         await b.close()
