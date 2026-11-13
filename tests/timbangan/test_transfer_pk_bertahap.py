@@ -30,6 +30,7 @@ async def first(klien):
  async with database.SessionLocal() as db:tid=await db.scalar(select(TimbanganTransaksi.id))
  return tid,body
 
+@pytest.mark.fondasi_multi
 async def test_form_replay_dan_selesai_tanpa_menggandakan(klien,plan,monkeypatch):
  tid,body=await first(klien)
  await klien.post('/timbangan/timbang/TRANSFER',data=body)
@@ -54,6 +55,7 @@ async def test_form_replay_dan_selesai_tanpa_menggandakan(klien,plan,monkeypatch
   a=await db.scalar(select(TimbanganAkun).where(TimbanganAkun.username=='wahid'))
   with pytest.raises(service.LayananError,match='Stok perjalanan'):await p.penjaga_koreksi(db,t,{'timbang2_kg':6400},None)
 
+@pytest.mark.fondasi_multi
 async def test_rpc_terputus_dan_ulang_termasuk_keputusan_admin(klien,plan,monkeypatch):
  tid,_=await first(klien);monkeypatch.setattr(rpc,'terkonfigurasi',lambda:True)
  async def putus(*a,**kw):raise rpc.ProduksiTakTersedia('Jaringan putus')

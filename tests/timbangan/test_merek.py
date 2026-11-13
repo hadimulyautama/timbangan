@@ -22,6 +22,10 @@ def test_tidak_ada_merek_lama_di_tampilan_dan_metadata():
         if path.name == 'timbang1.html':
             text = text.replace('bukan perintah pemindahan stok PadiFlow.',
                                 'bukan perintah pemindahan stok Sistem Produksi.')
+        if path.name == 'rincian_tindakan.html':
+            # Sumber stok perjalanan disebut pada larangan pembatalan saja.
+            text = text.replace('tiket terikat muatan dan stok perjalanan PadiFlow.',
+                                'tiket terikat muatan dan stok perjalanan Sistem Produksi.')
         if path.name == 'timbang2.html':
             # Pengajuan curah menyebut aplikasi sumber; identitas halaman
             # tetap TeraFlow. Hanya dua keterangan operasional ini diizinkan.
