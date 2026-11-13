@@ -4404,7 +4404,12 @@ async def test_retur_petunjuk_berat_dan_dokumen_timbang_kedua(
     pid = await _tambah_pelanggan('Toko Retur')
     await login(klien)
     form = (await klien.get(f'{PREFIX}/timbang/{jenis}')).text
-    assert f'<div class="lbl">{label_pertama}</div>' in form
+    def label_bobot(html):
+        label = re.search(r'<label\b[^>]*for="f-berat_kg"[^>]*>(.*?)</label>', html, re.S)
+        assert label, 'Kolom bobot harus mempunyai label yang terhubung.'
+        assert re.search(r'<input\b(?=[^>]*id="f-berat_kg")(?=[^>]*name="berat_kg")[^>]*>', html)
+        return label.group(1).strip()
+    assert label_bobot(form) == label_pertama
     r = await klien.post(f'{PREFIX}/timbang/{jenis}', data={
         'kunci': kode_dari(form), 'berat_kg': pertama,
         'supplier_id': str(pid) if jenis == 'RETUR_PELANGGAN' else '1',
@@ -4414,7 +4419,7 @@ async def test_retur_petunjuk_berat_dan_dokumen_timbang_kedua(
     tiket = await klien.get(f'{PREFIX}/tiket')
     trx_id = int(re.search(r'/tiket/(\d+)', tiket.text).group(1))
     form2 = (await klien.get(f'{PREFIX}/tiket/{trx_id}')).text
-    assert f'<div class="lbl">{label_kedua}</div>' in form2
+    assert label_bobot(form2) == label_kedua
     assert 'name="nomor_acuan"' in form2
     assert 'name="berat_acuan_kg"' in form2
     r = await klien.post(f'{PREFIX}/tiket/{trx_id}', data={
