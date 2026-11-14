@@ -55,6 +55,9 @@ def _siapkan() -> None:
         settings.database_url, echo=False, pool_pre_ping=True,
         connect_args={"server_settings": {"timezone": settings.app_timezone}},
     )
+    from hmu_identitas.ruang_data import pasang_pagar
+    import os
+    pasang_pagar(_engine, wajib=bool(os.environ.get("RAILWAY_ENVIRONMENT_ID")))
     from app.performa import pasang_penghitung
     pasang_penghitung(_engine)
     _pabrik = async_sessionmaker(

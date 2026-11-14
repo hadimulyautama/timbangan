@@ -36,6 +36,7 @@ from app.timbangan.db import get_db
 from app.timbangan.models import ROLE_SUPERADMIN, TimbanganAkun
 from hmu_identitas import masuk as identitas
 from hmu_identitas import token as _token
+from hmu_identitas.ruang_data import klaim_sesi, sesi_sah
 from hmu_identitas.sandi import cek_sandi, hash_sandi  # noqa: F401  (pemakai lama)
 
 log = logging.getLogger("timbangan.security")
@@ -89,19 +90,19 @@ def _umur_detik(hari: int | None = None) -> int:
 def buat_token(akun_id: int, *, hari: int | None = None, versi: int = 1) -> str:
     """Token bentuk LAMA: sub = `timbangan_akun.id`. Dipakai akun yang belum
     ditautkan (dan uji lama)."""
-    return _token.buat_token(_kunci(), akun_id=akun_id, versi=versi, umur_detik=_umur_detik(hari))
+    return _token.buat_token(_kunci(), akun_id=akun_id, versi=versi, umur_detik=_umur_detik(hari), ekstra=klaim_sesi())
 
 
 def buat_token_bersama(akun_bersama_id: int, *, versi: int) -> str:
     """Token untuk sesi akun bersama: sub = `produksi_akun.id`, ditandai."""
     return _token.buat_token(_kunci(), akun_id=akun_bersama_id, versi=versi,
-                             umur_detik=_umur_detik(), ekstra={TANDA_BERSAMA: 1})
+                             umur_detik=_umur_detik(), ekstra={TANDA_BERSAMA: 1, **klaim_sesi()})
 
 
 def baca_token(token: str | None) -> tuple[int, int] | None:
     """(id, versi) bila sah — bentuk lama, untuk pemakai lama. Tak melempar."""
     d = _token.baca_token(_kunci(), token)
-    return None if d is None else (d["akun_id"], d["versi"])
+    return (d["akun_id"], d["versi"]) if sesi_sah(d) else None
 
 
 def token_masih_berlaku(dibaca: tuple[int, int] | None, *, versi_akun: int) -> bool:
@@ -170,7 +171,7 @@ async def akun_opsional(request: Request) -> TimbanganAkun | None:
 
     d = _token.baca_token(_kunci(), request.cookies.get(NAMA_COOKIE))
     akun = None
-    if d is not None:
+    if sesi_sah(d):
         async with sesi_db() as db:
             akun = await _profil_dari_sesi(db, d)
     request.state.akun = akun
