@@ -35,6 +35,8 @@ log = logging.getLogger("timbangan")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from app.timbangan import service
+    from app.timbangan.monitoring import pengumpul
+    pengumpul.mulai()
     from app.timbangan.db import sesi_db
 
     try:
@@ -55,11 +57,16 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        await pengumpul.tutup()
         tugas.cancel()
         with suppress(asyncio.CancelledError):await tugas
 
 
 app = FastAPI(title="Pos Timbang — PT Hadi Mulya Utama", lifespan=lifespan)
+from app.timbangan import monitoring as monitoring_web
+from hmu_identitas.monitoring import MonitoringHTTP
+app.add_middleware(MonitoringHTTP,pengumpul=monitoring_web.pengumpul,pelaku=monitoring_web.pelaku_state,skrip='/timbangan/monitoring/aktivitas.js?v='+monitoring_web.VERSI)
+app.include_router(monitoring_web.router)
 pasang(app)
 
 

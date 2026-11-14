@@ -93,3 +93,6 @@ class PkPurchaseBatch(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(primary_key=True)
     timbangan_transaksi_id: Mapped[int | None] = mapped_column(index=True)
     kode_batch: Mapped[str | None] = mapped_column(String(40))
+
+# Metadata bersama untuk monitoring dan pemulihan; tidak mengubah model transaksi.
+from hmu_identitas.monitoring import SumberMonitoring, KejadianPemakaian, PembukaanMasuk, RencanaBantuan, PemulihanAkun
