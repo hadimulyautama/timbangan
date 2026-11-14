@@ -58,8 +58,11 @@ async def proses_masuk(
     #
     # Sampai 11 September 2026 tak ada sama sekali: seluruh daftar sandi bisa
     # dicoba satu per satu, dan tak ada baris di mana pun yang mencatatnya.
+    from app.timbangan.monitoring import petunjuk_masuk,catat_login
+    await petunjuk_masuk(request,uname,gerbang)
     sisa = gerbang.boleh_coba(uname, ip or "")
     if sisa is not None:
+        catat_login(request,'ditahan')
         return render(
             request, "masuk.html", tujuan=tujuan,
             pesan_err=(f"Terlalu banyak percobaan. Coba lagi "
@@ -76,6 +79,7 @@ async def proses_masuk(
         Login gagal yang tak pernah diaudit berarti penebakan yang berlangsung
         berminggu-minggu tak meninggalkan satu baris pun di mana pun.
         """
+        catat_login(request,'kredensial')
         gerbang.catat_gagal(uname, ip or "")
         await service.catat_audit(
             db, akun=akun, aksi="LOGIN_GAGAL", entitas="akun",
@@ -110,6 +114,7 @@ async def proses_masuk(
             if orang is not None and (orang.status or "").lower() != "aktif":
                 return await _tolak("Akun ini sedang dinonaktifkan. Hubungi Admin.")
 
+    catat_login(request,'berhasil')
     gerbang.catat_berhasil(uname, ip or "")
 
     # Kode perangkat TIDAK lagi diisi di sini. Dulu layar masuk memintanya,
