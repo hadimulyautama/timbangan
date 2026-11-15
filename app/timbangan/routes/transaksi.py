@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.timbangan import epos, logic, pdf, service, sopir, koreksi as borang_koreksi
 from app.timbangan.config import tsettings
 from app.timbangan.db import get_db, hari_ini
-from app.timbangan.models import TimbanganAkun, TimbanganCetak, TimbanganPemeriksaan
+from app.timbangan.models import TimbanganAkun, TimbanganCetak, TimbanganPemeriksaan, TimbanganTransaksi
 from app.config import settings
 from app.timbangan.routes.pos import _angka
 from app.timbangan.security import (
@@ -188,14 +188,25 @@ async def daftar(
         return PREFIX + path + "?" + urlencode({"kembali": alamat()})
 
     master = await service.daftar_jenis(db, hanya_aktif=False)
-    belum_ada = total == 0 and not await service.hitung_transaksi(
-        db, service.FilterTransaksi(sertakan_void=True))
+    # Keadaan kosong hanya perlu tahu apakah satu tiket pernah tersimpan.
+    # Jangan menghitung seluruh arsip untuk membedakannya dari hasil filter kosong.
+    belum_ada = total == 0 and (await db.scalar(
+        select(TimbanganTransaksi.id).limit(1))) is None
+    pencarian_lama = None
+    if total == 0 and not belum_ada and (f.cari or '').strip() and date.min < f.dari <= f.sampai:
+        # Satu tindakan eksplisit mencari satu jendela sebelumnya, bukan
+        # menghapus batas tanggal. Tetap 365 hari dan 50 baris per halaman,
+        # meskipun petugas mengulangnya untuk arsip yang lebih lama lagi.
+        akhir = f.dari - timedelta(days=1)
+        awal = date.fromordinal(max(1, f.dari.toordinal() - 365))
+        pencarian_lama = dict(dari=awal, sampai=akhir,
+            url=alamat(dari=awal.isoformat(), sampai=akhir.isoformat(), hal=1))
     return render(
         request, "daftar.html",
         f=f, halaman=halaman, per_halaman=per_halaman,
         arah_pilih=arah_pilih,
         total=total, baris=baris, jumlah_halaman=jumlah_halaman, alamat=alamat, tujuan=tujuan,
-        pemeriksaan=pemeriksaan, belum_ada=belum_ada,
+        pemeriksaan=pemeriksaan, belum_ada=belum_ada, pencarian_lama=pencarian_lama,
         jenis=[j for j in master if j.status == "aktif" or j.kode == f.jenis_kode],
         NAMA_JENIS={j.kode: j.nama for j in master},
         kembali=f"{PREFIX}/",
