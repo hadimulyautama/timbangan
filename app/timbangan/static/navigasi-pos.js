@@ -20,11 +20,13 @@
   // baca ke tiket yang sama diteruskan; endpoint tulis/cetak fisik tak disentuh.
   var cocok = location.pathname.match(/^\/timbangan\/(?:transaksi|tiket|partai)\/(\d+)(?:\/(?:cetak|koreksi))?$/);
   if (!cocok) return;
+  var mandiri = document.querySelector('[data-riwayat-mandiri-detail="' + cocok[1] + '"]');
   function riwayat(url) {
     if (!url) return null;
     try {
       var u = new URL(url, location.origin);
-      return u.origin === location.origin && ['/timbangan/transaksi', '/timbangan/laporan', '/timbangan/monitoring'].includes(u.pathname) ? u.pathname + u.search : null;
+      var posisi = mandiri && u.pathname === '/timbangan/transaksi' && u.hash === '#rh-tiket-' + cocok[1] ? u.hash : '';
+      return u.origin === location.origin && ['/timbangan/transaksi', '/timbangan/laporan', '/timbangan/monitoring'].includes(u.pathname) ? u.pathname + u.search + posisi : null;
     } catch (_) { return null; }
   }
   var kembali = riwayat(new URLSearchParams(location.search).get('kembali'));
@@ -44,6 +46,45 @@
     u.searchParams.set('kembali', kembali);
     a.href = u.pathname + u.search + u.hash;
   });
+})();
+
+/* Posisi kembali hanya untuk tiket mandiri selesai yang ditandai template.
+ * Konteks berada di tautan baca, tanpa storage bersama atau permintaan baru.
+ * Pembaruan data cukup memasang ulang tautan; tidak mengambil fokus pengguna. */
+(function () {
+  'use strict';
+  if (location.pathname !== '/timbangan/transaksi') return;
+  function siapkan() {
+    document.querySelectorAll('.rh-item[data-riwayat-mandiri]').forEach(function (row) {
+      var id = row.dataset.riwayatId;
+      function alamat(href) {
+        try {
+          var u = new URL(href, location.origin), kembali = new URL(u.searchParams.get('kembali'), location.origin);
+          if (u.origin !== location.origin || u.pathname !== '/timbangan/transaksi/' + id || kembali.origin !== location.origin || kembali.pathname !== '/timbangan/transaksi') return href;
+          kembali.hash = 'rh-tiket-' + id;
+          u.searchParams.set('kembali', kembali.pathname + kembali.search + kembali.hash);
+          return u.pathname + u.search + u.hash;
+        } catch (_) { return href; }
+      }
+      row.querySelectorAll('a[href]').forEach(function (a) { a.href = alamat(a.getAttribute('href')); });
+      if (row.dataset.buka) row.dataset.buka = alamat(row.dataset.buka);
+    });
+  }
+  function pulihkan() {
+    var m = location.hash.match(/^#rh-tiket-(\d+)$/);
+    if (!m) return;
+    var row = document.getElementById('rh-tiket-' + m[1]);
+    if (!row || !row.hasAttribute('data-riwayat-mandiri')) return;
+    requestAnimationFrame(function () {
+      if (!row.isConnected) return;
+      var a = row.querySelector('.rh-open');
+      if (a) a.focus({preventScroll:true});
+      row.scrollIntoView({block:'center'});
+    });
+  }
+  siapkan(); pulihkan();
+  if (document.readyState !== 'complete') window.addEventListener('load', pulihkan, {once:true});
+  window.addEventListener('teraflow:data', siapkan);
 })();
 
 /* Umpan balik segera untuk navigasi/formulir native; tidak mencegat simpan. */
