@@ -254,7 +254,8 @@
          yang tak ada cuma pintu menemukannya. RINGKASAN di bawah TETAP
          bersyarat — itu batas yang pemilik tarik sendiri. #}
       <a href="{{ PREFIX }}/transaksi"
-         class="{{ 'aktif' if layar in ('daftar', 'rincian', 'koreksi', 'cetak_pilih') }}">
+         class="{{ 'aktif' if layar in ('daftar', 'rincian', 'koreksi', 'cetak_pilih') }}"
+         {{ 'aria-current=page' if layar in ('daftar', 'rincian', 'koreksi', 'cetak_pilih') }}>
         <span class="bawah__ikon"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"
              stroke-linecap="round" stroke-linejoin="round">
           <path d="M4 4h16v16H4z"/><path d="M8 9h8"/><path d="M8 13h8"/>
@@ -265,7 +266,8 @@
       <span class="bawah__label">DATA &amp; PENGATURAN</span>
       {% if akun.is_admin %}
         <a href="{{ PREFIX }}/laporan"
-           class="{{ 'aktif' if layar in ('laporan', 'monitoring') }}">
+           class="{{ 'aktif' if layar in ('laporan', 'monitoring') }}"
+           {{ 'aria-current=page' if layar in ('laporan', 'monitoring') }}>
           <span class="bawah__ikon"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke-width="1.9"
                stroke-linecap="round" stroke-linejoin="round">
             <path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/>
