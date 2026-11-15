@@ -3874,7 +3874,11 @@ async def masuk_bersama(db: AsyncSession, username: str, sandi: str) -> tuple[Ak
     """Masuk dengan akun bersama: kredensial (paket), pintu pos timbang,
     profil (dibuat bila perlu). Melempar `identitas.Tolak`."""
     bersama = await identitas.periksa_kredensial(db, username, sandi)
-    sebab = pintu.sebab_tolak(bersama.peran, pintu.TIMBANGAN)
+    from hmu_identitas.produk import hak_lokal,TERAFLOW,ProdukDitolak
+    try:
+        hak=await hak_lokal(db,produk=TERAFLOW,user_id=bersama.user_id,peran_lama=bersama.peran)
+        sebab=pintu.sebab_tolak(hak.peran,pintu.TIMBANGAN)
+    except ProdukDitolak as e:sebab=str(e)
     if sebab:
         raise identitas.Tolak(403, sebab)
     profil = await profil_untuk(db, bersama)
@@ -3895,7 +3899,11 @@ async def buat_profil(db: AsyncSession, *, admin: TimbanganAkun, username: str,
             f"Tidak ada akun bersama bernama '{uname}'. Buat akunnya dulu di "
             "Pos Produksi atau Meja (Kelola pengguna, Super Admin), lalu "
             "tautkan di sini dengan kode perangkatnya.")
-    sebab = pintu.sebab_tolak(bersama.peran, pintu.TIMBANGAN)
+    from hmu_identitas.produk import hak_lokal,TERAFLOW,ProdukDitolak
+    try:
+        hak=await hak_lokal(db,produk=TERAFLOW,user_id=bersama.user_id,peran_lama=bersama.peran)
+        sebab=pintu.sebab_tolak(hak.peran,pintu.TIMBANGAN)
+    except ProdukDitolak as e:sebab=str(e)
     if sebab:
         raise LayananError(sebab)
     if await profil_untuk(db, bersama, buat=False) is not None:
