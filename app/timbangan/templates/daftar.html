@@ -111,7 +111,12 @@
         </tbody>
       </table>
       {% else %}
-        <div class="tf-empty kartu"><strong>{{ 'Belum ada transaksi' if belum_ada else 'Tidak ada transaksi yang cocok' }}</strong>{{ 'Transaksi yang tersimpan akan tampil di sini.' if belum_ada else 'Ubah pencarian, filter, atau rentang tanggal.' }}</div>
+        <div class="tf-empty kartu"><strong>{{ 'Belum ada transaksi' if belum_ada else 'Tidak ada transaksi yang cocok' }}</strong>{{ 'Transaksi yang tersimpan akan tampil di sini.' if belum_ada else 'Ubah pencarian, filter, atau rentang tanggal.' }}
+          {% if pencarian_lama %}
+            <p>Cari pada {{ pencarian_lama.dari|tgl(true) }} – {{ pencarian_lama.sampai|tgl(true) }}. Pencarian dan filter lain tetap dipakai.</p>
+            <a class="tbl" data-rh-cari-lama href="{{ pencarian_lama.url }}">Cari 1 tahun sebelumnya</a>
+          {% endif %}
+        </div>
       {% endif %}
       {% if akun.is_super and baris %}
         <details class="rh-bulk"><summary>Kelola catatan · Hapus massal</summary>
