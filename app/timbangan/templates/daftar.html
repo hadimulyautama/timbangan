@@ -88,7 +88,7 @@
           {% set selesai = t.status_tiket == TIKET_SELESAI %}
           {% set sementara = aktif and t.status_tiket == TIKET_TERBUKA %}
           {% set periksa = pemeriksaan.get(t.id) %}
-          <tr class="rh-item" data-riwayat-id="{{ t.id }}" data-buka="{{ tujuan('/transaksi/' ~ t.id) }}">
+          <tr class="rh-item" data-riwayat-id="{{ t.id }}" data-buka="{{ tujuan('/transaksi/' ~ t.id) }}"{% if aktif and selesai and t.arah == 'BEBAS' and not t.partai %} id="rh-tiket-{{ t.id }}" data-riwayat-mandiri{% endif %}>
             <td class="rh-time">{{ t.tanggal|tgl(true) }}<div class="tf-sub">{{ (t.timbang2_waktu or t.timbang1_waktu or t.created_at)|jam }} · lokal</div></td>
             <td class="rh-identity"><a class="rh-open" href="{{ tujuan('/transaksi/' ~ t.id) }}">{{ t.nomor_polisi or t.kode }}</a><div class="rh-party">{{ b.pihak_tampil }}</div><div class="tf-sub rh-code">{{ t.kode }}</div></td>
             <td class="rh-load">{{ NAMA_JENIS.get(t.jenis_kode, t.jenis_kode) }}<div class="tf-sub">{{ ARAH_LABEL.get(t.arah, t.arah|lower) }}{% if t.jasa %} · Titipan jasa giling{% endif %}</div>{% if t.partai %}<div class="tf-sub">Partai kecil · {{ t.penimbangan|length }} kali timbang</div>{% endif %}</td>
