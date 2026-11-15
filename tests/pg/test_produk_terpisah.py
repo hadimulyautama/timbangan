@@ -80,3 +80,43 @@ async def test_anggota_lintas_perusahaan_tidak_memakai_peran_master_sebagai_akse
     async with mesin() as db:
         db.add(UP(company_id=x['cid'],user_id=x['uid'],produk=TERAFLOW,aktif=True,peran=P.OPERATOR));await db.commit()
     assert (await klien.get('/timbangan/')).status_code==200
+
+
+async def test_penolakan_produk_bukan_salah_sandi_dan_tidak_menahan_setelah_dipulihkan(mesin,klien,orang,monkeypatch):
+    from hmu_identitas.model import Akun
+    from hmu_identitas.sandi import hash_sandi
+    from app.timbangan import gerbang_masuk as gerbang,monitoring
+    x=orang;gerbang.bersihkan();events=[]
+    monkeypatch.setattr(monitoring,'catat_login',lambda request,kode:events.append(kode))
+    async with mesin() as db:
+        a=Akun(user_id=x['uid'],username='petugas-uji',password_hash=hash_sandi('sandi-audit-produk-123'),status='aktif');db.add(a);await db.flush()
+        (await db.get(TimbanganAkun,x['pid'])).akun_id=a.id
+        for code in (PADIFLOW,TERAFLOW):
+            row=await db.get(CP,(x['cid'],code));row.warisan=False;row.aktif=False
+        await db.commit()
+    try:
+        for _ in range(gerbang.BATAS_GAGAL+2):
+            r=await klien.post('/timbangan/masuk',data=dict(username='petugas-uji',sandi='sandi-audit-produk-123'))
+            assert r.status_code==200 and 'tidak diaktifkan' in r.text
+        assert events==['peran']*(gerbang.BATAS_GAGAL+2)
+        async with mesin() as db:(await db.get(CP,(x['cid'],TERAFLOW))).aktif=True;await db.commit()
+        r=await klien.post('/timbangan/masuk',data=dict(username='petugas-uji',sandi='sandi-audit-produk-123'))
+        assert r.status_code==303 and sec.NAMA_COOKIE in r.cookies
+    finally:gerbang.bersihkan()
+
+
+async def test_sandi_salah_tetap_dibatasi_pada_produk_nonaktif(mesin,klien,orang):
+    from hmu_identitas.model import Akun
+    from hmu_identitas.sandi import hash_sandi
+    from app.timbangan import gerbang_masuk as gerbang
+    gerbang.bersihkan()
+    async with mesin() as db:
+        db.add(Akun(user_id=orang['uid'],username='petugas-uji',password_hash=hash_sandi('sandi-yang-benar-123'),status='aktif'))
+        (await db.get(CP,(orang['cid'],TERAFLOW))).aktif=False;await db.commit()
+    try:
+        for _ in range(gerbang.BATAS_GAGAL):
+            r=await klien.post('/timbangan/masuk',data=dict(username='petugas-uji',sandi='sandi-salah'))
+            assert 'sandi salah' in r.text
+        r=await klien.post('/timbangan/masuk',data=dict(username='petugas-uji',sandi='sandi-salah'))
+        assert 'Terlalu banyak percobaan' in r.text
+    finally:gerbang.bersihkan()
