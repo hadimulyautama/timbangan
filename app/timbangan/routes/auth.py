@@ -73,14 +73,19 @@ async def proses_masuk(
         select(TimbanganAkun).where(TimbanganAkun.username == uname)
     )).scalars().first()
 
-    async def _tolak(pesan: str):
+    async def _tolak(pesan: str, *, kode: str = "kredensial"):
         """Catat kegagalannya, lalu tolak.
 
         Login gagal yang tak pernah diaudit berarti penebakan yang berlangsung
         berminggu-minggu tak meninggalkan satu baris pun di mana pun.
         """
-        catat_login(request,'kredensial')
-        gerbang.catat_gagal(uname, ip or "")
+        catat_login(request,kode)
+        # Izin produk diperiksa setelah sandi benar. Penolakan izin bukan
+        # penebakan sandi: jangan membuat petugas tetap tertahan sesudah izin
+        # dipulihkan melalui Console. Semua penolakan tetap diaudit, dan
+        # sandi salah tetap memakai pembatas nama+IP yang sama.
+        if kode == 'kredensial':
+            gerbang.catat_gagal(uname, ip or "")
         await service.catat_audit(
             db, akun=akun, aksi="LOGIN_GAGAL", entitas="akun",
             entitas_id=(akun.id if akun else uname[:40]),
@@ -101,23 +106,23 @@ async def proses_masuk(
         bersama, akun = await service.masuk_bersama(db, uname, sandi)
     except identitas.Tolak as e:
         if e.kode != 401:
-            return await _tolak(e.pesan)
+            return await _tolak(e.pesan, kode="nonaktif" if e.pesan==identitas.PESAN_NONAKTIF else "peran")
         if akun is None or akun.tertaut or not cek_sandi(sandi, akun.password_hash):
             return await _tolak("Nama pengguna atau kata sandi salah.")
         if akun.status != "aktif":
-            return await _tolak("Akun ini sedang dinonaktifkan. Hubungi Admin.")
+            return await _tolak("Akun ini sedang dinonaktifkan. Hubungi Admin.", kode="nonaktif")
         # Dinonaktifkan di MASTER berarti tak lagi bekerja di sini sama sekali.
         if akun.user_id:
             from app.models import User as _User
 
             orang = await db.get(_User, akun.user_id)
             if orang is not None and (orang.status or "").lower() != "aktif":
-                return await _tolak("Akun ini sedang dinonaktifkan. Hubungi Admin.")
+                return await _tolak("Akun ini sedang dinonaktifkan. Hubungi Admin.", kode="nonaktif")
 
     from hmu_identitas.produk import hak_lokal,TERAFLOW,ProdukDitolak
     from hmu_identitas import peran as P
     try:await hak_lokal(db,produk=TERAFLOW,user_id=akun.user_id,peran_lama=P.dari_timbangan(akun.role))
-    except ProdukDitolak as e:return await _tolak(str(e))
+    except ProdukDitolak as e:return await _tolak(str(e), kode="peran")
 
     catat_login(request,'berhasil')
     gerbang.catat_berhasil(uname, ip or "")
