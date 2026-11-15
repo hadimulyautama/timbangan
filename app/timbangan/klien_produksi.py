@@ -45,6 +45,14 @@ async def _minta(metode: str, path: str, *, operator_akun_id: int | None = None,
         raise ProduksiTakTersedia(
             "Sambungan ke sistem produksi belum diatur (PRODUKSI_API_URL/TOKEN)."
         )
+    if path.startswith(('/internal/pengiriman/', '/internal/retur/', '/internal/retur-supplier/', '/internal/masuk/')):
+        from app.timbangan.db import sesi_db
+        from hmu_identitas.produk import integrasi_lokal, ProdukDitolak
+        async with sesi_db() as db:
+            try:
+                await integrasi_lokal(db)
+            except ProdukDitolak as exc:
+                raise ProduksiDilarang(str(exc)) from exc
     url = settings.produksi_api_url.rstrip("/") + path
     try:
         async with httpx.AsyncClient(timeout=settings.produksi_api_timeout) as c:

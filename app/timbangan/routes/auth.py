@@ -114,6 +114,11 @@ async def proses_masuk(
             if orang is not None and (orang.status or "").lower() != "aktif":
                 return await _tolak("Akun ini sedang dinonaktifkan. Hubungi Admin.")
 
+    from hmu_identitas.produk import hak_lokal,TERAFLOW,ProdukDitolak
+    from hmu_identitas import peran as P
+    try:await hak_lokal(db,produk=TERAFLOW,user_id=akun.user_id,peran_lama=P.dari_timbangan(akun.role))
+    except ProdukDitolak as e:return await _tolak(str(e))
+
     catat_login(request,'berhasil')
     gerbang.catat_berhasil(uname, ip or "")
 

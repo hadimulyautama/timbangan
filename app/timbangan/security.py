@@ -174,6 +174,15 @@ async def akun_opsional(request: Request) -> TimbanganAkun | None:
     if sesi_sah(d):
         async with sesi_db() as db:
             akun = await _profil_dari_sesi(db, d)
+            if akun is not None:
+                from hmu_identitas.produk import hak_lokal,TERAFLOW,ProdukDitolak
+                from hmu_identitas import peran as P
+                try:hak=await hak_lokal(db,produk=TERAFLOW,user_id=akun.user_id,peran_lama=P.dari_timbangan(akun.role))
+                except ProdukDitolak as exc:
+                    request.state.akses_produk_ditolak=str(exc)
+                    akun=None
+        # Role produk hanya pada objek yang sudah lepas; mirror profil/master tetap.
+        if akun is not None:akun.role=P.ke_timbangan(hak.peran)
     request.state.akun = akun
     return akun
 
@@ -182,6 +191,8 @@ async def butuh_akun(request: Request) -> TimbanganAkun:
     """Wajib login. Bila belum → diarahkan ke halaman masuk."""
     akun = await akun_opsional(request)
     if akun is None:
+        if getattr(request.state,"akses_produk_ditolak",None):
+            raise AksesDitolak(request.state.akses_produk_ditolak)
         raise ButuhLogin()
     return akun
 
