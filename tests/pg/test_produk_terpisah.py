@@ -120,3 +120,21 @@ async def test_sandi_salah_tetap_dibatasi_pada_produk_nonaktif(mesin,klien,orang
         r=await klien.post('/timbangan/masuk',data=dict(username='petugas-uji',sandi='sandi-salah'))
         assert 'Terlalu banyak percobaan' in r.text
     finally:gerbang.bersihkan()
+
+
+
+async def test_pencabutan_anggota_berlaku_untuk_sesi_warisan_tf(mesin,klien,orang):
+    x=orang
+    async with mesin() as db:
+        await db.delete(await db.get(UP,(x['cid'],x['uid'],TERAFLOW)));await db.commit()
+    klien.cookies.set(sec.NAMA_COOKIE,sec.buat_token(x['pid']))
+    assert (await klien.get('/timbangan/')).status_code==200
+    async with mesin() as db:
+        member=await db.scalar(select(KeanggotaanPerusahaan).where(KeanggotaanPerusahaan.company_id==x['cid'],KeanggotaanPerusahaan.user_id==x['uid']))
+        member.aktif=False;await db.commit();mid=member.id
+    r=await klien.get('/timbangan/')
+    assert r.status_code==403 and 'Keanggotaan' in r.text
+    async with mesin() as db:
+        (await db.get(KeanggotaanPerusahaan,mid)).aktif=True;await db.commit()
+        assert not await db.get(UP,(x['cid'],x['uid'],TERAFLOW))
+    assert (await klien.get('/timbangan/')).status_code==200
