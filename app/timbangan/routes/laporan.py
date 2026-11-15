@@ -14,13 +14,13 @@ from urllib.parse import urlencode
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.timbangan import format as fmt
 from app.timbangan import logic, service
 from app.timbangan.db import get_db, hari_ini
-from app.timbangan.models import TimbanganAkun, TimbanganPemeriksaan
+from app.timbangan.models import TimbanganAkun, TimbanganPemeriksaan, TimbanganTransaksi
 from app.timbangan.security import butuh_admin
 from app.timbangan.web import PREFIX, render
 
@@ -71,8 +71,18 @@ async def _halaman(request, db, tab_awal="rekap"):
     tautan = {t: f"{PREFIX}/laporan?" + urlencode({
         "tab": t, "dari": dari.isoformat(), "sampai": sampai.isoformat(),
     }) for t in ("rekap", "pemeriksaan", "pemantauan")}
+    # Hanya tab Pemeriksaan menampilkan seluruh tiketnya. Tab lain cukup
+    # membaca jumlah lembar, tanpa membangun tiket dan relasi foto/muatan
+    # semua tanggal. Samakan dengan daftar lama: hitung baris hasil join,
+    # termasuk status selain SELESAI, bukan angka DIBUKA pada dashboard.
+    lembar_terbuka = await service.daftar_pemeriksaan_terbuka(db) if tab == 'pemeriksaan' else []
+    jumlah_pemeriksaan_terbuka = len(lembar_terbuka) if tab == 'pemeriksaan' else await db.scalar(
+        select(func.count(TimbanganPemeriksaan.id))
+        .join(TimbanganTransaksi, TimbanganTransaksi.id == TimbanganPemeriksaan.transaksi_id)
+        .where(TimbanganPemeriksaan.status != service.PEMERIKSAAN_SELESAI))
     ctx = dict(f=f, tab=tab, tautan=tautan, konteks=tautan[tab],
-               lembar_terbuka=await service.daftar_pemeriksaan_terbuka(db),
+               lembar_terbuka=lembar_terbuka,
+               jumlah_pemeriksaan_terbuka=jumlah_pemeriksaan_terbuka,
                kembali=f"{PREFIX}/")
     if tab == "rekap":
         ctx["ringkasan"] = await service.ringkasan_dashboard(db, f)
