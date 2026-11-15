@@ -12,6 +12,7 @@
 {% block konteks %}{{ konteks_jenis(aturan) }}{% endblock %}
 
 {% block isi %}
+  {% if trx.arah == 'BEBAS' and not trx.partai and trx.status_tiket == TIKET_SELESAI and trx.status_transaksi != 'VOID' %}<span hidden data-riwayat-mandiri-detail="{{ trx.id }}"></span>{% endif %}
   {{ kontrol_detail(trx, PREFIX, kembali, cetak) }}
 
   {% if trx.status_transaksi == 'VOID' %}
