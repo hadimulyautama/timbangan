@@ -67,3 +67,16 @@ async def test_profil_lama_tanpa_tautan_hmu_tetap_bisa_bekerja(mesin,klien,orang
     async def hak(akun=Depends(sec.butuh_akun)):return dict(role=akun.role)
     klien.cookies.set(sec.NAMA_COOKIE,sec.buat_token(pid))
     r=await klien.get('/uji/hak');assert r.status_code==200 and r.json()['role']==P.ke_timbangan(P.OPERATOR)
+
+
+async def test_anggota_lintas_perusahaan_tidak_memakai_peran_master_sebagai_akses_warisan(mesin,klien,orang):
+    x=orang
+    async with mesin() as db:
+        company=Perusahaan(kode='asing',nama='Perusahaan lain');db.add(company);await db.flush()
+        db.add(KeanggotaanPerusahaan(company_id=company.id,user_id=x['uid'],aktif=True,peran=P.ADMIN))
+        grant=await db.get(UP,(x['cid'],x['uid'],TERAFLOW));await db.delete(grant);await db.commit()
+    klien.cookies.set(sec.NAMA_COOKIE,sec.buat_token(x['pid']))
+    assert (await klien.get('/timbangan/')).status_code==403
+    async with mesin() as db:
+        db.add(UP(company_id=x['cid'],user_id=x['uid'],produk=TERAFLOW,aktif=True,peran=P.OPERATOR));await db.commit()
+    assert (await klien.get('/timbangan/')).status_code==200
