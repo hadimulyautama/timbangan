@@ -79,8 +79,8 @@
       {% if baris %}
       <table class="rh-table">
         <caption class="rh-sr">Riwayat timbang · {{ total }} transaksi · satuan kilogram</caption>
-        <colgroup>{% if akun.is_super %}<col class="rh-col-check">{% endif %}<col class="rh-col-time"><col class="rh-col-identity"><col class="rh-col-load"><col class="rh-col-weight"><col class="rh-col-difference"><col class="rh-col-status"><col class="rh-col-actions"></colgroup>
-        <thead><tr>{% if akun.is_super %}<th scope="col">Pilih</th>{% endif %}<th scope="col">Waktu</th><th scope="col">Tiket &amp; pihak</th><th scope="col">Muatan</th><th scope="col" class="rh-num">Barang (kg)</th><th scope="col" class="rh-num">Selisih (kg)</th><th scope="col">Status</th><th scope="col">Aksi</th></tr></thead>
+        <colgroup><col class="rh-col-time"><col class="rh-col-identity"><col class="rh-col-load"><col class="rh-col-weight"><col class="rh-col-difference"><col class="rh-col-status"><col class="rh-col-actions"></colgroup>
+        <thead><tr><th scope="col">Waktu</th><th scope="col">Tiket &amp; pihak</th><th scope="col">Muatan</th><th scope="col" class="rh-num">Barang (kg)</th><th scope="col" class="rh-num">Selisih (kg)</th><th scope="col">Status</th><th scope="col">Aksi</th></tr></thead>
         <tbody>
         {% for b in baris %}
           {% set t = b.trx %}
@@ -89,7 +89,6 @@
           {% set sementara = aktif and t.status_tiket == TIKET_TERBUKA %}
           {% set periksa = pemeriksaan.get(t.id) %}
           <tr class="rh-item" data-riwayat-id="{{ t.id }}" data-buka="{{ tujuan('/transaksi/' ~ t.id) }}">
-            {% if akun.is_super %}<td class="rh-select"><label class="rh-check"><input type="checkbox" name="transaksi_id" value="{{ t.id }}" data-baris-pilih aria-label="Pilih {{ t.kode }}"></label></td>{% endif %}
             <td class="rh-time">{{ t.tanggal|tgl(true) }}<div class="tf-sub">{{ (t.timbang2_waktu or t.timbang1_waktu or t.created_at)|jam }} · lokal</div></td>
             <td class="rh-identity"><a class="rh-open" href="{{ tujuan('/transaksi/' ~ t.id) }}">{{ t.nomor_polisi or t.kode }}</a><div class="rh-party">{{ b.pihak_tampil }}</div><div class="tf-sub rh-code">{{ t.kode }}</div></td>
             <td class="rh-load">{{ NAMA_JENIS.get(t.jenis_kode, t.jenis_kode) }}<div class="tf-sub">{{ ARAH_LABEL.get(t.arah, t.arah|lower) }}{% if t.jasa %} · Titipan jasa giling{% endif %}</div>{% if t.partai %}<div class="tf-sub">Partai kecil · {{ t.penimbangan|length }} kali timbang</div>{% endif %}</td>
@@ -103,7 +102,7 @@
               <div class="rh-control {{ 'rh-warn' if t.status_kontrol in ('PERLU_PEMERIKSAAN','INVESTIGASI','KURANG','KELEBIHAN') }}">Kontrol: {{ STATUS_LABEL.get(t.status_kontrol, t.status_kontrol or 'belum tersedia') }}</div>
               {% if periksa %}<div class="tf-sub">Pemeriksaan {{ 'selesai' if periksa == 'SELESAI' else 'dibuka' }}</div>{% endif %}
             </td>
-            <td class="rh-actions"><a class="tf-link" href="{{ tujuan('/transaksi/' ~ t.id) }}">Detail<span class="rh-sr"> {{ t.kode }}</span></a>
+            <td class="rh-actions">{% if akun.is_super %}<label class="rh-check rh-select"><input type="checkbox" name="transaksi_id" value="{{ t.id }}" data-baris-pilih aria-label="Pilih {{ t.kode }}"></label>{% endif %}<a class="tf-link" href="{{ tujuan('/transaksi/' ~ t.id) }}">Detail<span class="rh-sr"> {{ t.kode }}</span></a>
               {% if aktif and selesai %}<a class="tbl halus kecil" href="{{ tujuan('/transaksi/' ~ t.id ~ '/cetak') }}">Cetak</a>
               {% elif sementara %}<a class="tf-link" href="{{ tujuan(('/partai/' if t.partai else '/tiket/') ~ t.id) }}">{{ 'Lanjutkan partai' if t.partai else 'Timbang kedua' }} →</a>{% endif %}
             </td>
